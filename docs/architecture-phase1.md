@@ -2,13 +2,22 @@
 
 ## Summary
 
-Phase 1 is a single-process local CLI. tmux is the only source of runtime truth. There is no daemon, no database, and no external connector yet.
+Phase 1 is a single-process local control plane. It can be used as a CLI or exposed through a local HTTP server. tmux is the only source of runtime truth. There is no database and no external connector yet.
 
 ## Modules
 
 ### `cmd/tagb`
 
-CLI entrypoint, subcommand parsing, exit codes, and text or JSON rendering.
+CLI entrypoint, subcommand parsing, exit codes, text or JSON rendering, and local HTTP server bootstrap.
+
+### `internal/httpapi`
+
+HTTP translation layer over the existing bridge service:
+
+- health endpoint
+- pane CRUD-like operations for attach and detach
+- snapshot and input endpoints
+- SSE stream endpoint for pane output
 
 ### `internal/tagb`
 
@@ -54,3 +63,4 @@ There is no separate registry to reconcile.
 - text input is pasted literally into the pane
 - control input is limited to `Enter` and `Ctrl-C`
 - output streaming favors robustness over terminal-perfect fidelity
+- the HTTP server is local-only by deployment convention; auth is deferred

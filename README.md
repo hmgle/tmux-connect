@@ -22,6 +22,7 @@ tagb [--socket NAME] [--json] stream --pane %5 [--lines 120]
 tagb [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
 tagb [--socket NAME] [--json] enter --pane %5
 tagb [--socket NAME] [--json] ctrl-c --pane %5
+tagb [--socket NAME] serve [--listen 127.0.0.1:8080]
 ```
 
 ## Quick Start
@@ -63,6 +64,36 @@ go run ./cmd/tagb snapshot --pane %5 --lines 120
 go run ./cmd/tagb stream --pane %5
 ```
 
+8. Start the local HTTP API:
+
+```bash
+go run ./cmd/tagb serve --listen 127.0.0.1:8080
+```
+
+## HTTP API
+
+The local server exposes the same control surface over HTTP:
+
+- `GET /healthz`
+- `GET /v1/panes`
+- `POST /v1/panes/attach`
+- `POST /v1/panes/detach`
+- `GET /v1/panes/inspect?pane=%250`
+- `GET /v1/panes/snapshot?pane=%250&lines=120`
+- `POST /v1/panes/send`
+- `POST /v1/panes/enter`
+- `POST /v1/panes/ctrl-c`
+- `GET /v1/panes/stream?pane=%250&lines=120` as SSE
+
+Example:
+
+```bash
+curl http://127.0.0.1:8080/v1/panes
+curl -X POST http://127.0.0.1:8080/v1/panes/send \
+  -H 'Content-Type: application/json' \
+  -d '{"pane":"%5","text":"continue","enter":true}'
+```
+
 ## Metadata
 
 Phase 1 stores recovery state directly on the tmux pane:
@@ -88,4 +119,4 @@ Managed state survives CLI restarts because tmux keeps the pane metadata.
 - Streaming prefers tmux control mode and falls back to polling snapshots when control mode is unavailable
 - Control keys currently support only `Enter` and `Ctrl-C`
 - Multi-socket support is explicit via `--socket`; there is no auto-discovery across sockets
-- No daemon process or platform connectors yet
+- No auth, remote connector, or persistent daemon mode yet

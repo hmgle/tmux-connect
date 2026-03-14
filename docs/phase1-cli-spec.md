@@ -52,6 +52,29 @@ Sends the `Enter` key.
 
 Sends the `Ctrl-C` key.
 
+### `serve [--listen 127.0.0.1:8080]`
+
+Starts a local HTTP server that exposes the current relay operations.
+
+## HTTP Endpoints
+
+- `GET /healthz`
+- `GET /v1/panes`
+- `POST /v1/panes/attach`
+- `POST /v1/panes/detach`
+- `GET /v1/panes/inspect?pane=%250`
+- `GET /v1/panes/snapshot?pane=%250&lines=120`
+- `POST /v1/panes/send`
+- `POST /v1/panes/enter`
+- `POST /v1/panes/ctrl-c`
+- `GET /v1/panes/stream?pane=%250&lines=120`
+
+`/v1/panes/stream` returns Server-Sent Events with:
+
+- `event: initial`
+- `event: output`
+- `event: error`
+
 ## Metadata Keys
 
 - `@tagb_managed`

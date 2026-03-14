@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/portgle/tmux-connect/internal/httpapi"
 	"github.com/portgle/tmux-connect/internal/tagb"
 	"github.com/portgle/tmux-connect/internal/tmux"
 )
@@ -22,12 +26,44 @@ func main() {
 		os.Exit(tagb.ExitUsage)
 	}
 
-	app := tagb.NewApp(os.Stdout, os.Stderr, tagb.NewService(tmux.NewClient(tmux.RealRunner{}, socket)))
+	service := tagb.NewService(tmux.NewClient(tmux.RealRunner{}, socket))
+	app := tagb.NewApp(os.Stdout, os.Stderr, service)
+	if len(args) > 0 && args[0] == "serve" {
+		if err := runServe(ctx, os.Stdout, os.Stderr, service, args[1:]); err != nil {
+			code := tagb.ExitCode(err)
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(code)
+		}
+		return
+	}
 	if err := app.Run(ctx, args); err != nil {
 		code := tagb.ExitCode(err)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(code)
 	}
+}
+
+func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer, service *tagb.Service, args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	listen := fs.String("listen", "127.0.0.1:8080", "HTTP listen address")
+	if err := fs.Parse(args); err != nil {
+		return tagb.UsageError("%v", err)
+	}
+	if strings.TrimSpace(*listen) == "" {
+		return tagb.UsageError("serve requires --listen")
+	}
+	if _, err := net.ResolveTCPAddr("tcp", *listen); err != nil {
+		return tagb.UsageError("invalid listen address %q: %v", *listen, err)
+	}
+	server := httpapi.NewServer(*listen, service)
+	if _, err := fmt.Fprintf(stdout, "serving HTTP API on %s\n", server.Addr()); err != nil {
+		return err
+	}
+	if err := server.ListenAndServe(ctx); err != nil {
+		return tagb.TmuxError("serve http api: %v", err)
+	}
+	return nil
 }
 
 func parseGlobalArgs(args []string) (string, []string, error) {
