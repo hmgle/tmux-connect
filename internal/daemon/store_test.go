@@ -189,12 +189,12 @@ func TestStoreSessionLinksAndReplyTarget(t *testing.T) {
 		t.Fatalf("CreateMessageLink(inbound) error = %v", err)
 	}
 
-	replyTo, err := store.LatestReplyTarget(ctx, session.SessionKey)
+	reloadedSession, err := store.SessionByKey(ctx, session.SessionKey)
 	if err != nil {
-		t.Fatalf("LatestReplyTarget() error = %v", err)
+		t.Fatalf("SessionByKey() error = %v", err)
 	}
-	if replyTo != 42 {
-		t.Fatalf("replyTo = %d, want 42", replyTo)
+	if reloadedSession.LastInboundMessageID != 42 {
+		t.Fatalf("last inbound = %d, want 42", reloadedSession.LastInboundMessageID)
 	}
 
 	if err := store.TouchSessionOutbound(ctx, session.SessionKey, 99); err != nil {
@@ -224,11 +224,11 @@ func TestStoreSessionLinksAndReplyTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore(reopen) error = %v", err)
 	}
-	replyToAfterRestart, err := reopened.LatestReplyTarget(ctx, session.SessionKey)
+	reloadedAfterRestart, err := reopened.SessionByKey(ctx, session.SessionKey)
 	if err != nil {
-		t.Fatalf("LatestReplyTarget(reopen) error = %v", err)
+		t.Fatalf("SessionByKey(reopen) error = %v", err)
 	}
-	if replyToAfterRestart != 42 {
-		t.Fatalf("replyTo after reopen = %d, want 42", replyToAfterRestart)
+	if reloadedAfterRestart.LastInboundMessageID != 42 {
+		t.Fatalf("last inbound after reopen = %d, want 42", reloadedAfterRestart.LastInboundMessageID)
 	}
 }

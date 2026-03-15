@@ -94,6 +94,9 @@ func TestSendMessage(t *testing.T) {
 		if payload["text"] != "hello" {
 			t.Fatalf("text = %#v, want %q", payload["text"], "hello")
 		}
+		if _, ok := payload["reply_parameters"]; ok {
+			t.Fatalf("unexpected reply_parameters in %#v", payload)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true,
 			"result": map[string]any{
@@ -126,8 +129,12 @@ func TestSendMessageWithReplyTarget(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
-		if payload["reply_to_message_id"] != float64(42) {
-			t.Fatalf("reply_to_message_id = %#v, want 42", payload["reply_to_message_id"])
+		replyParameters, ok := payload["reply_parameters"].(map[string]any)
+		if !ok {
+			t.Fatalf("reply_parameters missing in %#v", payload)
+		}
+		if replyParameters["message_id"] != float64(42) {
+			t.Fatalf("reply_parameters.message_id = %#v, want 42", replyParameters["message_id"])
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true,

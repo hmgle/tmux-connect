@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 )
 
 type fakeMessenger struct {
+	mu       sync.Mutex
 	messages []sentMessage
 }
 
@@ -22,11 +24,21 @@ type sentMessage struct {
 }
 
 func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opts telegram.SendOptions) (telegram.Message, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.messages = append(m.messages, sentMessage{
 		Text:             text,
 		ReplyToMessageID: opts.ReplyToMessageID,
 	})
 	return telegram.Message{MessageID: int64(len(m.messages))}, nil
+}
+
+func (m *fakeMessenger) snapshot() []sentMessage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]sentMessage, len(m.messages))
+	copy(out, m.messages)
+	return out
 }
 
 type fakePaneService struct {
@@ -119,10 +131,11 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot"}); err != nil {
 		t.Fatalf("HandleMessage(snapshot) error = %v", err)
 	}
-	if len(messenger.messages) < 2 || !strings.Contains(messenger.messages[len(messenger.messages)-1].Text, "hello from pane") {
-		t.Fatalf("unexpected messages %#v", messenger.messages)
+	messages := messenger.snapshot()
+	if len(messages) < 2 || !strings.Contains(messages[len(messages)-1].Text, "hello from pane") {
+		t.Fatalf("unexpected messages %#v", messages)
 	}
-	if got := messenger.messages[len(messenger.messages)-1].ReplyToMessageID; got != 2 {
+	if got := messages[len(messages)-1].ReplyToMessageID; got != 2 {
 		t.Fatalf("snapshot reply_to = %d, want 2", got)
 	}
 }
@@ -149,11 +162,19 @@ func TestRouterFollow(t *testing.T) {
 	}
 
 	service.sub.PushChunk(tmux.OutputChunk{Text: "delta output", ReceivedAt: time.Now()})
-	time.Sleep(900 * time.Millisecond)
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, "delta output") {
+				return true
+			}
+		}
+		return false
+	}, messenger)
 	follow.Disable(7)
 
-	texts := make([]string, 0, len(messenger.messages))
-	for _, msg := range messenger.messages {
+	messages := messenger.snapshot()
+	texts := make([]string, 0, len(messages))
+	for _, msg := range messages {
 		texts = append(texts, msg.Text)
 	}
 	joined := strings.Join(texts, "\n")
@@ -166,9 +187,62 @@ func TestRouterFollow(t *testing.T) {
 	if !strings.Contains(joined, "delta output") {
 		t.Fatalf("missing streamed output in %q", joined)
 	}
-	for _, msg := range messenger.messages[1:] {
+	for _, msg := range messages[1:] {
 		if msg.ReplyToMessageID != 2 {
 			t.Fatalf("follow reply_to = %d, want 2 for %#v", msg.ReplyToMessageID, msg)
 		}
+	}
+}
+
+func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store)
+	follow := NewFollowManager(service, replyBus, 20)
+	follow.flushInterval = 5 * time.Second
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
+		t.Fatalf("HandleMessage(bind) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+		t.Fatalf("HandleMessage(follow on) error = %v", err)
+	}
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: "buffered before disable", ReceivedAt: time.Now()})
+	if !follow.Disable(7) {
+		t.Fatalf("Disable() = false, want true")
+	}
+
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, "buffered before disable") {
+				return true
+			}
+		}
+		return false
+	}, messenger)
+}
+
+func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentMessage) bool, messenger *fakeMessenger) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for {
+		messages := messenger.snapshot()
+		if predicate(messages) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("condition not met before timeout, messages = %#v", messages)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
