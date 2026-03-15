@@ -21,10 +21,10 @@ HTTP translation layer over the existing bridge service:
 
 ### `internal/tagb`
 
-Shared bridge constants and types:
+Bridge service and typed errors:
 
-- pane target parsing
-- metadata key definitions
+- pane resolution and attach/detach workflows
+- metadata-aware list, inspect, snapshot, input, and stream operations
 - typed exit errors
 
 ### `internal/tmux`
@@ -40,11 +40,15 @@ Thin tmux execution layer:
 
 ## Runtime Model
 
-1. CLI resolves a pane target from `%5` or `socket:%5`
-2. tmux commands operate directly on that pane
-3. `attach` writes `@tagb_*` metadata onto the pane
-4. `list` and `inspect` read metadata back from tmux
-5. `stream` captures an initial snapshot, then follows later changes through control mode or polling fallback
+1. A caller reaches the bridge either through the CLI or the local HTTP server
+2. The bridge service resolves a pane target from `%5` or `socket:%5`
+3. tmux commands operate directly on that pane
+4. `attach` writes `@tagb_*` metadata onto the pane
+5. `list` and `inspect` read metadata back from tmux
+6. `snapshot` returns recent pane history
+7. `send`, `enter`, and `ctrl-c` inject literal text or control keys into the pane
+8. `stream` captures an initial snapshot, then follows later changes through control mode or polling fallback
+9. Over HTTP, the stream endpoint exposes those updates as SSE events
 
 ## Recovery Model
 

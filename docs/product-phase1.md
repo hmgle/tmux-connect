@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide a local CLI tool that can attach to an existing tmux pane and act as a stable relay for:
+Provide a local control plane that can run as a CLI or a local HTTP server, attach to an existing tmux pane, and act as a stable relay for:
 
 - reading pane output
 - fetching recent pane snapshots
@@ -16,7 +16,8 @@ Developers already running Claude Code, Codex CLI, or any other terminal agent i
 
 ## In Scope
 
-- Local CLI interface only
+- Local CLI interface
+- Local HTTP API for the same bridge operations
 - Existing pane attach/detach
 - Plain terminal relay mode
 - Metadata stored in tmux user options
@@ -26,7 +27,6 @@ Developers already running Claude Code, Codex CLI, or any other terminal agent i
 ## Out Of Scope
 
 - Telegram, Feishu, or any app integration
-- Local HTTP API
 - Structured agent parsing
 - Permission cards or approval flows
 - Bridge-managed pane creation
@@ -40,6 +40,7 @@ Developers already running Claude Code, Codex CLI, or any other terminal agent i
 - A user can read recent output with `snapshot`
 - A user can follow output with `stream`
 - A user can send text and basic control keys to the pane
+- A local client can call the same operations through the HTTP API
 - Managed state survives CLI restarts because tmux retains metadata
 
 ## Non-Goals

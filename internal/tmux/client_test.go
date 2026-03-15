@@ -44,6 +44,12 @@ func TestSnapshotDiff(t *testing.T) {
 			current:  "alpha\nbeta",
 			want:     "alpha\nbeta",
 		},
+		{
+			name:     "scrolls forward by one line",
+			previous: "one\ntwo\nthree",
+			current:  "two\nthree\nfour",
+			want:     "four",
+		},
 	}
 
 	for _, tc := range tests {

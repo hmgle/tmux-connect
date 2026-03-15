@@ -482,11 +482,13 @@ bridge 本质上是在给移动端远程控制一个 tmux pane，因此要明确
 - 谁发送了什么控制操作
 - 谁批准了什么权限请求
 
-## 12. 推荐的第一阶段实现范围
+## 12. 推荐的后续阶段实现范围
 
 为了尽快验证价值，我建议把范围收窄为：
 
-### Phase 1
+这里的阶段是面向更大 bridge 路线图的后续阶段，不对应当前仓库里已经实现的本地 CLI + HTTP relay `Phase 1`。
+
+### Phase 2
 
 - tmux control mode client
 - Telegram connector
@@ -497,7 +499,7 @@ bridge 本质上是在给移动端远程控制一个 tmux pane，因此要明确
 - snapshot / send / enter / ctrl-c / allow / deny
 - 基于 tmux user options 的恢复
 
-### Phase 2
+### Phase 3
 
 - 飞书 connector
 - Codex CLI 托管模式
@@ -505,7 +507,7 @@ bridge 本质上是在给移动端远程控制一个 tmux pane，因此要明确
 - 多会话切换和列表卡片
 - 更完整的节流与摘要
 
-### Phase 3
+### Phase 4
 
 - Cursor/OpenCode profile
 - 文件/图片上传

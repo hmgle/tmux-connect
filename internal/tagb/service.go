@@ -23,18 +23,14 @@ type PaneRecord struct {
 }
 
 func (s *Service) List(ctx context.Context) ([]PaneRecord, error) {
-	panes, err := s.tmux.ListPanes(ctx)
+	states, err := s.tmux.ListPaneStates(ctx)
 	if err != nil {
 		return nil, TmuxError("list panes: %v", err)
 	}
 
-	records := make([]PaneRecord, 0, len(panes))
-	for _, pane := range panes {
-		meta, err := s.tmux.GetMetadata(ctx, pane.Target)
-		if err != nil {
-			return nil, TmuxError("read metadata for %s: %v", pane.Target.PaneKey(), err)
-		}
-		records = append(records, PaneRecord{Info: pane, Metadata: meta})
+	records := make([]PaneRecord, 0, len(states))
+	for _, state := range states {
+		records = append(records, PaneRecord{Info: state.Info, Metadata: state.Metadata})
 	}
 
 	slices.SortFunc(records, func(a, b PaneRecord) int {
@@ -178,7 +174,7 @@ func (s *Service) OpenStream(ctx context.Context, ref string, lines int) (PaneSt
 	if err != nil {
 		return PaneStream{}, TmuxError("capture pane %s: %v", pane.Target.PaneKey(), err)
 	}
-	stream, err := s.tmux.SubscribePane(ctx, pane)
+	stream, err := s.tmux.SubscribePane(ctx, pane, lines)
 	if err != nil {
 		return PaneStream{}, TmuxError("subscribe to %s: %v", pane.Target.PaneKey(), err)
 	}

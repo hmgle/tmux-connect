@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,6 +156,73 @@ func TestHandleStream(t *testing.T) {
 	}
 	if body := rec.Body.String(); body == "" || !bytes.Contains(rec.Body.Bytes(), []byte("event: initial")) || !bytes.Contains(rec.Body.Bytes(), []byte("event: output")) {
 		t.Fatalf("unexpected SSE body: %q", body)
+	}
+}
+
+func TestHandleStreamHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sub := tmux.NewSubscriptionForTest()
+	srv := NewServer("127.0.0.1:0", stubService{
+		listFn:     func(context.Context) ([]tagb.PaneRecord, error) { return nil, nil },
+		attachFn:   func(context.Context, string, string, string) (tagb.PaneRecord, error) { return tagb.PaneRecord{}, nil },
+		detachFn:   func(context.Context, string) error { return nil },
+		inspectFn:  func(context.Context, string) (tagb.PaneRecord, error) { return tagb.PaneRecord{}, nil },
+		snapshotFn: func(context.Context, string, int) (string, error) { return "", nil },
+		sendFn:     func(context.Context, string, string, bool) error { return nil },
+		enterFn:    func(context.Context, string) error { return nil },
+		ctrlCFn:    func(context.Context, string) error { return nil },
+		openStreamFn: func(context.Context, string, int) (tagb.PaneStream, error) {
+			go func() {
+				time.Sleep(5 * time.Millisecond)
+				cancel()
+				sub.CloseChannels()
+			}()
+			return tagb.PaneStream{
+				Pane:         tmux.PaneInfo{Target: tmux.Target{Socket: "default", PaneID: "%5"}},
+				Subscription: sub,
+			}, nil
+		},
+	})
+	srv.heartbeatInterval = time.Millisecond
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/panes/stream?pane=%255", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(rec, req)
+
+	if !bytes.Contains(rec.Body.Bytes(), []byte(":keepalive\n\n")) {
+		t.Fatalf("expected heartbeat frame in SSE body, got %q", rec.Body.String())
+	}
+}
+
+func TestHandleSendRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer("127.0.0.1:0", stubService{
+		listFn:       func(context.Context) ([]tagb.PaneRecord, error) { return nil, nil },
+		attachFn:     func(context.Context, string, string, string) (tagb.PaneRecord, error) { return tagb.PaneRecord{}, nil },
+		detachFn:     func(context.Context, string) error { return nil },
+		inspectFn:    func(context.Context, string) (tagb.PaneRecord, error) { return tagb.PaneRecord{}, nil },
+		snapshotFn:   func(context.Context, string, int) (string, error) { return "", nil },
+		sendFn:       func(context.Context, string, string, bool) error { return nil },
+		enterFn:      func(context.Context, string) error { return nil },
+		ctrlCFn:      func(context.Context, string) error { return nil },
+		openStreamFn: func(context.Context, string, int) (tagb.PaneStream, error) { return tagb.PaneStream{}, nil },
+	})
+
+	body := strings.NewReader(`{"pane":"%5","text":"` + strings.Repeat("a", 1<<20) + `","enter":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/panes/send", body)
+	rec := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(rec.Body.String(), "http: request body too large") {
+		t.Fatalf("unexpected body %q", rec.Body.String())
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,13 +26,18 @@ type BridgeService interface {
 }
 
 type Server struct {
-	addr    string
-	service BridgeService
-	server  *http.Server
+	addr              string
+	service           BridgeService
+	server            *http.Server
+	heartbeatInterval time.Duration
 }
 
 func NewServer(addr string, service BridgeService) *Server {
-	s := &Server{addr: addr, service: service}
+	s := &Server{
+		addr:              addr,
+		service:           service,
+		heartbeatInterval: 20 * time.Second,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /v1/panes", s.handleList)
@@ -115,7 +121,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAttach(w http.ResponseWriter, r *http.Request) {
 	var req attachRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -129,7 +135,7 @@ func (s *Server) handleAttach(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDetach(w http.ResponseWriter, r *http.Request) {
 	var req paneRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -169,7 +175,7 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	var req sendRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -182,7 +188,7 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEnter(w http.ResponseWriter, r *http.Request) {
 	var req paneRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -195,7 +201,7 @@ func (s *Server) handleEnter(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCtrlC(w http.ResponseWriter, r *http.Request) {
 	var req paneRequest
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -238,20 +244,38 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
+	heartbeat := time.NewTicker(s.heartbeatInterval)
+	defer heartbeat.Stop()
+	chunks := stream.Subscription.Chunks()
+	errs := stream.Subscription.Errs()
+
 	for {
+		if chunks == nil && errs == nil {
+			return
+		}
 		select {
 		case <-r.Context().Done():
 			return
-		case err := <-stream.Subscription.Errs():
-			if err == nil {
+		case <-heartbeat.C:
+			if _, err := io.WriteString(w, ":keepalive\n\n"); err != nil {
 				return
+			}
+			flusher.Flush()
+		case err, ok := <-errs:
+			if !ok {
+				errs = nil
+				continue
+			}
+			if err == nil {
+				continue
 			}
 			_ = writeSSE(w, "error", map[string]string{"error": err.Error()})
 			flusher.Flush()
 			return
-		case chunk, ok := <-stream.Subscription.Chunks():
+		case chunk, ok := <-chunks:
 			if !ok {
-				return
+				chunks = nil
+				continue
 			}
 			if err := writeSSE(w, "output", map[string]any{
 				"pane":    stream.Pane.Target.PaneKey(),
@@ -265,10 +289,17 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func decodeJSON(r *http.Request, dst any) error {
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("request body must contain a single JSON object")
+		}
 		return err
 	}
 	return nil

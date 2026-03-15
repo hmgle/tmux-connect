@@ -20,22 +20,27 @@ func (s *Subscription) Errs() <-chan error         { return s.errs }
 func (s *Subscription) Close() error               { return s.close() }
 
 func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*Subscription, error) {
+	subCtx, cancel := context.WithCancel(ctx)
 	ptySession, err := c.runner.StartPTY(ctx, c.withSocket("attach-session", "-t", pane.SessionName, "-f", "ignore-size,active-pane")...)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	ttyName := ptySession.Name()
 	if err := c.waitForControlClient(ctx, ttyName); err != nil {
+		cancel()
 		_ = ptySession.Close()
 		return nil, err
 	}
 
 	panes, err := c.ListPanes(ctx)
 	if err != nil {
+		cancel()
 		_ = ptySession.Close()
 		return nil, err
 	}
 	if err := c.runClientCommand(ctx, ttyName, "refresh-client", "-C", "1x1"); err != nil {
+		cancel()
 		_ = ptySession.Close()
 		return nil, err
 	}
@@ -48,6 +53,7 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 			state = "on"
 		}
 		if err := c.runClientCommand(ctx, ttyName, "refresh-client", "-A", candidate.Target.PaneID+":"+state); err != nil {
+			cancel()
 			_ = ptySession.Close()
 			return nil, err
 		}
@@ -58,11 +64,12 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 		errs:   make(chan error, 1),
 	}
 	sub.close = func() error {
+		cancel()
 		_, _ = c.run(context.Background(), nil, "detach-client", "-t", ttyName)
 		return ptySession.Close()
 	}
 
-	go c.readControlOutput(ctx, pane.Target, ptySession, sub)
+	go c.readControlOutput(subCtx, pane.Target, ptySession, sub)
 	return sub, nil
 }
 

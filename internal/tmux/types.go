@@ -31,6 +31,11 @@ type PaneInfo struct {
 	Height      int    `json:"height"`
 }
 
+type PaneState struct {
+	Info     PaneInfo
+	Metadata BridgeMetadata
+}
+
 type OutputChunk struct {
 	Target     Target
 	Text       string

@@ -17,6 +17,8 @@ import (
 	"github.com/creack/pty"
 )
 
+const paneFieldSep = "\x1f"
+
 type Runner interface {
 	Run(ctx context.Context, stdin []byte, args ...string) (string, error)
 	StartPTY(ctx context.Context, args ...string) (PTYSession, error)
@@ -76,7 +78,7 @@ func (c *Client) SocketName() string {
 }
 
 func (c *Client) ListPanes(ctx context.Context) ([]PaneInfo, error) {
-	format := "#{pane_id}\t#{session_name}\t#{window_id}\t#{window_name}\t#{pane_title}\t#{pane_current_command}\t#{pane_dead}\t#{pane_width}\t#{pane_height}"
+	format := paneListFormat()
 	output, err := c.run(ctx, nil, "list-panes", "-a", "-F", format)
 	if err != nil {
 		return nil, err
@@ -88,31 +90,34 @@ func (c *Client) ListPanes(ctx context.Context) ([]PaneInfo, error) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		fields := strings.Split(line, "\t")
-		if len(fields) != 9 {
-			return nil, fmt.Errorf("unexpected list-panes row: %q", line)
-		}
-		width, err := strconv.Atoi(fields[7])
+		pane, err := parsePaneInfoLine(c.SocketName(), line)
 		if err != nil {
-			return nil, fmt.Errorf("parse width for %s: %w", fields[0], err)
+			return nil, err
 		}
-		height, err := strconv.Atoi(fields[8])
-		if err != nil {
-			return nil, fmt.Errorf("parse height for %s: %w", fields[0], err)
-		}
-		panes = append(panes, PaneInfo{
-			Target:      Target{Socket: c.SocketName(), PaneID: fields[0]},
-			SessionName: fields[1],
-			WindowID:    fields[2],
-			WindowName:  fields[3],
-			PaneTitle:   fields[4],
-			CurrentCmd:  fields[5],
-			Dead:        fields[6] == "1",
-			Width:       width,
-			Height:      height,
-		})
+		panes = append(panes, pane)
 	}
 	return panes, nil
+}
+
+func (c *Client) ListPaneStates(ctx context.Context) ([]PaneState, error) {
+	output, err := c.run(ctx, nil, "list-panes", "-a", "-F", paneStateFormat())
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	states := make([]PaneState, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		pane, meta, err := parsePaneStateLine(c.SocketName(), line)
+		if err != nil {
+			return nil, err
+		}
+		states = append(states, PaneState{Info: pane, Metadata: meta})
+	}
+	return states, nil
 }
 
 func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (string, error) {
@@ -127,10 +132,11 @@ func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) er
 	if len(data) == 0 {
 		return nil
 	}
-	if _, err := c.run(ctx, data, "load-buffer", "-"); err != nil {
+	bufferName := "tagb-" + strings.TrimPrefix(target.PaneID, "%")
+	if _, err := c.run(ctx, data, "load-buffer", "-b", bufferName, "-"); err != nil {
 		return err
 	}
-	_, err := c.run(ctx, nil, "paste-buffer", "-d", "-p", "-t", target.PaneID)
+	_, err := c.run(ctx, nil, "paste-buffer", "-b", bufferName, "-d", "-p", "-t", target.PaneID)
 	return err
 }
 
@@ -160,8 +166,22 @@ func (c *Client) SetUserOption(ctx context.Context, target Target, key string, v
 	return err
 }
 
+func (c *Client) GetUserOption(ctx context.Context, target Target, key string) (string, error) {
+	output, err := c.run(ctx, nil, "show-options", "-p", "-v", "-t", target.PaneID, key)
+	if err != nil {
+		if isUnsetOptionError(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
 func (c *Client) DeleteUserOption(ctx context.Context, target Target, key string) error {
 	_, err := c.run(ctx, nil, "set-option", "-p", "-u", "-t", target.PaneID, key)
+	if isUnsetOptionError(err) {
+		return nil
+	}
 	return err
 }
 
@@ -192,23 +212,22 @@ func (c *Client) ClearMetadata(ctx context.Context, target Target) error {
 }
 
 func (c *Client) TouchMetadata(ctx context.Context, target Target) error {
-	meta, err := c.GetMetadata(ctx, target)
+	managed, err := c.GetUserOption(ctx, target, OptionManaged)
 	if err != nil {
 		return err
 	}
-	if !meta.Managed {
+	if managed != "1" {
 		return nil
 	}
-	meta.LastActivityUnix = time.Now().Unix()
-	return c.SetMetadata(ctx, target, meta)
+	return c.SetUserOption(ctx, target, OptionLastActivity, strconv.FormatInt(time.Now().Unix(), 10))
 }
 
-func (c *Client) SubscribePane(ctx context.Context, pane PaneInfo) (*Subscription, error) {
+func (c *Client) SubscribePane(ctx context.Context, pane PaneInfo, lines int) (*Subscription, error) {
 	control, err := c.startControlSubscription(ctx, pane)
 	if err == nil {
 		return control, nil
 	}
-	return c.startPollingSubscription(ctx, pane), nil
+	return c.startPollingSubscription(ctx, pane, lines), nil
 }
 
 func (c *Client) run(ctx context.Context, stdin []byte, args ...string) (string, error) {
@@ -238,9 +257,105 @@ func parseUserOptions(output string) map[string]string {
 	return opts
 }
 
+func paneListFormat() string {
+	return strings.Join([]string{
+		"#{pane_id}",
+		"#{session_name}",
+		"#{window_id}",
+		"#{window_name}",
+		"#{pane_title}",
+		"#{pane_current_command}",
+		"#{pane_dead}",
+		"#{pane_width}",
+		"#{pane_height}",
+	}, paneFieldSep)
+}
+
+func paneStateFormat() string {
+	return strings.Join([]string{
+		"#{pane_id}",
+		"#{session_name}",
+		"#{window_id}",
+		"#{window_name}",
+		"#{pane_title}",
+		"#{pane_current_command}",
+		"#{pane_dead}",
+		"#{pane_width}",
+		"#{pane_height}",
+		"#{@tagb_managed}",
+		"#{@tagb_mode}",
+		"#{@tagb_agent}",
+		"#{@tagb_label}",
+		"#{@tagb_created_by}",
+		"#{@tagb_last_activity_unix}",
+	}, paneFieldSep)
+}
+
+func parsePaneStateLine(socket string, line string) (PaneInfo, BridgeMetadata, error) {
+	fields := strings.Split(line, paneFieldSep)
+	if len(fields) != 15 {
+		return PaneInfo{}, BridgeMetadata{}, fmt.Errorf("unexpected list-panes row: %q", line)
+	}
+	info, err := buildPaneInfo(socket, fields[:9])
+	if err != nil {
+		return PaneInfo{}, BridgeMetadata{}, err
+	}
+	meta := MetadataFromOptions(map[string]string{
+		OptionManaged:      fields[9],
+		OptionMode:         fields[10],
+		OptionAgent:        fields[11],
+		OptionLabel:        fields[12],
+		OptionCreatedBy:    fields[13],
+		OptionLastActivity: fields[14],
+	})
+	return info, meta, nil
+}
+
+func parsePaneInfoLine(socket string, line string) (PaneInfo, error) {
+	fields := strings.Split(line, paneFieldSep)
+	if len(fields) != 9 {
+		return PaneInfo{}, fmt.Errorf("unexpected list-panes row: %q", line)
+	}
+	return buildPaneInfo(socket, fields)
+}
+
+func buildPaneInfo(socket string, fields []string) (PaneInfo, error) {
+	width, err := strconv.Atoi(fields[7])
+	if err != nil {
+		return PaneInfo{}, fmt.Errorf("parse width for %s: %w", fields[0], err)
+	}
+	height, err := strconv.Atoi(fields[8])
+	if err != nil {
+		return PaneInfo{}, fmt.Errorf("parse height for %s: %w", fields[0], err)
+	}
+	return PaneInfo{
+		Target:      Target{Socket: socket, PaneID: fields[0]},
+		SessionName: fields[1],
+		WindowID:    fields[2],
+		WindowName:  fields[3],
+		PaneTitle:   fields[4],
+		CurrentCmd:  fields[5],
+		Dead:        fields[6] == "1",
+		Width:       width,
+		Height:      height,
+	}, nil
+}
+
 func isClosedConn(err error) bool {
 	if err == nil {
 		return false
 	}
 	return errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EIO)
+}
+
+func isUnsetOptionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "invalid option") || strings.Contains(msg, "unknown option") {
+		return true
+	}
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
 }
