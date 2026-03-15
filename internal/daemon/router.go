@@ -149,7 +149,9 @@ func (r *Router) handleAttach(ctx context.Context, message IncomingMessage, args
 	if err != nil {
 		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("attach failed: %v", err))
 	}
-	_ = r.registry.Refresh(ctx)
+	if err := r.registry.Refresh(ctx); err != nil {
+		return r.replyBus.Reply(ctx, chatID, record.Info.Target.PaneKey(), "error", fmt.Sprintf("attached %s but registry refresh failed: %v", record.Info.Target.PaneKey(), err))
+	}
 	return r.replyBus.Reply(ctx, chatID, "", "attach", fmt.Sprintf("attached %s", record.Info.Target.PaneKey()))
 }
 
@@ -168,9 +170,17 @@ func (r *Router) handleDetach(ctx context.Context, message IncomingMessage, args
 	if err := r.service.Detach(ctx, ref); err != nil {
 		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("detach failed: %v", err))
 	}
-	_ = r.store.UnbindPaneEverywhere(ctx, paneKey)
+	var cleanupErrs []string
+	if err := r.store.UnbindPaneEverywhere(ctx, paneKey); err != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Sprintf("failed to clear local bindings: %v", err))
+	}
 	r.follow.StopPane(paneKey)
-	_ = r.registry.Refresh(ctx)
+	if err := r.registry.Refresh(ctx); err != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Sprintf("registry refresh failed: %v", err))
+	}
+	if len(cleanupErrs) > 0 {
+		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("detached %s but cleanup was incomplete: %s", paneKey, strings.Join(cleanupErrs, "; ")))
+	}
 	return r.replyBus.Reply(ctx, chatID, "", "detach", fmt.Sprintf("detached %s", paneKey))
 }
 

@@ -137,6 +137,8 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 
 	var builder strings.Builder
 	timerActive := false
+	chunks := stream.Subscription.Chunks()
+	errs := stream.Subscription.Errs()
 
 	flush := func(flushCtx context.Context) bool {
 		text := strings.TrimSpace(builder.String())
@@ -149,28 +151,54 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		}
 		return true
 	}
+	drainPendingChunks := func() {
+		for chunks != nil {
+			select {
+			case chunk, ok := <-chunks:
+				if !ok {
+					chunks = nil
+					return
+				}
+				builder.WriteString(chunk.Text)
+			default:
+				return
+			}
+		}
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
+			drainPendingChunks()
 			flushCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_ = flush(flushCtx)
 			cancel()
 			return
-		case err, ok := <-stream.Subscription.Errs():
+		case err, ok := <-errs:
 			if !ok {
-				_ = flush(ctx)
-				return
+				errs = nil
+				if chunks == nil {
+					drainPendingChunks()
+					_ = flush(ctx)
+					return
+				}
+				continue
 			}
+			drainPendingChunks()
 			if !flush(ctx) {
 				return
 			}
 			_ = m.replyBus.Reply(ctx, session.chatID, session.paneKey, "follow-error", fmt.Sprintf("follow stopped for %s: %v", session.paneKey, err))
 			return
-		case chunk, ok := <-stream.Subscription.Chunks():
+		case chunk, ok := <-chunks:
 			if !ok {
-				_ = flush(ctx)
-				return
+				chunks = nil
+				if errs == nil {
+					drainPendingChunks()
+					_ = flush(ctx)
+					return
+				}
+				continue
 			}
 			builder.WriteString(chunk.Text)
 			if builder.Len() >= m.maxMessageLen {

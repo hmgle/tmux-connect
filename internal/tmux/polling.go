@@ -7,6 +7,10 @@ import (
 )
 
 func (c *Client) startPollingSubscription(ctx context.Context, pane PaneInfo, lines int) *Subscription {
+	return c.startPollingSubscriptionWithBaseline(ctx, pane, lines, "")
+}
+
+func (c *Client) startPollingSubscriptionWithBaseline(ctx context.Context, pane PaneInfo, lines int, previous string) *Subscription {
 	subCtx, cancel := context.WithCancel(ctx)
 	sub := &Subscription{
 		chunks: make(chan OutputChunk, 4),
@@ -24,7 +28,6 @@ func (c *Client) startPollingSubscription(ctx context.Context, pane PaneInfo, li
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 
-		var previous string
 		for {
 			body, err := c.CapturePane(subCtx, pane.Target, lines)
 			if err != nil {

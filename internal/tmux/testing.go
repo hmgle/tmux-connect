@@ -16,7 +16,15 @@ func (s *Subscription) PushError(err error) {
 	s.errs <- err
 }
 
-func (s *Subscription) CloseChannels() {
-	close(s.chunks)
+func (s *Subscription) CloseErrs() {
 	close(s.errs)
+}
+
+func (s *Subscription) CloseChunks() {
+	close(s.chunks)
+}
+
+func (s *Subscription) CloseChannels() {
+	s.CloseChunks()
+	s.CloseErrs()
 }

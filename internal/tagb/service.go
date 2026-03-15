@@ -170,13 +170,9 @@ func (s *Service) OpenStream(ctx context.Context, ref string, lines int) (PaneSt
 	if err != nil {
 		return PaneStream{}, err
 	}
-	initial, err := s.tmux.CapturePane(ctx, pane.Target, lines)
+	initial, stream, err := s.tmux.OpenPaneStream(ctx, pane, lines)
 	if err != nil {
-		return PaneStream{}, TmuxError("capture pane %s: %v", pane.Target.PaneKey(), err)
-	}
-	stream, err := s.tmux.SubscribePane(ctx, pane, lines)
-	if err != nil {
-		return PaneStream{}, TmuxError("subscribe to %s: %v", pane.Target.PaneKey(), err)
+		return PaneStream{}, TmuxError("open stream for %s: %v", pane.Target.PaneKey(), err)
 	}
 	return PaneStream{Pane: pane, Initial: initial, Subscription: stream}, nil
 }

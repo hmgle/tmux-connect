@@ -302,18 +302,28 @@ func (a *App) runStream(ctx context.Context, args []string) error {
 		}
 	}
 
+	chunks := stream.Subscription.Chunks()
+	errs := stream.Subscription.Errs()
 	for {
+		if chunks == nil && errs == nil {
+			return nil
+		}
 		select {
 		case <-ctx.Done():
 			return nil
-		case err := <-stream.Subscription.Errs():
+		case err, ok := <-errs:
+			if !ok {
+				errs = nil
+				continue
+			}
 			if err == nil {
-				return nil
+				continue
 			}
 			return TmuxError("stream %s: %v", stream.Pane.Target.PaneKey(), err)
-		case chunk, ok := <-stream.Subscription.Chunks():
+		case chunk, ok := <-chunks:
 			if !ok {
-				return nil
+				chunks = nil
+				continue
 			}
 			if *jsonOut {
 				if err := writeJSON(a.stdout, map[string]any{

@@ -227,7 +227,33 @@ func (c *Client) SubscribePane(ctx context.Context, pane PaneInfo, lines int) (*
 	if err == nil {
 		return control, nil
 	}
-	return c.startPollingSubscription(ctx, pane, lines), nil
+	initial, captureErr := c.CapturePane(ctx, pane.Target, lines)
+	if captureErr != nil {
+		return nil, captureErr
+	}
+	return c.startPollingSubscriptionWithBaseline(ctx, pane, lines, initial), nil
+}
+
+func (c *Client) OpenPaneStream(ctx context.Context, pane PaneInfo, lines int) (string, *Subscription, error) {
+	control, err := c.startControlSubscription(ctx, pane)
+	if err == nil {
+		initial, captureErr := c.CapturePane(ctx, pane.Target, lines)
+		if captureErr != nil {
+			_ = control.Close()
+			return "", nil, captureErr
+		}
+		stream, cutoverErr := CutoverSubscription(control, initial)
+		if cutoverErr != nil {
+			return "", nil, cutoverErr
+		}
+		return initial, stream, nil
+	}
+
+	initial, captureErr := c.CapturePane(ctx, pane.Target, lines)
+	if captureErr != nil {
+		return "", nil, captureErr
+	}
+	return initial, c.startPollingSubscriptionWithBaseline(ctx, pane, lines, initial), nil
 }
 
 func (c *Client) run(ctx context.Context, stdin []byte, args ...string) (string, error) {

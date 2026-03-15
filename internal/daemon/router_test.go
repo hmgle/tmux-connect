@@ -231,6 +231,41 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	}, messenger)
 }
 
+func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store)
+	follow := NewFollowManager(service, replyBus, 20)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
+		t.Fatalf("HandleMessage(bind) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+		t.Fatalf("HandleMessage(follow on) error = %v", err)
+	}
+
+	service.sub.CloseErrs()
+	service.sub.PushChunk(tmux.OutputChunk{Text: "chunk after errs close", ReceivedAt: time.Now()})
+	service.sub.CloseChunks()
+
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, "chunk after errs close") {
+				return true
+			}
+		}
+		return false
+	}, messenger)
+}
+
 func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentMessage) bool, messenger *fakeMessenger) {
 	t.Helper()
 

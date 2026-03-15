@@ -176,3 +176,49 @@ func TestStartPollingSubscriptionHonorsLinesAndClose(t *testing.T) {
 		t.Fatal("polling subscription did not stop after Close")
 	}
 }
+
+func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
+	t.Parallel()
+
+	captures := []string{"one", "one\ntwo"}
+	var captureIndex int
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+			if args[0] != "capture-pane" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			if captureIndex >= len(captures) {
+				return captures[len(captures)-1], nil
+			}
+			body := captures[captureIndex]
+			captureIndex++
+			return body, nil
+		},
+		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
+			return nil, errors.New("control unavailable")
+		},
+	}
+	client := NewClient(runner, "")
+	pane := PaneInfo{
+		Target:      Target{PaneID: "%9"},
+		SessionName: "dev",
+	}
+
+	initial, sub, err := client.OpenPaneStream(context.Background(), pane, 20)
+	if err != nil {
+		t.Fatalf("OpenPaneStream() error = %v", err)
+	}
+	defer sub.Close()
+
+	if initial != "one" {
+		t.Fatalf("initial = %q, want %q", initial, "one")
+	}
+	select {
+	case chunk := <-sub.Chunks():
+		if chunk.Text != "two" {
+			t.Fatalf("chunk.Text = %q, want %q", chunk.Text, "two")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected polling diff chunk")
+	}
+}
