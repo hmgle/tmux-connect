@@ -4,7 +4,11 @@
 
 `tmux-connect` has completed its Phase 1 local bridge baseline, its Phase 2 Telegram relay daemon, and the first Phase 3 persistence/reply-continuity foundation slice.
 
-Recommended reading order:
+## Quick Start (Chinese)
+
+- [guide-zh.md](./guide-zh.md) — comprehensive usage guide with scenarios, workflows, sequence diagrams, and step-by-step instructions (Chinese)
+
+## Recommended reading order
 
 1. [product-phase2.md](./product-phase2.md)
 2. [architecture-phase2.md](./architecture-phase2.md)
