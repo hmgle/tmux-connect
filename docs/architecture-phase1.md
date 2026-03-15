@@ -1,5 +1,7 @@
 # Architecture: Phase 1
 
+> Status: completed baseline; retained as the original local-bridge architecture. For the current runtime, see [architecture-phase2.md](./architecture-phase2.md).
+
 ## Summary
 
 Phase 1 is a single-process local control plane. It can be used as a CLI or exposed through a local HTTP server. tmux is the only source of runtime truth. There is no database and no external connector yet.

@@ -6,6 +6,15 @@
 > Cursor Agent 等工具桥接到 Telegram、飞书等移动端消息平台，支持远程查看、发送指令、
 > 批准权限、切换会话与恢复连接。
 
+> 实现进度补充（2026-03-15）：
+>
+> - 已实现：Phase 1 本地 CLI / HTTP bridge；Phase 2 Telegram relay daemon、SQLite 聊天绑定、命令式 Telegram 控制、follow 聚合推送
+> - 未实现：structured agent adapter、权限卡片、Feishu/Lark connector、bridge 托管创建 pane、message-link 持久化
+> - 当前实现状态请优先参考：
+>   - [product-phase2.md](./product-phase2.md)
+>   - [architecture-phase2.md](./architecture-phase2.md)
+>   - [phase2-status.md](./phase2-status.md)
+
 ## 1. 设计目标
 
 这个项目的核心需求不是“替代 cc-connect 的 pipe 通信”，而是：

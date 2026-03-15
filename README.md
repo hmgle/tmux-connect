@@ -1,14 +1,15 @@
 # tmux-connect
 
-`tmux-connect` is a Phase 1 local bridge for controlling existing tmux panes from a CLI.
+`tmux-connect` is a local tmux bridge for controlling existing panes from a CLI, HTTP API, or a Telegram relay daemon.
 
-This first cut is intentionally narrow:
+Current scope:
 
-- Go-based local CLI only
+- Go-based local CLI and daemon
 - Attach existing panes only
 - Relay mode only; no structured Claude/Codex parsing yet
-- Recovery via tmux user options only
-- No Telegram, Feishu, or HTTP connector yet
+- Recovery via tmux user options plus a local SQLite state store for Telegram chat bindings
+- Local HTTP control plane
+- Telegram long-polling daemon for remote pane relay
 
 ## Commands
 
@@ -23,6 +24,9 @@ tagb [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
 tagb [--socket NAME] [--json] enter --pane %5
 tagb [--socket NAME] [--json] ctrl-c --pane %5
 tagb [--socket NAME] serve [--listen 127.0.0.1:8080]
+tagb [--socket NAME] daemon run --telegram-token TOKEN [--db PATH] [--allow-chat 123456]
+tagb [--socket NAME] daemon doctor --telegram-token TOKEN [--db PATH]
+tagb [--socket NAME] daemon status [--db PATH]
 ```
 
 ## Quick Start
@@ -69,6 +73,52 @@ go run ./cmd/tagb stream --pane %5
 ```bash
 go run ./cmd/tagb serve --listen 127.0.0.1:8080
 ```
+
+## Telegram Relay Daemon
+
+The daemon keeps a Telegram bot connected and routes command-style chat operations to the currently bound tmux pane.
+
+Requirements:
+
+- `sqlite3` must be installed and available in `PATH`
+- a Telegram bot token from BotFather
+
+Start the daemon:
+
+```bash
+go run ./cmd/tagb daemon run \
+  --telegram-token "$TAGB_TELEGRAM_TOKEN" \
+  --db ~/.tagb/tagb.db \
+  --allow-chat 123456789
+```
+
+Useful checks:
+
+```bash
+go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
+go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+```
+
+Supported Telegram commands:
+
+- `/panes`
+- `/attach <pane>`
+- `/detach <pane>`
+- `/bind <pane>`
+- `/current`
+- `/snapshot [lines]`
+- `/send <text>`
+- `/enter`
+- `/ctrlc`
+- `/follow on|off`
+
+Detailed daemon and Telegram docs:
+
+- `docs/README.md`
+- `docs/product-phase2.md`
+- `docs/architecture-phase2.md`
+- `docs/phase2-telegram-daemon-spec.md`
+- `docs/telegram.md`
 
 ## HTTP API
 
@@ -119,4 +169,6 @@ Managed state survives CLI restarts because tmux keeps the pane metadata.
 - Streaming prefers tmux control mode and falls back to polling snapshots when control mode is unavailable
 - Control keys currently support only `Enter` and `Ctrl-C`
 - Multi-socket support is explicit via `--socket`; there is no auto-discovery across sockets
-- No auth, remote connector, or persistent daemon mode yet
+- Telegram is the only remote connector today
+- Telegram interaction is command-based; there is no structured agent protocol, approval card flow, or rich inline UI yet
+- The local state store currently shells out to `sqlite3`; there is no embedded DB layer yet

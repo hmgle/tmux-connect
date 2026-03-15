@@ -1,5 +1,7 @@
 # Product Spec: Phase 1 Local tmux Bridge
 
+> Status: completed baseline; retained as historical scope reference. For the current product state, see [product-phase2.md](./product-phase2.md).
+
 ## Goal
 
 Provide a local control plane that can run as a CLI or a local HTTP server, attach to an existing tmux pane, and act as a stable relay for:

@@ -1,5 +1,7 @@
 # CLI Spec: Phase 1
 
+> Status: completed baseline; Phase 2 adds `tagb daemon` and Telegram relay behavior. See [phase2-telegram-daemon-spec.md](./phase2-telegram-daemon-spec.md).
+
 ## Root Flags
 
 - `--socket NAME`: operate on a non-default tmux socket
