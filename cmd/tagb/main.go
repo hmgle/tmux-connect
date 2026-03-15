@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/portgle/tmux-connect/internal/daemon"
 	"github.com/portgle/tmux-connect/internal/httpapi"
 	"github.com/portgle/tmux-connect/internal/tagb"
 	"github.com/portgle/tmux-connect/internal/tmux"
@@ -30,6 +31,14 @@ func main() {
 	app := tagb.NewApp(os.Stdout, os.Stderr, service)
 	if len(args) > 0 && args[0] == "serve" {
 		if err := runServe(ctx, os.Stdout, os.Stderr, service, args[1:]); err != nil {
+			code := tagb.ExitCode(err)
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(code)
+		}
+		return
+	}
+	if len(args) > 0 && args[0] == "daemon" {
+		if err := daemon.RunCLI(ctx, os.Stdout, os.Stderr, service, args[1:]); err != nil {
 			code := tagb.ExitCode(err)
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(code)

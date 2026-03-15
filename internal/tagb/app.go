@@ -350,6 +350,7 @@ Commands:
   ctrl-c   --pane %5 [--json]
   stream   --pane %5 [--lines 120] [--json]
   serve    [--listen 127.0.0.1:8080]
+  daemon   <run|doctor|status> [flags]
 `)
 }
 
