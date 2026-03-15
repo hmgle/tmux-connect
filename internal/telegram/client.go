@@ -94,8 +94,13 @@ type getUpdatesRequest struct {
 }
 
 type sendMessageRequest struct {
-	ChatID int64  `json:"chat_id"`
-	Text   string `json:"text"`
+	ChatID           int64  `json:"chat_id"`
+	Text             string `json:"text"`
+	ReplyToMessageID int64  `json:"reply_to_message_id,omitempty"`
+}
+
+type SendOptions struct {
+	ReplyToMessageID int64
 }
 
 type apiResponse[T any] struct {
@@ -139,10 +144,11 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, timeout time.Dura
 	return resp.Result, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) (Message, error) {
+func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, opts SendOptions) (Message, error) {
 	req := sendMessageRequest{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:           chatID,
+		Text:             text,
+		ReplyToMessageID: opts.ReplyToMessageID,
 	}
 	var resp apiResponse[Message]
 	if err := c.call(ctx, "sendMessage", req, &resp); err != nil {

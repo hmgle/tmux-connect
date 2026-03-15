@@ -7,9 +7,10 @@ Current scope:
 - Go-based local CLI and daemon
 - Attach existing panes only
 - Relay mode only; no structured Claude/Codex parsing yet
-- Recovery via tmux user options plus a local SQLite state store for Telegram chat bindings
+- Recovery via tmux user options plus a local SQLite state store for Telegram chat bindings, sessions, and message links
 - Local HTTP control plane
 - Telegram long-polling daemon for remote pane relay
+- Telegram reply continuity backed by durable session/message-link persistence
 
 ## Commands
 
@@ -118,6 +119,8 @@ Detailed daemon and Telegram docs:
 - `docs/product-phase2.md`
 - `docs/architecture-phase2.md`
 - `docs/phase2-telegram-daemon-spec.md`
+- `docs/phase3-status.md`
+- `docs/phase4-handoff.md`
 - `docs/telegram.md`
 
 ## HTTP API
@@ -170,5 +173,5 @@ Managed state survives CLI restarts because tmux keeps the pane metadata.
 - Control keys currently support only `Enter` and `Ctrl-C`
 - Multi-socket support is explicit via `--socket`; there is no auto-discovery across sockets
 - Telegram is the only remote connector today
-- Telegram interaction is command-based; there is no structured agent protocol, approval card flow, or rich inline UI yet
-- The local state store currently shells out to `sqlite3`; there is no embedded DB layer yet
+- Telegram interaction is command-based; reply continuity exists, but there is still no structured agent protocol, approval card flow, or rich inline UI
+- The local state store currently shells out to `sqlite3`; schema versioning now exists, but there is still no embedded DB layer

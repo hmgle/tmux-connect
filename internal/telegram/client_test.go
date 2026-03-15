@@ -109,11 +109,46 @@ func TestSendMessage(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("token", WithBaseURL(server.URL))
-	message, err := client.SendMessage(context.Background(), 1, "hello")
+	message, err := client.SendMessage(context.Background(), 1, "hello", SendOptions{})
 	if err != nil {
 		t.Fatalf("SendMessage() error = %v", err)
 	}
 	if message.MessageID != 99 {
 		t.Fatalf("message_id = %d, want 99", message.MessageID)
+	}
+}
+
+func TestSendMessageWithReplyTarget(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["reply_to_message_id"] != float64(42) {
+			t.Fatalf("reply_to_message_id = %#v, want 42", payload["reply_to_message_id"])
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": 100,
+				"text":       "hello",
+				"chat": map[string]any{
+					"id":   1,
+					"type": "private",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("token", WithBaseURL(server.URL))
+	message, err := client.SendMessage(context.Background(), 1, "hello", SendOptions{ReplyToMessageID: 42})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if message.MessageID != 100 {
+		t.Fatalf("message_id = %d, want 100", message.MessageID)
 	}
 }

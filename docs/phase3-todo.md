@@ -1,5 +1,13 @@
 # Phase 3 TODO
 
+> Historical snapshot before the first Phase 3 foundation slice landed.
+>
+> Superseded by:
+>
+> - [phase3-status.md](./phase3-status.md)
+> - [phase4-handoff.md](./phase4-handoff.md)
+> - [phase4-todo.md](./phase4-todo.md)
+
 ## Primary Goal
 
 Move from "remote terminal relay" toward "agent-aware mobile bridge" without breaking the tmux-first runtime model.
@@ -29,8 +37,8 @@ Move from "remote terminal relay" toward "agent-aware mobile bridge" without bre
 ## Data Layer TODO
 
 - Replace shelling out to `sqlite3` with an in-process DB layer
-- Expand schema to include session records and message links
-- Add migrations and version tracking for the DB schema
+- improve `sessions` / `message_links` so they can support inline callbacks, edit targets, and richer reply threading
+- evolve the current minimal migration/versioning path if future schema churn becomes more complex
 
 ## Quality TODO
 

@@ -114,3 +114,121 @@ func TestStoreStatsAndMessages(t *testing.T) {
 		t.Fatalf("unexpected stats %#v", stats)
 	}
 }
+
+func TestStoreMigratePhase2ToPhase3(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+
+	if err := store.exec(ctx, `
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS message_links;
+PRAGMA user_version = 1;
+`); err != nil {
+		t.Fatalf("prep old schema error = %v", err)
+	}
+
+	if err := store.applyMigrations(ctx); err != nil {
+		t.Fatalf("applyMigrations() error = %v", err)
+	}
+
+	version, err := store.schemaVersion(ctx)
+	if err != nil {
+		t.Fatalf("schemaVersion() error = %v", err)
+	}
+	if version != schemaVersionPhase3 {
+		t.Fatalf("schema version = %d, want %d", version, schemaVersionPhase3)
+	}
+
+	if _, err := store.EnsureSession(ctx, "telegram", 7, "default:%5", "codex"); err != nil {
+		t.Fatalf("EnsureSession() error = %v", err)
+	}
+}
+
+func TestStoreSessionLinksAndReplyTarget(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "tagb.db")
+	store, err := OpenStore(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+
+	session, err := store.EnsureSession(ctx, "telegram", 7, "default:%5", "codex")
+	if err != nil {
+		t.Fatalf("EnsureSession() error = %v", err)
+	}
+	if session.SessionKey != "telegram:7:default:%5" {
+		t.Fatalf("session key = %q", session.SessionKey)
+	}
+
+	sameSession, err := store.EnsureSession(ctx, "telegram", 7, "default:%5", "")
+	if err != nil {
+		t.Fatalf("EnsureSession() second error = %v", err)
+	}
+	if sameSession.SessionKey != session.SessionKey {
+		t.Fatalf("session key changed: %q != %q", sameSession.SessionKey, session.SessionKey)
+	}
+
+	if err := store.TouchSessionInbound(ctx, session.SessionKey, 42); err != nil {
+		t.Fatalf("TouchSessionInbound() error = %v", err)
+	}
+	if err := store.CreateMessageLink(ctx, MessageLinkRecord{
+		Platform:         "telegram",
+		ChatID:           7,
+		PaneKey:          "default:%5",
+		SessionKey:       session.SessionKey,
+		Kind:             "command",
+		InboundMessageID: 42,
+	}); err != nil {
+		t.Fatalf("CreateMessageLink(inbound) error = %v", err)
+	}
+
+	replyTo, err := store.LatestReplyTarget(ctx, session.SessionKey)
+	if err != nil {
+		t.Fatalf("LatestReplyTarget() error = %v", err)
+	}
+	if replyTo != 42 {
+		t.Fatalf("replyTo = %d, want 42", replyTo)
+	}
+
+	if err := store.TouchSessionOutbound(ctx, session.SessionKey, 99); err != nil {
+		t.Fatalf("TouchSessionOutbound() error = %v", err)
+	}
+	if err := store.CreateMessageLink(ctx, MessageLinkRecord{
+		Platform:          "telegram",
+		ChatID:            7,
+		PaneKey:           "default:%5",
+		SessionKey:        session.SessionKey,
+		Kind:              "snapshot",
+		OutboundMessageID: 99,
+		ReplyToMessageID:  42,
+	}); err != nil {
+		t.Fatalf("CreateMessageLink(outbound) error = %v", err)
+	}
+
+	loaded, err := store.LatestSessionByChatPane(ctx, "telegram", 7, "default:%5")
+	if err != nil {
+		t.Fatalf("LatestSessionByChatPane() error = %v", err)
+	}
+	if loaded.LastInboundMessageID != 42 || loaded.LastOutboundMessageID != 99 {
+		t.Fatalf("unexpected session %#v", loaded)
+	}
+
+	reopened, err := OpenStore(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("OpenStore(reopen) error = %v", err)
+	}
+	replyToAfterRestart, err := reopened.LatestReplyTarget(ctx, session.SessionKey)
+	if err != nil {
+		t.Fatalf("LatestReplyTarget(reopen) error = %v", err)
+	}
+	if replyToAfterRestart != 42 {
+		t.Fatalf("replyTo after reopen = %d, want 42", replyToAfterRestart)
+	}
+}

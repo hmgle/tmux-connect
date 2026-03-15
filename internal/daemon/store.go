@@ -27,11 +27,39 @@ type MessageRecord struct {
 	BodyPreview       string
 }
 
+type SessionRecord struct {
+	SessionKey            string
+	Platform              string
+	ChatID                int64
+	PaneKey               string
+	Agent                 string
+	AgentSessionID        string
+	AgentThreadID         string
+	LastInboundMessageID  int64
+	LastOutboundMessageID int64
+}
+
+type MessageLinkRecord struct {
+	Platform          string
+	ChatID            int64
+	PaneKey           string
+	SessionKey        string
+	Kind              string
+	InboundMessageID  int64
+	OutboundMessageID int64
+	ReplyToMessageID  int64
+}
+
 type StoreStats struct {
 	Chats    int
 	Bindings int
 	Messages int
 }
+
+const (
+	schemaVersionPhase2 = 1
+	schemaVersionPhase3 = 2
+)
 
 func OpenStore(ctx context.Context, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
@@ -85,7 +113,10 @@ CREATE TABLE IF NOT EXISTS message_log (
 CREATE INDEX IF NOT EXISTS idx_message_log_chat_created_at
   ON message_log (chat_id, created_at DESC);
 `
-	return s.exec(ctx, schema)
+	if err := s.exec(ctx, schema); err != nil {
+		return err
+	}
+	return s.applyMigrations(ctx)
 }
 
 func (s *Store) BindPane(ctx context.Context, chatID int64, paneKey string) error {
@@ -217,6 +248,180 @@ VALUES (%d, %s, %s, %s, %d, %s);
 	return s.exec(ctx, query)
 }
 
+func (s *Store) EnsureSession(ctx context.Context, platform string, chatID int64, paneKey string, agent string) (SessionRecord, error) {
+	platform = strings.TrimSpace(platform)
+	paneKey = strings.TrimSpace(paneKey)
+	agent = strings.TrimSpace(agent)
+	if platform == "" {
+		return SessionRecord{}, fmt.Errorf("platform is required")
+	}
+	if paneKey == "" {
+		return SessionRecord{}, fmt.Errorf("pane key is required")
+	}
+	sessionKey := sessionKeyFor(platform, chatID, paneKey)
+	query := fmt.Sprintf(`
+INSERT INTO sessions (
+  session_key,
+  platform,
+  chat_id,
+  pane_key,
+  agent,
+  agent_session_id,
+  agent_thread_id,
+  last_inbound_message_id,
+  last_outbound_message_id
+)
+VALUES (%s, %s, %d, %s, %s, '', '', 0, 0)
+ON CONFLICT(session_key) DO UPDATE SET
+  pane_key = excluded.pane_key,
+  agent = CASE
+    WHEN trim(excluded.agent) <> '' THEN excluded.agent
+    ELSE sessions.agent
+  END,
+  updated_at = CURRENT_TIMESTAMP;
+`, sqlString(sessionKey), sqlString(platform), chatID, sqlString(paneKey), sqlString(agent))
+	if err := s.exec(ctx, query); err != nil {
+		return SessionRecord{}, err
+	}
+	return s.SessionByKey(ctx, sessionKey)
+}
+
+func (s *Store) SessionByKey(ctx context.Context, sessionKey string) (SessionRecord, error) {
+	type row struct {
+		SessionKey            string      `json:"session_key"`
+		Platform              string      `json:"platform"`
+		ChatID                json.Number `json:"chat_id"`
+		PaneKey               string      `json:"pane_key"`
+		Agent                 string      `json:"agent"`
+		AgentSessionID        string      `json:"agent_session_id"`
+		AgentThreadID         string      `json:"agent_thread_id"`
+		LastInboundMessageID  json.Number `json:"last_inbound_message_id"`
+		LastOutboundMessageID json.Number `json:"last_outbound_message_id"`
+	}
+	var rows []row
+	query := fmt.Sprintf(`
+SELECT session_key, platform, chat_id, pane_key, agent, agent_session_id, agent_thread_id, last_inbound_message_id, last_outbound_message_id
+FROM sessions
+WHERE session_key = %s
+LIMIT 1;
+`, sqlString(strings.TrimSpace(sessionKey)))
+	if err := s.queryJSON(ctx, query, &rows); err != nil {
+		return SessionRecord{}, err
+	}
+	if len(rows) == 0 {
+		return SessionRecord{}, nil
+	}
+	chatID, err := rows[0].ChatID.Int64()
+	if err != nil {
+		return SessionRecord{}, fmt.Errorf("parse chat id: %w", err)
+	}
+	lastInbound, err := parseJSONInt64(rows[0].LastInboundMessageID)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	lastOutbound, err := parseJSONInt64(rows[0].LastOutboundMessageID)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	return SessionRecord{
+		SessionKey:            rows[0].SessionKey,
+		Platform:              rows[0].Platform,
+		ChatID:                chatID,
+		PaneKey:               rows[0].PaneKey,
+		Agent:                 rows[0].Agent,
+		AgentSessionID:        rows[0].AgentSessionID,
+		AgentThreadID:         rows[0].AgentThreadID,
+		LastInboundMessageID:  lastInbound,
+		LastOutboundMessageID: lastOutbound,
+	}, nil
+}
+
+func (s *Store) LatestSessionByChatPane(ctx context.Context, platform string, chatID int64, paneKey string) (SessionRecord, error) {
+	type row struct {
+		SessionKey            string      `json:"session_key"`
+		Platform              string      `json:"platform"`
+		ChatID                json.Number `json:"chat_id"`
+		PaneKey               string      `json:"pane_key"`
+		Agent                 string      `json:"agent"`
+		AgentSessionID        string      `json:"agent_session_id"`
+		AgentThreadID         string      `json:"agent_thread_id"`
+		LastInboundMessageID  json.Number `json:"last_inbound_message_id"`
+		LastOutboundMessageID json.Number `json:"last_outbound_message_id"`
+	}
+	var rows []row
+	query := fmt.Sprintf(`
+SELECT session_key, platform, chat_id, pane_key, agent, agent_session_id, agent_thread_id, last_inbound_message_id, last_outbound_message_id
+FROM sessions
+WHERE platform = %s AND chat_id = %d AND pane_key = %s
+ORDER BY updated_at DESC
+LIMIT 1;
+`, sqlString(strings.TrimSpace(platform)), chatID, sqlString(strings.TrimSpace(paneKey)))
+	if err := s.queryJSON(ctx, query, &rows); err != nil {
+		return SessionRecord{}, err
+	}
+	if len(rows) == 0 {
+		return SessionRecord{}, nil
+	}
+	return s.SessionByKey(ctx, rows[0].SessionKey)
+}
+
+func (s *Store) TouchSessionInbound(ctx context.Context, sessionKey string, messageID int64) error {
+	query := fmt.Sprintf(`
+UPDATE sessions
+SET last_inbound_message_id = %d,
+    updated_at = CURRENT_TIMESTAMP
+WHERE session_key = %s;
+`, messageID, sqlString(strings.TrimSpace(sessionKey)))
+	return s.exec(ctx, query)
+}
+
+func (s *Store) TouchSessionOutbound(ctx context.Context, sessionKey string, messageID int64) error {
+	query := fmt.Sprintf(`
+UPDATE sessions
+SET last_outbound_message_id = %d,
+    updated_at = CURRENT_TIMESTAMP
+WHERE session_key = %s;
+`, messageID, sqlString(strings.TrimSpace(sessionKey)))
+	return s.exec(ctx, query)
+}
+
+func (s *Store) CreateMessageLink(ctx context.Context, record MessageLinkRecord) error {
+	query := fmt.Sprintf(`
+INSERT INTO message_links (
+  platform,
+  chat_id,
+  pane_key,
+  session_key,
+  kind,
+  inbound_message_id,
+  outbound_message_id,
+  reply_to_message_id
+)
+VALUES (%s, %d, %s, %s, %s, %d, %d, %d);
+`, sqlString(strings.TrimSpace(record.Platform)), record.ChatID, sqlString(strings.TrimSpace(record.PaneKey)), sqlString(strings.TrimSpace(record.SessionKey)), sqlString(strings.TrimSpace(record.Kind)), record.InboundMessageID, record.OutboundMessageID, record.ReplyToMessageID)
+	return s.exec(ctx, query)
+}
+
+func (s *Store) LatestReplyTarget(ctx context.Context, sessionKey string) (int64, error) {
+	type row struct {
+		LastInboundMessageID json.Number `json:"last_inbound_message_id"`
+	}
+	var rows []row
+	query := fmt.Sprintf(`
+SELECT last_inbound_message_id
+FROM sessions
+WHERE session_key = %s
+LIMIT 1;
+`, sqlString(strings.TrimSpace(sessionKey)))
+	if err := s.queryJSON(ctx, query, &rows); err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return parseJSONInt64(rows[0].LastInboundMessageID)
+}
+
 func (s *Store) Stats(ctx context.Context) (StoreStats, error) {
 	type row struct {
 		Chats    json.Number `json:"chats"`
@@ -253,6 +458,80 @@ SELECT
 		return StoreStats{}, err
 	}
 	return StoreStats{Chats: chats, Bindings: bindings, Messages: messages}, nil
+}
+
+func (s *Store) applyMigrations(ctx context.Context) error {
+	version, err := s.schemaVersion(ctx)
+	if err != nil {
+		return err
+	}
+	if version < schemaVersionPhase2 {
+		if err := s.setSchemaVersion(ctx, schemaVersionPhase2); err != nil {
+			return err
+		}
+		version = schemaVersionPhase2
+	}
+	if version < schemaVersionPhase3 {
+		query := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS sessions (
+  session_key TEXT PRIMARY KEY,
+  platform TEXT NOT NULL,
+  chat_id INTEGER NOT NULL,
+  pane_key TEXT NOT NULL,
+  agent TEXT NOT NULL DEFAULT '',
+  agent_session_id TEXT NOT NULL DEFAULT '',
+  agent_thread_id TEXT NOT NULL DEFAULT '',
+  last_inbound_message_id INTEGER NOT NULL DEFAULT 0,
+  last_outbound_message_id INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(platform, chat_id, pane_key)
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_chat_updated_at
+  ON sessions (chat_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_pane_updated_at
+  ON sessions (pane_key, updated_at DESC);
+CREATE TABLE IF NOT EXISTS message_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  platform TEXT NOT NULL,
+  chat_id INTEGER NOT NULL,
+  pane_key TEXT NOT NULL DEFAULT '',
+  session_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  inbound_message_id INTEGER NOT NULL DEFAULT 0,
+  outbound_message_id INTEGER NOT NULL DEFAULT 0,
+  reply_to_message_id INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_message_links_session_created_at
+  ON message_links (session_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_message_links_chat_pane_created_at
+  ON message_links (chat_id, pane_key, created_at DESC);
+PRAGMA user_version = %d;
+`, schemaVersionPhase3)
+		if err := s.exec(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) schemaVersion(ctx context.Context) (int, error) {
+	type row struct {
+		UserVersion json.Number `json:"user_version"`
+	}
+	var rows []row
+	if err := s.queryJSON(ctx, "PRAGMA user_version;", &rows); err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return numberToInt(rows[0].UserVersion)
+}
+
+func (s *Store) setSchemaVersion(ctx context.Context, version int) error {
+	return s.exec(ctx, fmt.Sprintf("PRAGMA user_version = %d;", version))
 }
 
 func (s *Store) exec(ctx context.Context, query string) error {
@@ -306,6 +585,21 @@ func numberToInt(value json.Number) (int, error) {
 		return 0, fmt.Errorf("parse sqlite count %q: %w", string(value), err)
 	}
 	return int(parsed), nil
+}
+
+func parseJSONInt64(value json.Number) (int64, error) {
+	if string(value) == "" {
+		return 0, nil
+	}
+	parsed, err := value.Int64()
+	if err != nil {
+		return 0, fmt.Errorf("parse sqlite int64 %q: %w", string(value), err)
+	}
+	return parsed, nil
+}
+
+func sessionKeyFor(platform string, chatID int64, paneKey string) string {
+	return strings.TrimSpace(platform) + ":" + strconv.FormatInt(chatID, 10) + ":" + strings.TrimSpace(paneKey)
 }
 
 func defaultDBPath() string {

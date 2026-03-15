@@ -13,11 +13,19 @@ import (
 )
 
 type fakeMessenger struct {
-	messages []string
+	messages []sentMessage
 }
 
-func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string) (telegram.Message, error) {
-	m.messages = append(m.messages, text)
+type sentMessage struct {
+	Text             string
+	ReplyToMessageID int64
+}
+
+func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opts telegram.SendOptions) (telegram.Message, error) {
+	m.messages = append(m.messages, sentMessage{
+		Text:             text,
+		ReplyToMessageID: opts.ReplyToMessageID,
+	})
 	return telegram.Message{MessageID: int64(len(m.messages))}, nil
 }
 
@@ -111,8 +119,11 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot"}); err != nil {
 		t.Fatalf("HandleMessage(snapshot) error = %v", err)
 	}
-	if len(messenger.messages) < 2 || !strings.Contains(messenger.messages[len(messenger.messages)-1], "hello from pane") {
+	if len(messenger.messages) < 2 || !strings.Contains(messenger.messages[len(messenger.messages)-1].Text, "hello from pane") {
 		t.Fatalf("unexpected messages %#v", messenger.messages)
+	}
+	if got := messenger.messages[len(messenger.messages)-1].ReplyToMessageID; got != 2 {
+		t.Fatalf("snapshot reply_to = %d, want 2", got)
 	}
 }
 
@@ -141,7 +152,11 @@ func TestRouterFollow(t *testing.T) {
 	time.Sleep(900 * time.Millisecond)
 	follow.Disable(7)
 
-	joined := strings.Join(messenger.messages, "\n")
+	texts := make([]string, 0, len(messenger.messages))
+	for _, msg := range messenger.messages {
+		texts = append(texts, msg.Text)
+	}
+	joined := strings.Join(texts, "\n")
 	if !strings.Contains(joined, "follow enabled") {
 		t.Fatalf("missing follow confirmation in %q", joined)
 	}
@@ -150,5 +165,10 @@ func TestRouterFollow(t *testing.T) {
 	}
 	if !strings.Contains(joined, "delta output") {
 		t.Fatalf("missing streamed output in %q", joined)
+	}
+	for _, msg := range messenger.messages[1:] {
+		if msg.ReplyToMessageID != 2 {
+			t.Fatalf("follow reply_to = %d, want 2 for %#v", msg.ReplyToMessageID, msg)
+		}
 	}
 }

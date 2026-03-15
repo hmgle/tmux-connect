@@ -3,6 +3,14 @@
 > Purpose: give the next Codex session enough context to continue implementation quickly without drifting toward the wrong architecture.
 >
 > Last updated: 2026-03-15
+>
+> Historical note: this handoff was consumed by the first Phase 3 foundation slice.
+>
+> Current follow-up docs:
+>
+> - [phase3-status.md](./phase3-status.md)
+> - [phase4-handoff.md](./phase4-handoff.md)
+> - [phase4-todo.md](./phase4-todo.md)
 
 ## 1. Current Reality
 
