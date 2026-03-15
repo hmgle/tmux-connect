@@ -11,7 +11,8 @@ Recommended reading order:
 3. [phase2-telegram-daemon-spec.md](./phase2-telegram-daemon-spec.md)
 4. [phase2-status.md](./phase2-status.md)
 5. [telegram.md](./telegram.md)
-6. [phase3-todo.md](./phase3-todo.md)
+6. [phase3-handoff.md](./phase3-handoff.md)
+7. [phase3-todo.md](./phase3-todo.md)
 
 ## Historical Docs
 
