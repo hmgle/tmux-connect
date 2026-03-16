@@ -38,43 +38,54 @@ func TestFormatFollowMessageEmptyAfterTrim(t *testing.T) {
 	}
 }
 
-func TestPrepareFollowMessageDeltaSkipsExactDuplicate(t *testing.T) {
+func TestBuildFollowUpdateSkipsExactDuplicate(t *testing.T) {
 	t.Parallel()
 
-	got, changed := prepareFollowMessageDelta("same output", "same output")
+	got, changed := buildFollowUpdate("same output", "same output")
 	if changed {
-		t.Fatalf("prepareFollowMessageDelta() changed = true, got %q", got)
+		t.Fatalf("buildFollowUpdate() changed = true, got %q", got)
 	}
 	if got != "" {
-		t.Fatalf("prepareFollowMessageDelta() = %q, want empty", got)
+		t.Fatalf("buildFollowUpdate() = %q, want empty", got)
 	}
 }
 
-func TestPrepareFollowMessageDeltaOmitsRepeatedPrefix(t *testing.T) {
+func TestBuildFollowUpdateShowsInlineContext(t *testing.T) {
 	t.Parallel()
 
 	previous := strings.Join([]string{
-		"build step 1 finished successfully",
-		"build step 2 finished successfully",
-		"waiting for next action",
+		"ready",
+		"calc> ",
 	}, "\n")
-	current := strings.Join([]string{
-		"build step 1 finished successfully",
-		"build step 2 finished successfully",
-		"To continue this session, run /resume",
-	}, "\n")
+	current := previous + "1+2"
 
-	got, changed := prepareFollowMessageDelta(previous, current)
+	got, changed := buildFollowUpdate(previous, current)
 	if !changed {
-		t.Fatal("prepareFollowMessageDelta() changed = false, want true")
+		t.Fatal("buildFollowUpdate() changed = false, want true")
 	}
-	if !strings.HasPrefix(got, followRepeatedPrefixMarker) {
-		t.Fatalf("prepareFollowMessageDelta() = %q, want repeated-prefix marker", got)
+	if !strings.Contains(got, "ready") {
+		t.Fatalf("buildFollowUpdate() = %q, want prior context", got)
 	}
-	if !strings.Contains(got, "To continue this session, run /resume") {
-		t.Fatalf("prepareFollowMessageDelta() = %q, want preserved tail", got)
+	if !strings.Contains(got, "calc> 1+2") {
+		t.Fatalf("buildFollowUpdate() = %q, want full updated line", got)
 	}
-	if strings.Contains(got, "build step 1 finished successfully") {
-		t.Fatalf("prepareFollowMessageDelta() = %q, want repeated prefix omitted", got)
+	if strings.Contains(got, "\n1+2") {
+		t.Fatalf("buildFollowUpdate() = %q, want contextual line instead of bare suffix", got)
+	}
+}
+
+func TestBuildFollowUpdateReturnsDeltaForCompletedLines(t *testing.T) {
+	t.Parallel()
+
+	previous := "line one\n"
+	current := "line one\nline two\nline three\n"
+
+	got, changed := buildFollowUpdate(previous, current)
+	if !changed {
+		t.Fatal("buildFollowUpdate() changed = false, want true")
+	}
+	want := "line two\nline three"
+	if got != want {
+		t.Fatalf("buildFollowUpdate() = %q, want %q", got, want)
 	}
 }

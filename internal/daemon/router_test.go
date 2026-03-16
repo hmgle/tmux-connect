@@ -42,8 +42,10 @@ func (m *fakeMessenger) snapshot() []sentMessage {
 }
 
 type fakePaneService struct {
-	records map[string]tagb.PaneRecord
-	sub     *tmux.Subscription
+	records       map[string]tagb.PaneRecord
+	sub           *tmux.Subscription
+	snapshotText  string
+	initialOutput string
 }
 
 func newFakePaneService() *fakePaneService {
@@ -60,7 +62,9 @@ func newFakePaneService() *fakePaneService {
 		records: map[string]tagb.PaneRecord{
 			record.Info.Target.PaneKey(): record,
 		},
-		sub: tmux.NewSubscriptionForTest(),
+		sub:           tmux.NewSubscriptionForTest(),
+		snapshotText:  "hello from pane",
+		initialOutput: "initial output",
 	}
 }
 
@@ -87,7 +91,7 @@ func (s *fakePaneService) Inspect(_ context.Context, ref string) (tagb.PaneRecor
 }
 
 func (s *fakePaneService) Snapshot(context.Context, string, int) (string, error) {
-	return "hello from pane", nil
+	return s.snapshotText, nil
 }
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
@@ -99,7 +103,7 @@ func (s *fakePaneService) CtrlC(context.Context, string) error { return nil }
 func (s *fakePaneService) OpenStream(context.Context, string, int) (tagb.PaneStream, error) {
 	return tagb.PaneStream{
 		Pane:         s.records["default:%5"].Info,
-		Initial:      "initial output",
+		Initial:      s.initialOutput,
 		Subscription: s.sub,
 	}, nil
 }
@@ -269,7 +273,7 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	}
 }
 
-func TestRouterFollowOmitsRepeatedPrefixFromLaterPushes(t *testing.T) {
+func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -278,6 +282,7 @@ func TestRouterFollowOmitsRepeatedPrefixFromLaterPushes(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	service := newFakePaneService()
+	service.initialOutput = "ready\ncalc> "
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store)
 	follow := NewFollowManager(service, replyBus, 20)
@@ -290,31 +295,30 @@ func TestRouterFollowOmitsRepeatedPrefixFromLaterPushes(t *testing.T) {
 		t.Fatalf("HandleMessage(follow on 10ms) error = %v", err)
 	}
 
-	first := strings.Join([]string{
-		"step 1 output is a bit verbose and intentionally long",
-		"step 2 output is a bit verbose and intentionally long",
-		"waiting for input",
-	}, "\n")
-	second := strings.Join([]string{
-		"step 1 output is a bit verbose and intentionally long",
-		"step 2 output is a bit verbose and intentionally long",
-		"To continue this session, run /resume",
-	}, "\n")
-
-	service.sub.PushChunk(tmux.OutputChunk{Text: first, ReceivedAt: time.Now()})
+	service.sub.PushChunk(tmux.OutputChunk{Text: "1", ReceivedAt: time.Now()})
 	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
 		for _, msg := range messages {
-			if strings.Contains(msg.Text, "waiting for input") {
+			if strings.Contains(msg.Text, "calc> 1") {
 				return true
 			}
 		}
 		return false
 	}, messenger)
 
-	service.sub.PushChunk(tmux.OutputChunk{Text: second, ReceivedAt: time.Now()})
+	service.sub.PushChunk(tmux.OutputChunk{Text: "+", ReceivedAt: time.Now()})
 	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
 		for _, msg := range messages {
-			if strings.Contains(msg.Text, followRepeatedPrefixMarker) {
+			if strings.Contains(msg.Text, "calc> 1+") {
+				return true
+			}
+		}
+		return false
+	}, messenger)
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: "2", ReceivedAt: time.Now()})
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, "calc> 1+2") {
 				return true
 			}
 		}
@@ -323,11 +327,14 @@ func TestRouterFollowOmitsRepeatedPrefixFromLaterPushes(t *testing.T) {
 
 	messages := messenger.snapshot()
 	latest := messages[len(messages)-1].Text
-	if !strings.Contains(latest, "To continue this session, run /resume") {
-		t.Fatalf("latest message = %q, want preserved tail", latest)
+	if !strings.Contains(latest, "ready") {
+		t.Fatalf("latest message = %q, want previous context", latest)
 	}
-	if strings.Contains(latest, "step 1 output is a bit verbose and intentionally long") {
-		t.Fatalf("latest message = %q, want repeated prefix omitted", latest)
+	if !strings.Contains(latest, "calc> 1+2") {
+		t.Fatalf("latest message = %q, want complete updated line", latest)
+	}
+	if strings.HasSuffix(latest, "\n1") || strings.HasSuffix(latest, "\n+") || strings.HasSuffix(latest, "\n2") {
+		t.Fatalf("latest message = %q, want contextual line instead of raw character delta", latest)
 	}
 }
 
