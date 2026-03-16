@@ -33,6 +33,7 @@ type PaneRegistry struct {
 	managed    map[string]tagb.PaneRecord
 	lastErr    error
 	lastLoaded bool
+	dirty      bool
 }
 
 func NewPaneRegistry(service paneService) *PaneRegistry {
@@ -64,6 +65,7 @@ func (r *PaneRegistry) Refresh(ctx context.Context) error {
 	r.managed = managed
 	r.lastErr = nil
 	r.lastLoaded = true
+	r.dirty = false
 	return nil
 }
 
@@ -94,11 +96,18 @@ func (r *PaneRegistry) LastErr() error {
 func (r *PaneRegistry) EnsureLoaded(ctx context.Context) error {
 	r.mu.RLock()
 	loaded := r.lastLoaded
+	dirty := r.dirty
 	r.mu.RUnlock()
-	if loaded {
+	if loaded && !dirty {
 		return nil
 	}
 	return r.Refresh(ctx)
+}
+
+func (r *PaneRegistry) MarkDirty() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dirty = true
 }
 
 func sortedRecords(source map[string]tagb.PaneRecord) []tagb.PaneRecord {

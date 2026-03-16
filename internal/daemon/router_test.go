@@ -69,6 +69,7 @@ type fakePaneService struct {
 	snapshotText  string
 	snapshotRich  string
 	initialOutput string
+	listCalls     int
 }
 
 func newFakePaneService() *fakePaneService {
@@ -93,11 +94,41 @@ func newFakePaneService() *fakePaneService {
 }
 
 func (s *fakePaneService) List(context.Context) ([]tagb.PaneRecord, error) {
+	s.listCalls++
 	out := make([]tagb.PaneRecord, 0, len(s.records))
 	for _, record := range s.records {
 		out = append(out, record)
 	}
 	return out, nil
+}
+
+func TestRouterAttachMarksRegistryDirtyAndDefersRefreshUntilPanes(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	registry := NewPaneRegistry(service)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, registry, store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/attach %5"}); err != nil {
+		t.Fatalf("HandleMessage(attach) error = %v", err)
+	}
+	if service.listCalls != 0 {
+		t.Fatalf("expected attach to avoid immediate registry refresh, got %d list calls", service.listCalls)
+	}
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/panes"}); err != nil {
+		t.Fatalf("HandleMessage(panes) error = %v", err)
+	}
+	if service.listCalls != 1 {
+		t.Fatalf("expected panes to refresh registry once after dirty attach, got %d list calls", service.listCalls)
+	}
 }
 
 func (s *fakePaneService) Attach(context.Context, string, string, string) (tagb.PaneRecord, error) {
