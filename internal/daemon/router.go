@@ -244,13 +244,16 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
-	lines, err := optionalInt(args, r.snapshotLines)
+	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "usage", "usage: /snapshot [lines]")
+		return r.replyBus.Reply(ctx, chatID, paneKey, "usage", "usage: /snapshot [lines] [image|text]")
 	}
 	body, err := r.service.Snapshot(ctx, paneKey, lines)
 	if err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
+	}
+	if mode == snapshotModeText {
+		return r.replyBus.Reply(ctx, chatID, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
 	}
 	richBody, richErr := r.service.SnapshotRich(ctx, paneKey, lines)
 	if richErr == nil && strings.TrimSpace(richBody) != "" {
@@ -452,6 +455,44 @@ func parsePositiveDuration(value string) (time.Duration, error) {
 	return parsed, nil
 }
 
+type snapshotMode string
+
+const (
+	snapshotModeImage snapshotMode = "image"
+	snapshotModeText  snapshotMode = "text"
+)
+
+func parseSnapshotArgs(value string, fallbackLines int) (int, snapshotMode, error) {
+	lines := fallbackLines
+	mode := snapshotModeImage
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
+		return lines, mode, nil
+	}
+
+	for _, field := range fields {
+		switch strings.ToLower(strings.TrimSpace(field)) {
+		case "":
+			continue
+		case string(snapshotModeImage):
+			mode = snapshotModeImage
+		case string(snapshotModeText):
+			mode = snapshotModeText
+		default:
+			parsed, err := strconv.Atoi(field)
+			if err != nil {
+				return 0, "", fmt.Errorf("invalid snapshot arg %q", field)
+			}
+			lines = parsed
+		}
+	}
+
+	if lines <= 0 {
+		return 0, "", fmt.Errorf("snapshot lines must be > 0")
+	}
+	return lines, mode, nil
+}
+
 func formatCurrent(record tagb.PaneRecord, following bool) string {
 	lines := []string{
 		"Current pane: " + record.Info.Target.PaneKey(),
@@ -474,7 +515,7 @@ func helpText() string {
 		"/detach <pane>",
 		"/bind <pane>",
 		"/current",
-		"/snapshot [lines]",
+		"/snapshot [lines] [image|text]",
 		"/send <text>",
 		"/enter",
 		"/ctrlc",

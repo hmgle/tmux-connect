@@ -431,7 +431,7 @@ Bot: Follow stopped
 
 | 命令 | 语法 | 说明 |
 |------|------|------|
-| `/snapshot` | `/snapshot [lines]` | 截取当前 pane 最近 N 行输出（默认 120） |
+| `/snapshot` | `/snapshot [lines] [image\|text]` | 截取当前 pane 最近 N 行输出（默认 120 行，默认 `image`；显式指定 `text` 时按文本消息发送） |
 | `/send` | `/send <text>` | 向当前 pane 注入文本（不自动回车） |
 | `/enter` | `/enter` | 发送回车键 |
 | `/ctrlc` | `/ctrlc` 或 `/ctrl-c` | 发送 Ctrl-C 中断信号 |

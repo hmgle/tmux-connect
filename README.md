@@ -107,11 +107,13 @@ Supported Telegram commands:
 - `/detach <pane>`
 - `/bind <pane>`
 - `/current`
-- `/snapshot [lines]`
+- `/snapshot [lines] [image|text]`
 - `/send <text>`
 - `/enter`
 - `/ctrlc`
 - `/follow on|off`
+
+`/snapshot` defaults to `image`. Use `/snapshot text` when you need the pane content as Telegram text.
 
 Detailed daemon and Telegram docs:
 

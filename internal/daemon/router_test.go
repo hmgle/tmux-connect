@@ -174,6 +174,39 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestRouterSnapshotTextMode(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
+		t.Fatalf("HandleMessage(bind) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot text"}); err != nil {
+		t.Fatalf("HandleMessage(snapshot text) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if len(last.Photo) != 0 {
+		t.Fatalf("expected text snapshot, got photo message %#v", last)
+	}
+	if !strings.Contains(last.Text, "hello from pane") {
+		t.Fatalf("snapshot text = %q, want pane text", last.Text)
+	}
+	if got := last.ParseMode; got != telegram.ParseModeHTML {
+		t.Fatalf("snapshot text parse mode = %q, want %q", got, telegram.ParseModeHTML)
+	}
+}
+
 func TestRouterFollow(t *testing.T) {
 	t.Parallel()
 
@@ -423,5 +456,47 @@ func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentM
 			t.Fatalf("condition not met before timeout, messages = %#v", messages)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestParseSnapshotArgs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		value     string
+		wantLines int
+		wantMode  snapshotMode
+		wantErr   bool
+	}{
+		{name: "default", value: "", wantLines: 120, wantMode: snapshotModeImage},
+		{name: "lines only", value: "200", wantLines: 200, wantMode: snapshotModeImage},
+		{name: "text only", value: "text", wantLines: 120, wantMode: snapshotModeText},
+		{name: "image only", value: "image", wantLines: 120, wantMode: snapshotModeImage},
+		{name: "lines then text", value: "200 text", wantLines: 200, wantMode: snapshotModeText},
+		{name: "text then lines", value: "text 200", wantLines: 200, wantMode: snapshotModeText},
+		{name: "bad mode", value: "plain", wantErr: true},
+		{name: "bad lines", value: "0", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lines, mode, err := parseSnapshotArgs(tt.value, 120)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseSnapshotArgs(%q) error = nil, want error", tt.value)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSnapshotArgs(%q) error = %v", tt.value, err)
+			}
+			if lines != tt.wantLines {
+				t.Fatalf("lines = %d, want %d", lines, tt.wantLines)
+			}
+			if mode != tt.wantMode {
+				t.Fatalf("mode = %q, want %q", mode, tt.wantMode)
+			}
+		})
 	}
 }

@@ -60,7 +60,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - `/detach <pane>`
 - `/bind <pane>`
 - `/current`
-- `/snapshot [lines]`
+- `/snapshot [lines] [image|text]`
 - `/send <text>`
 - `/enter`
 - `/ctrlc`
@@ -81,6 +81,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 
 - If `--allow-chat` is used, chats not in the allowlist are rejected
 - `/bind` only works on managed panes; use `/attach` first if needed
+- `/snapshot` defaults to `image`; use `/snapshot text` to receive Telegram text instead of an image
 - `/detach` clears chat bindings and stops any follow sessions that point to that pane
 - if the current pane disappears, the daemon clears that chat's current-pane state and asks the user to bind again
 - follow mode is one active subscription per chat

@@ -72,9 +72,9 @@ Binds the current Telegram chat to a managed pane and sets it as the current pan
 
 Shows the current pane and basic metadata for the chat.
 
-### `/snapshot [lines]`
+### `/snapshot [lines] [image|text]`
 
-Returns a recent pane capture for the current pane.
+Returns a recent pane capture for the current pane. Default mode is `image`; pass `text` to force Telegram text output.
 
 ### `/send <text>`
 
