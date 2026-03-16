@@ -19,6 +19,7 @@ import (
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
+	"golang.org/x/text/width"
 )
 
 type Options struct {
@@ -92,8 +93,10 @@ var themes = map[string]Theme{
 }
 
 type styledCell struct {
-	r     rune
-	style style
+	r            rune
+	style        style
+	span         int
+	continuation bool
 }
 
 type style struct {
@@ -105,7 +108,18 @@ type style struct {
 
 var (
 	fontMu      sync.Mutex
-	parsedFonts = map[string]*opentype.Font{}
+	parsedFonts = map[string]*parsedFontEntry{}
+)
+
+type parsedFontEntry struct {
+	font  *opentype.Font
+	err   error
+	ready chan struct{}
+}
+
+const (
+	maxRenderDimension = 10_000
+	maxRenderPixels    = 40_000_000
 )
 
 func RenderPNG(text string, opts Options) ([]byte, error) {
@@ -212,43 +226,59 @@ func loadParsedFont(opts Options) (*opentype.Font, error) {
 	}
 
 	fontMu.Lock()
-	parsedFont := parsedFonts[key]
+	entry := parsedFonts[key]
+	if entry != nil {
+		fontMu.Unlock()
+		<-entry.ready
+		if entry.font != nil {
+			return entry.font, nil
+		}
+		return nil, entry.err
+	}
+	entry = &parsedFontEntry{ready: make(chan struct{})}
+	parsedFonts[key] = entry
 	fontMu.Unlock()
-	if parsedFont != nil {
-		return parsedFont, nil
+
+	parsedFont, err := parseFont(key, opts.FontFile)
+	if err != nil {
+		fontMu.Lock()
+		entry.err = err
+		delete(parsedFonts, key)
+		close(entry.ready)
+		fontMu.Unlock()
+		return nil, err
 	}
 
-	var fontBytes []byte
-	var err error
-	if key == defaultFontKey {
-		fontBytes = gomono.TTF
-	} else {
-		fontBytes, err = os.ReadFile(opts.FontFile)
+	fontMu.Lock()
+	entry.font = parsedFont
+	close(entry.ready)
+	fontMu.Unlock()
+	return parsedFont, nil
+}
+
+func parseFont(key string, fontFile string) (*opentype.Font, error) {
+	fontBytes := gomono.TTF
+	if key != defaultFontKey {
+		var err error
+		fontBytes, err = os.ReadFile(fontFile)
 		if err != nil {
-			return nil, fmt.Errorf("read snapshot font file %s: %w", opts.FontFile, err)
+			return nil, fmt.Errorf("read snapshot font file %s: %w", fontFile, err)
 		}
 	}
 
-	parsedFont, err = opentype.Parse(fontBytes)
+	parsedFont, err := opentype.Parse(fontBytes)
 	if err != nil {
 		if key == defaultFontKey {
 			return nil, fmt.Errorf("parse embedded mono font: %w", err)
 		}
-		return nil, fmt.Errorf("parse snapshot font file %s: %w", opts.FontFile, err)
+		return nil, fmt.Errorf("parse snapshot font file %s: %w", fontFile, err)
 	}
-
-	fontMu.Lock()
-	defer fontMu.Unlock()
-	if cached := parsedFonts[key]; cached != nil {
-		return cached, nil
-	}
-	parsedFonts[key] = parsedFont
 	return parsedFont, nil
 }
 
 func render(lines [][]styledCell, face font.Face, theme Theme, opts Options) (*image.RGBA, error) {
 	if len(lines) == 0 {
-		lines = [][]styledCell{{}}
+		lines = [][]styledCell{{blankCell(theme)}}
 	}
 
 	metrics := face.Metrics()
@@ -268,8 +298,24 @@ func render(lines [][]styledCell, face font.Face, theme Theme, opts Options) (*i
 
 	width := opts.PaddingX*2 + cols*cellWidth
 	height := opts.PaddingY*2 + rows*lineHeight
+	if width > maxRenderDimension || height > maxRenderDimension {
+		return nil, fmt.Errorf("snapshot image too large: %dx%d exceeds %dpx limit", width, height, maxRenderDimension)
+	}
+	if width*height > maxRenderPixels {
+		return nil, fmt.Errorf("snapshot image too large: %dx%d exceeds pixel budget", width, height)
+	}
+
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	draw.Draw(img, img.Bounds(), image.NewUniform(theme.Background), image.Point{}, draw.Src)
+	uniforms := map[color.RGBA]*image.Uniform{}
+	uniformFor := func(c color.RGBA) *image.Uniform {
+		if uniform := uniforms[c]; uniform != nil {
+			return uniform
+		}
+		uniform := image.NewUniform(c)
+		uniforms[c] = uniform
+		return uniform
+	}
+	draw.Draw(img, img.Bounds(), uniformFor(theme.Background), image.Point{}, draw.Src)
 
 	drawer := font.Drawer{
 		Dst:  img,
@@ -281,14 +327,22 @@ func render(lines [][]styledCell, face font.Face, theme Theme, opts Options) (*i
 		top := opts.PaddingY + row*lineHeight
 		baseline := top + ascent
 		for col, cell := range line {
-			left := opts.PaddingX + col*cellWidth
-			fg, bg := cell.style.resolve()
-			rect := image.Rect(left, top, left+cellWidth, top+lineHeight)
-			draw.Draw(img, rect, image.NewUniform(bg), image.Point{}, draw.Src)
-			if cell.r == ' ' {
+			if cell.continuation {
 				continue
 			}
-			drawer.Src = image.NewUniform(fg)
+
+			span := cell.span
+			if span <= 0 {
+				span = 1
+			}
+			left := opts.PaddingX + col*cellWidth
+			fg, bg := cell.style.resolve()
+			rect := image.Rect(left, top, left+span*cellWidth, top+lineHeight)
+			draw.Draw(img, rect, uniformFor(bg), image.Point{}, draw.Src)
+			if cell.r == ' ' || cell.r == 0 {
+				continue
+			}
+			drawer.Src = uniformFor(fg)
 			drawer.Dot = fixed.P(left, baseline)
 			drawer.DrawString(string(cell.r))
 		}
@@ -297,7 +351,7 @@ func render(lines [][]styledCell, face font.Face, theme Theme, opts Options) (*i
 	return img, nil
 }
 
-func (s style) resolve() (color.Color, color.Color) {
+func (s style) resolve() (color.RGBA, color.RGBA) {
 	fg := s.fg
 	bg := s.bg
 	if s.reverse {
@@ -311,9 +365,9 @@ func (s style) resolve() (color.Color, color.Color) {
 
 func brighten(c color.RGBA, amount uint8) color.RGBA {
 	return rgba(
-		minInt(int(c.R)+int(amount), 255),
-		minInt(int(c.G)+int(amount), 255),
-		minInt(int(c.B)+int(amount), 255),
+		min(int(c.R)+int(amount), 255),
+		min(int(c.G)+int(amount), 255),
+		min(int(c.B)+int(amount), 255),
 	)
 }
 
@@ -332,7 +386,8 @@ func parseANSI(text string, theme Theme) ([][]styledCell, error) {
 					end++
 				}
 				if end >= len(text) {
-					return nil, fmt.Errorf("unterminated ansi sequence")
+					i = end
+					continue
 				}
 				if text[end] == 'm' {
 					current = applySGR(current, parseSGRParams(text[i+2:end]), theme)
@@ -363,10 +418,10 @@ func parseANSI(text string, theme Theme) ([][]styledCell, error) {
 			i++
 		default:
 			r, size := rune(text[i]), 1
-			if r >= utf8RuneSelf {
+			if r >= utf8.RuneSelf {
 				r, size = utf8.DecodeRuneInString(text[i:])
 			}
-			if r == utf8.RuneError {
+			if r == utf8.RuneError && size == 1 {
 				r = '?'
 				size = 1
 			}
@@ -374,8 +429,12 @@ func parseANSI(text string, theme Theme) ([][]styledCell, error) {
 				i += size
 				continue
 			}
-			writeCell(lines, row, col, styledCell{r: r, style: current}, theme)
-			col++
+			span := runeCellSpan(r)
+			writeCell(lines, row, col, styledCell{r: r, style: current, span: span}, theme)
+			for offset := 1; offset < span; offset++ {
+				writeCell(lines, row, col+offset, styledCell{style: current, continuation: true}, theme)
+			}
+			col += span
 			i += size
 		}
 	}
@@ -383,17 +442,26 @@ func parseANSI(text string, theme Theme) ([][]styledCell, error) {
 	return lines, nil
 }
 
-const (
-	utf8RuneSelf = 0x80
-)
-
 func writeCell(lines [][]styledCell, row int, col int, cell styledCell, theme Theme) {
 	line := lines[row]
 	for len(line) <= col {
-		line = append(line, styledCell{r: ' ', style: defaultStyle(theme)})
+		line = append(line, blankCell(theme))
 	}
 	line[col] = cell
 	lines[row] = line
+}
+
+func blankCell(theme Theme) styledCell {
+	return styledCell{r: ' ', style: defaultStyle(theme), span: 1}
+}
+
+func runeCellSpan(r rune) int {
+	switch width.LookupRune(r).Kind() {
+	case width.EastAsianFullwidth, width.EastAsianWide:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func isCSIEnd(b byte) bool {
@@ -524,11 +592,4 @@ func ansiCubeValue(v int) int {
 
 func rgba(r int, g int, b int) color.RGBA {
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 0xff}
-}
-
-func minInt(a int, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

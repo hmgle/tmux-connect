@@ -122,19 +122,24 @@ func (c *Client) ListPaneStates(ctx context.Context) ([]PaneState, error) {
 }
 
 func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (string, error) {
-	if lines <= 0 {
-		lines = 120
-	}
-	start := strconv.Itoa(-(lines - 1))
-	return c.run(ctx, nil, "capture-pane", "-p", "-J", "-t", target.PaneID, "-S", start)
+	return c.capturePane(ctx, target, lines, false)
 }
 
 func (c *Client) CapturePaneRich(ctx context.Context, target Target, lines int) (string, error) {
+	return c.capturePane(ctx, target, lines, true)
+}
+
+func (c *Client) capturePane(ctx context.Context, target Target, lines int, escape bool) (string, error) {
 	if lines <= 0 {
 		lines = 120
 	}
 	start := strconv.Itoa(-(lines - 1))
-	return c.run(ctx, nil, "capture-pane", "-p", "-J", "-e", "-t", target.PaneID, "-S", start)
+	args := []string{"capture-pane", "-p", "-J"}
+	if escape {
+		args = append(args, "-e")
+	}
+	args = append(args, "-t", target.PaneID, "-S", start)
+	return c.run(ctx, nil, args...)
 }
 
 func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) error {
