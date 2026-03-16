@@ -234,7 +234,47 @@ ORDER BY chat_id;
 }
 
 func (s *Store) LogMessage(ctx context.Context, record MessageRecord) error {
-	query := fmt.Sprintf(`
+	return s.exec(ctx, logMessageStatement(record))
+}
+
+func (s *Store) RecordOutbound(ctx context.Context, record MessageRecord, link *MessageLinkRecord) error {
+	statements := []string{logMessageStatement(record)}
+	if link != nil && strings.TrimSpace(link.SessionKey) != "" {
+		statements = append(statements,
+			touchSessionOutboundStatement(strings.TrimSpace(link.SessionKey), link.OutboundMessageID),
+			createMessageLinkStatement(*link),
+		)
+	}
+	return s.exec(ctx, wrapTransaction(statements...))
+}
+
+func (s *Store) RecordInbound(ctx context.Context, record MessageRecord, platform string, agent string) error {
+	statements := []string{logMessageStatement(record)}
+	paneKey := strings.TrimSpace(record.PaneKey)
+	if paneKey != "" {
+		platform = strings.TrimSpace(platform)
+		if platform == "" {
+			return fmt.Errorf("platform is required")
+		}
+		sessionKey := sessionKeyFor(platform, record.ChatID, paneKey)
+		statements = append(statements,
+			ensureSessionStatement(platform, record.ChatID, paneKey, strings.TrimSpace(agent), sessionKey),
+			touchSessionInboundStatement(sessionKey, record.TelegramMessageID),
+			createMessageLinkStatement(MessageLinkRecord{
+				Platform:         platform,
+				ChatID:           record.ChatID,
+				PaneKey:          paneKey,
+				SessionKey:       sessionKey,
+				Kind:             strings.TrimSpace(record.Kind),
+				InboundMessageID: record.TelegramMessageID,
+			}),
+		)
+	}
+	return s.exec(ctx, wrapTransaction(statements...))
+}
+
+func logMessageStatement(record MessageRecord) string {
+	return fmt.Sprintf(`
 INSERT INTO message_log (
   chat_id,
   pane_key,
@@ -245,7 +285,6 @@ INSERT INTO message_log (
 )
 VALUES (%d, %s, %s, %s, %d, %s);
 `, record.ChatID, sqlString(strings.TrimSpace(record.PaneKey)), sqlString(strings.TrimSpace(record.Direction)), sqlString(strings.TrimSpace(record.Kind)), record.TelegramMessageID, sqlString(truncatePreview(record.BodyPreview)))
-	return s.exec(ctx, query)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, platform string, chatID int64, paneKey string, agent string) (SessionRecord, error) {
@@ -354,27 +393,37 @@ LIMIT 1;
 }
 
 func (s *Store) TouchSessionInbound(ctx context.Context, sessionKey string, messageID int64) error {
-	query := fmt.Sprintf(`
+	return s.exec(ctx, touchSessionInboundStatement(sessionKey, messageID))
+}
+
+func touchSessionInboundStatement(sessionKey string, messageID int64) string {
+	return fmt.Sprintf(`
 UPDATE sessions
 SET last_inbound_message_id = %d,
     updated_at = CURRENT_TIMESTAMP
 WHERE session_key = %s;
 `, messageID, sqlString(strings.TrimSpace(sessionKey)))
-	return s.exec(ctx, query)
 }
 
 func (s *Store) TouchSessionOutbound(ctx context.Context, sessionKey string, messageID int64) error {
-	query := fmt.Sprintf(`
+	return s.exec(ctx, touchSessionOutboundStatement(sessionKey, messageID))
+}
+
+func touchSessionOutboundStatement(sessionKey string, messageID int64) string {
+	return fmt.Sprintf(`
 UPDATE sessions
 SET last_outbound_message_id = %d,
     updated_at = CURRENT_TIMESTAMP
 WHERE session_key = %s;
 `, messageID, sqlString(strings.TrimSpace(sessionKey)))
-	return s.exec(ctx, query)
 }
 
 func (s *Store) CreateMessageLink(ctx context.Context, record MessageLinkRecord) error {
-	query := fmt.Sprintf(`
+	return s.exec(ctx, createMessageLinkStatement(record))
+}
+
+func createMessageLinkStatement(record MessageLinkRecord) string {
+	return fmt.Sprintf(`
 INSERT INTO message_links (
   platform,
   chat_id,
@@ -387,7 +436,30 @@ INSERT INTO message_links (
 )
 VALUES (%s, %d, %s, %s, %s, %d, %d, %d);
 `, sqlString(strings.TrimSpace(record.Platform)), record.ChatID, sqlString(strings.TrimSpace(record.PaneKey)), sqlString(strings.TrimSpace(record.SessionKey)), sqlString(strings.TrimSpace(record.Kind)), record.InboundMessageID, record.OutboundMessageID, record.ReplyToMessageID)
-	return s.exec(ctx, query)
+}
+
+func ensureSessionStatement(platform string, chatID int64, paneKey string, agent string, sessionKey string) string {
+	return fmt.Sprintf(`
+INSERT INTO sessions (
+  session_key,
+  platform,
+  chat_id,
+  pane_key,
+  agent,
+  agent_session_id,
+  agent_thread_id,
+  last_inbound_message_id,
+  last_outbound_message_id
+)
+VALUES (%s, %s, %d, %s, %s, '', '', 0, 0)
+ON CONFLICT(session_key) DO UPDATE SET
+  pane_key = excluded.pane_key,
+  agent = CASE
+    WHEN trim(excluded.agent) <> '' THEN excluded.agent
+    ELSE sessions.agent
+  END,
+  updated_at = CURRENT_TIMESTAMP;
+`, sqlString(strings.TrimSpace(sessionKey)), sqlString(strings.TrimSpace(platform)), chatID, sqlString(strings.TrimSpace(paneKey)), sqlString(strings.TrimSpace(agent)))
 }
 
 func (s *Store) Stats(ctx context.Context) (StoreStats, error) {
@@ -538,6 +610,27 @@ func (s *Store) queryJSON(ctx context.Context, query string, dest any) error {
 
 func sqlString(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func wrapTransaction(statements ...string) string {
+	if len(statements) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("BEGIN;\n")
+	for _, statement := range statements {
+		trimmed := strings.TrimSpace(statement)
+		if trimmed == "" {
+			continue
+		}
+		b.WriteString(trimmed)
+		if !strings.HasSuffix(trimmed, ";") {
+			b.WriteString(";")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("COMMIT;\n")
+	return b.String()
 }
 
 func truncatePreview(value string) string {

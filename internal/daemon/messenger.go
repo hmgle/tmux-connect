@@ -85,21 +85,17 @@ func (b *ReplyBus) prepareOutbound(ctx context.Context, chatID int64, paneKey st
 }
 
 func (b *ReplyBus) recordOutbound(ctx context.Context, chatID int64, state outboundState, kind string, text string, messageID int64) {
-	if err := b.store.LogMessage(ctx, MessageRecord{
+	record := MessageRecord{
 		ChatID:            chatID,
 		PaneKey:           state.paneKey,
 		Direction:         "out",
 		Kind:              strings.TrimSpace(kind),
 		TelegramMessageID: messageID,
 		BodyPreview:       text,
-	}); err != nil {
-		b.warnStoreError("log outbound message", err)
 	}
+	var link *MessageLinkRecord
 	if state.sessionKey != "" {
-		if err := b.store.TouchSessionOutbound(ctx, state.sessionKey, messageID); err != nil {
-			b.warnStoreError("touch outbound session", err)
-		}
-		if err := b.store.CreateMessageLink(ctx, MessageLinkRecord{
+		link = &MessageLinkRecord{
 			Platform:          telegramPlatform,
 			ChatID:            chatID,
 			PaneKey:           state.paneKey,
@@ -107,44 +103,24 @@ func (b *ReplyBus) recordOutbound(ctx context.Context, chatID int64, state outbo
 			Kind:              strings.TrimSpace(kind),
 			OutboundMessageID: messageID,
 			ReplyToMessageID:  state.replyToMessageID,
-		}); err != nil {
-			b.warnStoreError("create outbound message link", err)
 		}
+	}
+	if err := b.store.RecordOutbound(ctx, record, link); err != nil {
+		b.warnStoreError("log outbound message", err)
 	}
 }
 
 func (b *ReplyBus) LogInbound(ctx context.Context, chatID int64, paneKey string, agent string, messageID int64, kind string, text string) {
 	paneKey = strings.TrimSpace(paneKey)
-	if err := b.store.LogMessage(ctx, MessageRecord{
+	if err := b.store.RecordInbound(ctx, MessageRecord{
 		ChatID:            chatID,
 		PaneKey:           paneKey,
 		Direction:         "in",
 		Kind:              strings.TrimSpace(kind),
 		TelegramMessageID: messageID,
 		BodyPreview:       text,
-	}); err != nil {
+	}, telegramPlatform, agent); err != nil {
 		b.warnStoreError("log inbound message", err)
-	}
-	if paneKey == "" {
-		return
-	}
-	session, err := b.store.EnsureSession(ctx, telegramPlatform, chatID, paneKey, agent)
-	if err != nil {
-		b.warnStoreError("ensure inbound session", err)
-		return
-	}
-	if err := b.store.TouchSessionInbound(ctx, session.SessionKey, messageID); err != nil {
-		b.warnStoreError("touch inbound session", err)
-	}
-	if err := b.store.CreateMessageLink(ctx, MessageLinkRecord{
-		Platform:         telegramPlatform,
-		ChatID:           chatID,
-		PaneKey:          paneKey,
-		SessionKey:       session.SessionKey,
-		Kind:             strings.TrimSpace(kind),
-		InboundMessageID: messageID,
-	}); err != nil {
-		b.warnStoreError("create inbound message link", err)
 	}
 }
 

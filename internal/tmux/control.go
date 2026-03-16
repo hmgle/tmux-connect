@@ -3,9 +3,11 @@ package tmux
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -179,43 +181,76 @@ func maxInt(a int, b int) int {
 	return b
 }
 
+var (
+	ErrControlUnsupported      = errors.New("tmux control mode unsupported")
+	ErrControlHandshakeTimeout = errors.New("tmux control handshake timeout")
+	ErrControlProtocol         = errors.New("tmux control protocol error")
+)
+
+type controlModeError struct {
+	kind error
+	err  error
+}
+
+func (e *controlModeError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.err == nil {
+		return e.kind.Error()
+	}
+	return e.err.Error()
+}
+
+func (e *controlModeError) Unwrap() error { return e.err }
+
+func (e *controlModeError) Is(target error) bool {
+	return e != nil && target == e.kind
+}
+
 func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*Subscription, error) {
 	subCtx, cancel := context.WithCancel(ctx)
-	ptySession, err := c.runner.StartPTY(ctx, c.withSocket("attach-session", "-t", pane.SessionName, "-f", "ignore-size,active-pane")...)
+	ptySession, err := c.runner.StartPTY(subCtx, c.withSocket("attach-session", "-t", pane.SessionName, "-f", "ignore-size,active-pane")...)
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, classifyControlError(err)
 	}
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- ptySession.Wait()
+		close(waitDone)
+	}()
 	ttyName := ptySession.Name()
-	if err := c.waitForControlClient(ctx, ttyName); err != nil {
+	if err := c.waitForControlClient(subCtx, ttyName); err != nil {
 		cancel()
 		_ = ptySession.Close()
+		<-waitDone
 		return nil, err
 	}
 
-	panes, err := c.ListPanes(ctx)
+	panes, err := c.ListSessionPanes(subCtx, pane.SessionName)
 	if err != nil {
 		cancel()
 		_ = ptySession.Close()
+		<-waitDone
 		return nil, err
 	}
-	if err := c.runClientCommand(ctx, ttyName, "refresh-client", "-C", "1x1"); err != nil {
+	if err := c.runClientCommand(subCtx, ttyName, "refresh-client", "-C", "1x1"); err != nil {
 		cancel()
 		_ = ptySession.Close()
-		return nil, err
+		<-waitDone
+		return nil, classifyControlError(err)
 	}
 	for _, candidate := range panes {
-		if candidate.SessionName != pane.SessionName {
-			continue
-		}
 		state := "off"
 		if candidate.Target.PaneID == pane.Target.PaneID {
 			state = "on"
 		}
-		if err := c.runClientCommand(ctx, ttyName, "refresh-client", "-A", candidate.Target.PaneID+":"+state); err != nil {
+		if err := c.runClientCommand(subCtx, ttyName, "refresh-client", "-A", candidate.Target.PaneID+":"+state); err != nil {
 			cancel()
 			_ = ptySession.Close()
-			return nil, err
+			<-waitDone
+			return nil, classifyControlError(err)
 		}
 	}
 
@@ -223,10 +258,17 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 		chunks: make(chan OutputChunk, 16),
 		errs:   make(chan error, 1),
 	}
+	var (
+		closeErr  error
+		closeOnce sync.Once
+	)
 	sub.close = func() error {
-		cancel()
-		_, _ = c.run(context.Background(), nil, "detach-client", "-t", ttyName)
-		return ptySession.Close()
+		closeOnce.Do(func() {
+			cancel()
+			_, _ = c.run(context.Background(), nil, "detach-client", "-t", ttyName)
+			closeErr = errors.Join(ptySession.Close(), waitForPTYExit(waitDone, 2*time.Second))
+		})
+		return closeErr
 	}
 
 	go c.readControlOutput(subCtx, pane.Target, ptySession, sub)
@@ -250,7 +292,15 @@ func (c *Client) readControlOutput(ctx context.Context, target Target, session P
 		if line == "" {
 			continue
 		}
-		if chunk, ok := parseNotification(target, line); ok {
+		chunk, ok, parseErr := parseNotification(target, line)
+		if parseErr != nil {
+			select {
+			case sub.errs <- &controlModeError{kind: ErrControlProtocol, err: parseErr}:
+			default:
+			}
+			return
+		}
+		if ok {
 			select {
 			case <-ctx.Done():
 				return
@@ -273,9 +323,14 @@ func (c *Client) waitForControlClient(ctx context.Context, ttyName string) error
 					return nil
 				}
 			}
+		} else if classified := classifyControlError(err); errors.Is(classified, ErrControlUnsupported) {
+			return classified
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("control client did not register")
+			return &controlModeError{
+				kind: ErrControlHandshakeTimeout,
+				err:  fmt.Errorf("control client %q did not register", ttyName),
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -300,34 +355,40 @@ func (c *Client) withSocket(args ...string) []string {
 	return fullArgs
 }
 
-func parseNotification(target Target, line string) (OutputChunk, bool) {
+func parseNotification(target Target, line string) (OutputChunk, bool, error) {
 	if strings.HasPrefix(line, "%output ") {
 		parts := strings.SplitN(line, " ", 3)
-		if len(parts) != 3 || parts[1] != target.PaneID {
-			return OutputChunk{}, false
+		if len(parts) != 3 {
+			return OutputChunk{}, false, fmt.Errorf("malformed %%output notification: %q", line)
+		}
+		if parts[1] != target.PaneID {
+			return OutputChunk{}, false, nil
 		}
 		text, err := decodeTmuxEscapes(parts[2])
 		if err != nil {
-			return OutputChunk{}, false
+			return OutputChunk{}, false, err
 		}
-		return OutputChunk{Target: target, Text: text, ReceivedAt: time.Now()}, true
+		return OutputChunk{Target: target, Text: text, ReceivedAt: time.Now()}, true, nil
 	}
 	if strings.HasPrefix(line, "%extended-output ") {
 		parts := strings.SplitN(line, " ", 4)
-		if len(parts) < 4 || parts[1] != target.PaneID {
-			return OutputChunk{}, false
+		if len(parts) < 4 {
+			return OutputChunk{}, false, fmt.Errorf("malformed %%extended-output notification: %q", line)
+		}
+		if parts[1] != target.PaneID {
+			return OutputChunk{}, false, nil
 		}
 		index := strings.Index(line, ": ")
 		if index == -1 {
-			return OutputChunk{}, false
+			return OutputChunk{}, false, fmt.Errorf("missing payload in %%extended-output notification: %q", line)
 		}
 		text, err := decodeTmuxEscapes(line[index+2:])
 		if err != nil {
-			return OutputChunk{}, false
+			return OutputChunk{}, false, err
 		}
-		return OutputChunk{Target: target, Text: text, ReceivedAt: time.Now()}, true
+		return OutputChunk{Target: target, Text: text, ReceivedAt: time.Now()}, true, nil
 	}
-	return OutputChunk{}, false
+	return OutputChunk{}, false, nil
 }
 
 func cleanControlLine(line string) string {
@@ -336,6 +397,21 @@ func cleanControlLine(line string) string {
 	line = strings.ReplaceAll(line, "\x1bP1000p", "")
 	line = strings.ReplaceAll(line, "\x1b\\", "")
 	return strings.TrimSpace(line)
+}
+
+func waitForPTYExit(waitDone <-chan error, timeout time.Duration) error {
+	if waitDone == nil {
+		return nil
+	}
+	select {
+	case err, ok := <-waitDone:
+		if !ok || err == nil {
+			return nil
+		}
+		return err
+	case <-time.After(timeout):
+		return fmt.Errorf("%w: process did not exit within %s", ErrControlProtocol, timeout)
+	}
 }
 
 func decodeTmuxEscapes(value string) (string, error) {
@@ -361,4 +437,26 @@ func decodeTmuxEscapes(value string) (string, error) {
 		i += 3
 	}
 	return b.String(), nil
+}
+
+func classifyControlError(err error) error {
+	if err == nil || errors.Is(err, ErrControlUnsupported) || errors.Is(err, ErrControlHandshakeTimeout) || errors.Is(err, ErrControlProtocol) {
+		return err
+	}
+	if isControlUnsupportedError(err) {
+		return &controlModeError{kind: ErrControlUnsupported, err: err}
+	}
+	return err
+}
+
+func isControlUnsupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unknown option") ||
+		strings.Contains(msg, "unknown command") ||
+		strings.Contains(msg, "bad flag") ||
+		strings.Contains(msg, "usage: refresh-client") ||
+		strings.Contains(msg, "command attach-session")
 }

@@ -21,12 +21,28 @@ func TestParseNotification(t *testing.T) {
 	t.Parallel()
 
 	target := Target{Socket: "default", PaneID: "%5"}
-	chunk, ok := parseNotification(target, `%output %5 hello\012`)
+	chunk, ok, err := parseNotification(target, `%output %5 hello\012`)
+	if err != nil {
+		t.Fatalf("parseNotification() error = %v", err)
+	}
 	if !ok {
 		t.Fatal("expected output notification")
 	}
 	if chunk.Text != "hello\n" {
 		t.Fatalf("chunk text = %q", chunk.Text)
+	}
+}
+
+func TestParseNotificationReportsMalformedTargetPayload(t *testing.T) {
+	t.Parallel()
+
+	target := Target{Socket: "default", PaneID: "%5"}
+	_, ok, err := parseNotification(target, `%extended-output %5 0 missing-colon`)
+	if ok {
+		t.Fatal("did not expect malformed notification to be accepted")
+	}
+	if err == nil {
+		t.Fatal("expected parseNotification() error")
 	}
 }
 

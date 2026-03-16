@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -70,6 +71,8 @@ type Client struct {
 	socket string
 }
 
+var injectBufferSeq atomic.Uint64
+
 func NewClient(runner Runner, socket string) *Client {
 	return &Client{runner: runner, socket: socket}
 }
@@ -79,25 +82,11 @@ func (c *Client) SocketName() string {
 }
 
 func (c *Client) ListPanes(ctx context.Context) ([]PaneInfo, error) {
-	format := paneListFormat()
-	output, err := c.run(ctx, nil, "list-panes", "-a", "-F", format)
-	if err != nil {
-		return nil, err
-	}
+	return c.listPanes(ctx, nil)
+}
 
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	panes := make([]PaneInfo, 0, len(lines))
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		pane, err := parsePaneInfoLine(c.SocketName(), line)
-		if err != nil {
-			return nil, err
-		}
-		panes = append(panes, pane)
-	}
-	return panes, nil
+func (c *Client) ListSessionPanes(ctx context.Context, sessionName string) ([]PaneInfo, error) {
+	return c.listPanes(ctx, []string{"-t", sessionName})
 }
 
 func (c *Client) ListPaneStates(ctx context.Context) ([]PaneState, error) {
@@ -146,7 +135,7 @@ func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) er
 	if len(data) == 0 {
 		return nil
 	}
-	bufferName := "tagb-" + strings.TrimPrefix(target.PaneID, "%")
+	bufferName := fmt.Sprintf("tagb-%s-%d", strings.TrimPrefix(target.PaneID, "%"), injectBufferSeq.Add(1))
 	if _, err := c.run(ctx, data, "load-buffer", "-b", bufferName, "-"); err != nil {
 		return err
 	}
@@ -208,21 +197,11 @@ func (c *Client) GetMetadata(ctx context.Context, target Target) (BridgeMetadata
 }
 
 func (c *Client) SetMetadata(ctx context.Context, target Target, meta BridgeMetadata) error {
-	for key, value := range meta.ToOptions() {
-		if err := c.SetUserOption(ctx, target, key, value); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.runOptionCommands(ctx, target, false, metadataOptionPairs(meta))
 }
 
 func (c *Client) ClearMetadata(ctx context.Context, target Target) error {
-	for _, key := range []string{OptionManaged, OptionMode, OptionAgent, OptionLabel, OptionCreatedBy, OptionLastActivity} {
-		if err := c.DeleteUserOption(ctx, target, key); err != nil {
-			return err
-		}
-	}
-	return nil
+	return c.runOptionCommands(ctx, target, true, metadataOptionPairs(BridgeMetadata{}))
 }
 
 func (c *Client) TouchMetadata(ctx context.Context, target Target) error {
@@ -233,6 +212,10 @@ func (c *Client) TouchMetadata(ctx context.Context, target Target) error {
 	if managed != "1" {
 		return nil
 	}
+	return c.TouchMetadataManaged(ctx, target)
+}
+
+func (c *Client) TouchMetadataManaged(ctx context.Context, target Target) error {
 	return c.SetUserOption(ctx, target, OptionLastActivity, strconv.FormatInt(time.Now().Unix(), 10))
 }
 
@@ -240,6 +223,9 @@ func (c *Client) SubscribePane(ctx context.Context, pane PaneInfo, lines int) (*
 	control, err := c.startControlSubscription(ctx, pane)
 	if err == nil {
 		return control, nil
+	}
+	if !shouldFallbackToPolling(err) {
+		return nil, err
 	}
 	initial, captureErr := c.CapturePane(ctx, pane.Target, lines)
 	if captureErr != nil {
@@ -262,12 +248,86 @@ func (c *Client) OpenPaneStream(ctx context.Context, pane PaneInfo, lines int) (
 		}
 		return initial, stream, nil
 	}
+	if !shouldFallbackToPolling(err) {
+		return "", nil, err
+	}
 
 	initial, captureErr := c.CapturePane(ctx, pane.Target, lines)
 	if captureErr != nil {
 		return "", nil, captureErr
 	}
 	return initial, c.startPollingSubscriptionWithBaseline(ctx, pane, lines, initial), nil
+}
+
+func (c *Client) listPanes(ctx context.Context, extraArgs []string) ([]PaneInfo, error) {
+	args := []string{"list-panes"}
+	args = append(args, extraArgs...)
+	args = append(args, "-F", paneListFormat())
+	output, err := c.run(ctx, nil, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	panes := make([]PaneInfo, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		pane, parseErr := parsePaneInfoLine(c.SocketName(), line)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		panes = append(panes, pane)
+	}
+	return panes, nil
+}
+
+func (c *Client) runOptionCommands(ctx context.Context, target Target, unset bool, pairs []optionValue) error {
+	commands := make([][]string, 0, len(pairs))
+	for _, pair := range pairs {
+		if unset {
+			commands = append(commands, []string{"set-option", "-p", "-u", "-t", target.PaneID, pair.key})
+			continue
+		}
+		commands = append(commands, []string{"set-option", "-p", "-t", target.PaneID, pair.key, pair.value})
+	}
+	if len(commands) == 0 {
+		return nil
+	}
+	_, err := c.run(ctx, nil, joinTmuxCommands(commands)...)
+	if unset && isUnsetOptionError(err) {
+		return nil
+	}
+	return err
+}
+
+func joinTmuxCommands(commands [][]string) []string {
+	args := make([]string, 0, len(commands)*8)
+	for i, command := range commands {
+		if i > 0 {
+			args = append(args, ";")
+		}
+		args = append(args, command...)
+	}
+	return args
+}
+
+type optionValue struct {
+	key   string
+	value string
+}
+
+func metadataOptionPairs(meta BridgeMetadata) []optionValue {
+	opts := meta.ToOptions()
+	return []optionValue{
+		{key: OptionManaged, value: opts[OptionManaged]},
+		{key: OptionMode, value: opts[OptionMode]},
+		{key: OptionAgent, value: opts[OptionAgent]},
+		{key: OptionLabel, value: opts[OptionLabel]},
+		{key: OptionCreatedBy, value: opts[OptionCreatedBy]},
+		{key: OptionLastActivity, value: opts[OptionLastActivity]},
+	}
 }
 
 func (c *Client) run(ctx context.Context, stdin []byte, args ...string) (string, error) {
@@ -412,4 +472,8 @@ func isUnsetOptionError(err error) bool {
 	}
 	var exitErr *exec.ExitError
 	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
+}
+
+func shouldFallbackToPolling(err error) bool {
+	return errors.Is(err, ErrControlUnsupported)
 }
