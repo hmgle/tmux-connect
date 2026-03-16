@@ -18,6 +18,7 @@ import (
 )
 
 const paneFieldSep = "\x1f"
+const paneFieldSepEscaped = `\037`
 
 type Runner interface {
 	Run(ctx context.Context, stdin []byte, args ...string) (string, error)
@@ -318,7 +319,7 @@ func paneStateFormat() string {
 }
 
 func parsePaneStateLine(socket string, line string) (PaneInfo, BridgeMetadata, error) {
-	fields := strings.Split(line, paneFieldSep)
+	fields := splitPaneFields(line, 15)
 	if len(fields) != 15 {
 		return PaneInfo{}, BridgeMetadata{}, fmt.Errorf("unexpected list-panes row: %q", line)
 	}
@@ -338,11 +339,25 @@ func parsePaneStateLine(socket string, line string) (PaneInfo, BridgeMetadata, e
 }
 
 func parsePaneInfoLine(socket string, line string) (PaneInfo, error) {
-	fields := strings.Split(line, paneFieldSep)
+	fields := splitPaneFields(line, 9)
 	if len(fields) != 9 {
 		return PaneInfo{}, fmt.Errorf("unexpected list-panes row: %q", line)
 	}
 	return buildPaneInfo(socket, fields)
+}
+
+func splitPaneFields(line string, expected int) []string {
+	fields := strings.Split(line, paneFieldSep)
+	if len(fields) == expected {
+		return fields
+	}
+	if strings.Contains(line, paneFieldSepEscaped) {
+		fields = strings.Split(line, paneFieldSepEscaped)
+		if len(fields) == expected {
+			return fields
+		}
+	}
+	return fields
 }
 
 func buildPaneInfo(socket string, fields []string) (PaneInfo, error) {

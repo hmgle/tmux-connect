@@ -70,6 +70,40 @@ func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 	}
 }
 
+func TestParsePaneInfoLineAcceptsEscapedSeparator(t *testing.T) {
+	t.Parallel()
+
+	line := `%1\0372\037@1\037zsh\037gle@host:~/proj\037zsh\0370\03780\03722`
+
+	pane, err := parsePaneInfoLine("default", line)
+	if err != nil {
+		t.Fatalf("parsePaneInfoLine() error = %v", err)
+	}
+	if pane.Target.PaneID != "%1" || pane.SessionName != "2" {
+		t.Fatalf("unexpected pane %#v", pane)
+	}
+	if pane.Width != 80 || pane.Height != 22 {
+		t.Fatalf("unexpected size %#v", pane)
+	}
+}
+
+func TestParsePaneStateLineAcceptsEscapedSeparator(t *testing.T) {
+	t.Parallel()
+
+	line := `%5\037dev\037@1\037shell\037api\037zsh\0370\037120\03740\0371\037relay\037codex\037backend\037manual-attach\0371700000000`
+
+	pane, meta, err := parsePaneStateLine("default", line)
+	if err != nil {
+		t.Fatalf("parsePaneStateLine() error = %v", err)
+	}
+	if pane.Target.PaneID != "%5" || pane.WindowName != "shell" {
+		t.Fatalf("unexpected pane %#v", pane)
+	}
+	if !meta.Managed || meta.Agent != AgentCodex || meta.Label != "backend" {
+		t.Fatalf("unexpected metadata %#v", meta)
+	}
+}
+
 func TestInjectInputUsesNamedBuffer(t *testing.T) {
 	t.Parallel()
 
