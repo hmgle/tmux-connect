@@ -343,6 +343,19 @@ func TestDeleteUserOptionIgnoresUnsetErrors(t *testing.T) {
 	}
 }
 
+func TestClassifyOptionErrorMarksUnavailableOptions(t *testing.T) {
+	t.Parallel()
+
+	for _, err := range []error{
+		errors.New("exit status 1: unknown option"),
+		errors.New("exit status 1: invalid option"),
+	} {
+		if !errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
+			t.Fatalf("classifyOptionError(%v) should mark option unavailable", err)
+		}
+	}
+}
+
 func TestStartPollingSubscriptionHonorsLinesAndClose(t *testing.T) {
 	t.Parallel()
 

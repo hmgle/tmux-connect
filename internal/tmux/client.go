@@ -166,11 +166,7 @@ func (c *Client) SendKeys(ctx context.Context, target Target, keys ...string) er
 func (c *Client) GetUserOptions(ctx context.Context, target Target) (map[string]string, error) {
 	output, err := c.run(ctx, nil, "show-options", "-p", "-t", target.PaneID)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid option") {
-			return map[string]string{}, nil
-		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		if errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
 			return map[string]string{}, nil
 		}
 		return nil, err
@@ -186,7 +182,7 @@ func (c *Client) SetUserOption(ctx context.Context, target Target, key string, v
 func (c *Client) GetUserOption(ctx context.Context, target Target, key string) (string, error) {
 	output, err := c.run(ctx, nil, "show-options", "-p", "-v", "-t", target.PaneID, key)
 	if err != nil {
-		if isUnsetOptionError(err) {
+		if errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
 			return "", nil
 		}
 		return "", err
@@ -196,7 +192,7 @@ func (c *Client) GetUserOption(ctx context.Context, target Target, key string) (
 
 func (c *Client) DeleteUserOption(ctx context.Context, target Target, key string) error {
 	_, err := c.run(ctx, nil, "set-option", "-p", "-u", "-t", target.PaneID, key)
-	if isUnsetOptionError(err) {
+	if errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
 		return nil
 	}
 	return err
@@ -334,7 +330,7 @@ func (c *Client) runOptionCommands(ctx context.Context, target Target, unset boo
 		return nil
 	}
 	_, err := c.run(ctx, nil, joinTmuxCommands(commands)...)
-	if unset && isUnsetOptionError(err) {
+	if unset && errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
 		return nil
 	}
 	return err
@@ -498,18 +494,6 @@ func isClosedConn(err error) bool {
 		return false
 	}
 	return errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EIO)
-}
-
-func isUnsetOptionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "invalid option") || strings.Contains(msg, "unknown option") {
-		return true
-	}
-	var exitErr *exec.ExitError
-	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
 }
 
 func shouldFallbackToPolling(err error) bool {
