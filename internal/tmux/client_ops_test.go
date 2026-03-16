@@ -100,6 +100,56 @@ func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 	}
 }
 
+func TestGetPaneUsesTargetedListCommand(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			return "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n", nil
+		},
+	}
+	client := NewClient(runner, "")
+
+	pane, err := client.GetPane(context.Background(), Target{PaneID: "%5"})
+	if err != nil {
+		t.Fatalf("GetPane() error = %v", err)
+	}
+	if pane.Target.PaneID != "%5" || pane.SessionName != "dev" {
+		t.Fatalf("unexpected pane %#v", pane)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	}
+}
+
+func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			return "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n", nil
+		},
+	}
+	client := NewClient(runner, "")
+
+	state, err := client.GetPaneState(context.Background(), Target{PaneID: "%5"})
+	if err != nil {
+		t.Fatalf("GetPaneState() error = %v", err)
+	}
+	if state.Info.Target.PaneID != "%5" || !state.Metadata.Managed || state.Metadata.Agent != AgentCodex {
+		t.Fatalf("unexpected state %#v", state)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	}
+}
+
 func TestParsePaneInfoLineAcceptsEscapedSeparator(t *testing.T) {
 	t.Parallel()
 

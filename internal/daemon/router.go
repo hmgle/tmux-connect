@@ -274,7 +274,7 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 	if text == "" {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "usage", "usage: /send <text>")
 	}
-	if err := r.service.Send(ctx, paneKey, text, false); err != nil {
+	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
 	return r.replyBus.Reply(ctx, chatID, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
@@ -288,7 +288,7 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage) error
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
-	if err := r.service.Enter(ctx, paneKey); err != nil {
+	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
 	}
 	return r.replyBus.Reply(ctx, chatID, paneKey, "enter", fmt.Sprintf("sent Enter to %s", paneKey))
@@ -302,7 +302,7 @@ func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
-	if err := r.service.CtrlC(ctx, paneKey); err != nil {
+	if err := r.service.CtrlCManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("ctrl-c failed: %v", err))
 	}
 	return r.replyBus.Reply(ctx, chatID, paneKey, "ctrl-c", fmt.Sprintf("sent Ctrl-C to %s", paneKey))

@@ -50,16 +50,14 @@ func (s *Service) ResolvePane(ctx context.Context, ref string) (tmux.PaneInfo, e
 	if err != nil {
 		return tmux.PaneInfo{}, UsageError("%v", err)
 	}
-	panes, err := s.tmux.ListPanes(ctx)
+	if !target.Matches(tmux.Target{Socket: s.tmux.SocketName(), PaneID: target.PaneID}) {
+		return tmux.PaneInfo{}, NotFoundError("pane not found: %s", ref)
+	}
+	pane, err := s.tmux.GetPane(ctx, target)
 	if err != nil {
-		return tmux.PaneInfo{}, TmuxError("list panes: %v", err)
+		return tmux.PaneInfo{}, NotFoundError("pane not found: %s", ref)
 	}
-	for _, pane := range panes {
-		if pane.Target.Matches(target) {
-			return pane, nil
-		}
-	}
-	return tmux.PaneInfo{}, NotFoundError("pane not found: %s", ref)
+	return pane, nil
 }
 
 func (s *Service) Attach(ctx context.Context, ref string, agent string, label string) (PaneRecord, error) {
@@ -93,15 +91,15 @@ func (s *Service) Detach(ctx context.Context, ref string) error {
 }
 
 func (s *Service) Inspect(ctx context.Context, ref string) (PaneRecord, error) {
-	pane, err := s.ResolvePane(ctx, ref)
+	target, err := s.parseTarget(ref)
 	if err != nil {
 		return PaneRecord{}, err
 	}
-	meta, err := s.tmux.GetMetadata(ctx, pane.Target)
+	state, err := s.tmux.GetPaneState(ctx, target)
 	if err != nil {
-		return PaneRecord{}, TmuxError("read metadata for %s: %v", pane.Target.PaneKey(), err)
+		return PaneRecord{}, NotFoundError("pane not found: %s", ref)
 	}
-	return PaneRecord{Info: pane, Metadata: meta}, nil
+	return PaneRecord{Info: state.Info, Metadata: state.Metadata}, nil
 }
 
 func (s *Service) Snapshot(ctx context.Context, ref string, lines int) (string, error) {
@@ -129,6 +127,14 @@ func (s *Service) SnapshotRich(ctx context.Context, ref string, lines int) (stri
 }
 
 func (s *Service) Send(ctx context.Context, ref string, text string, sendEnter bool) error {
+	return s.send(ctx, ref, text, sendEnter, false)
+}
+
+func (s *Service) SendManaged(ctx context.Context, ref string, text string, sendEnter bool) error {
+	return s.send(ctx, ref, text, sendEnter, true)
+}
+
+func (s *Service) send(ctx context.Context, ref string, text string, sendEnter bool, managed bool) error {
 	pane, err := s.ResolvePane(ctx, ref)
 	if err != nil {
 		return err
@@ -141,19 +147,29 @@ func (s *Service) Send(ctx context.Context, ref string, text string, sendEnter b
 			return TmuxError("send enter to %s: %v", pane.Target.PaneKey(), err)
 		}
 	}
-	if err := s.tmux.TouchMetadata(ctx, pane.Target); err != nil {
+	if err := s.touchPaneMetadata(ctx, pane.Target, managed); err != nil {
 		return TmuxError("update metadata for %s: %v", pane.Target.PaneKey(), err)
 	}
 	return nil
 }
 
 func (s *Service) Enter(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "Enter")
+	_, err := s.sendControlKey(ctx, ref, "Enter", false)
 	return err
 }
 
 func (s *Service) CtrlC(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "C-c")
+	_, err := s.sendControlKey(ctx, ref, "C-c", false)
+	return err
+}
+
+func (s *Service) EnterManaged(ctx context.Context, ref string) error {
+	_, err := s.sendControlKey(ctx, ref, "Enter", true)
+	return err
+}
+
+func (s *Service) CtrlCManaged(ctx context.Context, ref string) error {
+	_, err := s.sendControlKey(ctx, ref, "C-c", true)
 	return err
 }
 
@@ -163,7 +179,7 @@ type PaneStream struct {
 	Subscription *tmux.Subscription
 }
 
-func (s *Service) sendControlKey(ctx context.Context, ref string, key string) (tmux.PaneInfo, error) {
+func (s *Service) sendControlKey(ctx context.Context, ref string, key string, managed bool) (tmux.PaneInfo, error) {
 	pane, err := s.ResolvePane(ctx, ref)
 	if err != nil {
 		return tmux.PaneInfo{}, err
@@ -171,7 +187,7 @@ func (s *Service) sendControlKey(ctx context.Context, ref string, key string) (t
 	if err := s.tmux.SendKeys(ctx, pane.Target, key); err != nil {
 		return tmux.PaneInfo{}, TmuxError("send %s to %s: %v", key, pane.Target.PaneKey(), err)
 	}
-	if err := s.tmux.TouchMetadata(ctx, pane.Target); err != nil {
+	if err := s.touchPaneMetadata(ctx, pane.Target, managed); err != nil {
 		return tmux.PaneInfo{}, TmuxError("update metadata for %s: %v", pane.Target.PaneKey(), err)
 	}
 	return pane, nil
@@ -187,4 +203,22 @@ func (s *Service) OpenStream(ctx context.Context, ref string, lines int) (PaneSt
 		return PaneStream{}, TmuxError("open stream for %s: %v", pane.Target.PaneKey(), err)
 	}
 	return PaneStream{Pane: pane, Initial: initial, Subscription: stream}, nil
+}
+
+func (s *Service) parseTarget(ref string) (tmux.Target, error) {
+	target, err := tmux.ParseTarget(ref, s.tmux.SocketName())
+	if err != nil {
+		return tmux.Target{}, UsageError("%v", err)
+	}
+	if !target.Matches(tmux.Target{Socket: s.tmux.SocketName(), PaneID: target.PaneID}) {
+		return tmux.Target{}, NotFoundError("pane not found: %s", ref)
+	}
+	return target, nil
+}
+
+func (s *Service) touchPaneMetadata(ctx context.Context, target tmux.Target, managed bool) error {
+	if managed {
+		return s.tmux.TouchMetadataManaged(ctx, target)
+	}
+	return s.tmux.TouchMetadata(ctx, target)
 }

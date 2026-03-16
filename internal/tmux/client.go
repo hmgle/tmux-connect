@@ -82,7 +82,7 @@ func (c *Client) SocketName() string {
 }
 
 func (c *Client) ListPanes(ctx context.Context) ([]PaneInfo, error) {
-	return c.listPanes(ctx, nil)
+	return c.listPanes(ctx, []string{"-a"})
 }
 
 func (c *Client) ListSessionPanes(ctx context.Context, sessionName string) ([]PaneInfo, error) {
@@ -90,24 +90,29 @@ func (c *Client) ListSessionPanes(ctx context.Context, sessionName string) ([]Pa
 }
 
 func (c *Client) ListPaneStates(ctx context.Context) ([]PaneState, error) {
-	output, err := c.run(ctx, nil, "list-panes", "-a", "-F", paneStateFormat())
-	if err != nil {
-		return nil, err
-	}
+	return c.listPaneStates(ctx, []string{"-a"})
+}
 
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	states := make([]PaneState, 0, len(lines))
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		pane, meta, err := parsePaneStateLine(c.SocketName(), line)
-		if err != nil {
-			return nil, err
-		}
-		states = append(states, PaneState{Info: pane, Metadata: meta})
+func (c *Client) GetPane(ctx context.Context, target Target) (PaneInfo, error) {
+	panes, err := c.listPanes(ctx, []string{"-t", target.PaneID})
+	if err != nil {
+		return PaneInfo{}, err
 	}
-	return states, nil
+	if len(panes) == 0 {
+		return PaneInfo{}, fmt.Errorf("pane not found: %s", target.PaneID)
+	}
+	return panes[0], nil
+}
+
+func (c *Client) GetPaneState(ctx context.Context, target Target) (PaneState, error) {
+	states, err := c.listPaneStates(ctx, []string{"-t", target.PaneID})
+	if err != nil {
+		return PaneState{}, err
+	}
+	if len(states) == 0 {
+		return PaneState{}, fmt.Errorf("pane not found: %s", target.PaneID)
+	}
+	return states[0], nil
 }
 
 func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (string, error) {
@@ -281,6 +286,30 @@ func (c *Client) listPanes(ctx context.Context, extraArgs []string) ([]PaneInfo,
 		panes = append(panes, pane)
 	}
 	return panes, nil
+}
+
+func (c *Client) listPaneStates(ctx context.Context, extraArgs []string) ([]PaneState, error) {
+	args := []string{"list-panes"}
+	args = append(args, extraArgs...)
+	args = append(args, "-F", paneStateFormat())
+	output, err := c.run(ctx, nil, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	states := make([]PaneState, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		pane, meta, parseErr := parsePaneStateLine(c.SocketName(), line)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		states = append(states, PaneState{Info: pane, Metadata: meta})
+	}
+	return states, nil
 }
 
 func (c *Client) runOptionCommands(ctx context.Context, target Target, unset bool, pairs []optionValue) error {

@@ -17,8 +17,11 @@ type paneService interface {
 	Snapshot(context.Context, string, int) (string, error)
 	SnapshotRich(context.Context, string, int) (string, error)
 	Send(context.Context, string, string, bool) error
+	SendManaged(context.Context, string, string, bool) error
 	Enter(context.Context, string) error
+	EnterManaged(context.Context, string) error
 	CtrlC(context.Context, string) error
+	CtrlCManaged(context.Context, string) error
 	OpenStream(context.Context, string, int) (tagb.PaneStream, error)
 }
 

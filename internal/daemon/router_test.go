@@ -123,10 +123,15 @@ func (s *fakePaneService) SnapshotRich(context.Context, string, int) (string, er
 }
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
+func (s *fakePaneService) SendManaged(context.Context, string, string, bool) error {
+	return nil
+}
 
-func (s *fakePaneService) Enter(context.Context, string) error { return nil }
+func (s *fakePaneService) Enter(context.Context, string) error        { return nil }
+func (s *fakePaneService) EnterManaged(context.Context, string) error { return nil }
 
-func (s *fakePaneService) CtrlC(context.Context, string) error { return nil }
+func (s *fakePaneService) CtrlC(context.Context, string) error        { return nil }
+func (s *fakePaneService) CtrlCManaged(context.Context, string) error { return nil }
 
 func (s *fakePaneService) OpenStream(context.Context, string, int) (tagb.PaneStream, error) {
 	return tagb.PaneStream{
