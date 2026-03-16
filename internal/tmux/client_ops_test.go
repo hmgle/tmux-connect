@@ -525,3 +525,51 @@ func TestCapturePaneRichUsesEscapeFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestCapturePaneRichCachesUnsupportedCapability(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, _ ...string) (string, error) {
+			return "", errors.New("invalid option")
+		},
+	}
+	client := NewClient(runner, "")
+
+	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); !errors.Is(err, ErrRichCaptureUnsupported) {
+		t.Fatalf("CapturePaneRich() error = %v, want ErrRichCaptureUnsupported", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 tmux call after first unsupported probe, got %d", len(runner.calls))
+	}
+	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); !errors.Is(err, ErrRichCaptureUnsupported) {
+		t.Fatalf("second CapturePaneRich() error = %v, want ErrRichCaptureUnsupported", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected cached unsupported capability to skip extra tmux calls, got %d", len(runner.calls))
+	}
+}
+
+func TestStartControlSubscriptionCachesUnsupportedCapability(t *testing.T) {
+	t.Parallel()
+
+	var startCalls int
+	runner := &fakeRunner{
+		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
+			startCalls++
+			return nil, errors.New("unknown option")
+		},
+	}
+	client := NewClient(runner, "")
+	pane := PaneInfo{Target: Target{PaneID: "%9"}, SessionName: "dev"}
+
+	if _, err := client.startControlSubscription(context.Background(), pane); !errors.Is(err, ErrControlUnsupported) {
+		t.Fatalf("startControlSubscription() error = %v, want ErrControlUnsupported", err)
+	}
+	if _, err := client.startControlSubscription(context.Background(), pane); !errors.Is(err, ErrControlUnsupported) {
+		t.Fatalf("second startControlSubscription() error = %v, want ErrControlUnsupported", err)
+	}
+	if startCalls != 1 {
+		t.Fatalf("expected control unsupported capability to skip extra StartPTY calls, got %d", startCalls)
+	}
+}

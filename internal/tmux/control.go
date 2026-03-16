@@ -209,11 +209,18 @@ func (e *controlModeError) Is(target error) bool {
 }
 
 func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*Subscription, error) {
+	if !c.supportsControlMode() {
+		return nil, ErrControlUnsupported
+	}
 	subCtx, cancel := context.WithCancel(ctx)
 	ptySession, err := c.runner.StartPTY(subCtx, c.withSocket("attach-session", "-t", pane.SessionName, "-f", "ignore-size,active-pane")...)
 	if err != nil {
+		if classified := classifyControlError(err); errors.Is(classified, ErrControlUnsupported) {
+			c.markControlModeUnsupported()
+			return nil, classified
+		}
 		cancel()
-		return nil, classifyControlError(err)
+		return nil, err
 	}
 	waitDone := make(chan error, 1)
 	go func() {
@@ -239,7 +246,11 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 		cancel()
 		_ = ptySession.Close()
 		<-waitDone
-		return nil, classifyControlError(err)
+		classified := classifyControlError(err)
+		if errors.Is(classified, ErrControlUnsupported) {
+			c.markControlModeUnsupported()
+		}
+		return nil, classified
 	}
 	for _, candidate := range panes {
 		state := "off"
@@ -250,7 +261,11 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 			cancel()
 			_ = ptySession.Close()
 			<-waitDone
-			return nil, classifyControlError(err)
+			classified := classifyControlError(err)
+			if errors.Is(classified, ErrControlUnsupported) {
+				c.markControlModeUnsupported()
+			}
+			return nil, classified
 		}
 	}
 
@@ -324,6 +339,7 @@ func (c *Client) waitForControlClient(ctx context.Context, ttyName string) error
 				}
 			}
 		} else if classified := classifyControlError(err); errors.Is(classified, ErrControlUnsupported) {
+			c.markControlModeUnsupported()
 			return classified
 		}
 		if time.Now().After(deadline) {
@@ -454,7 +470,7 @@ func isControlUnsupportedError(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unknown option") ||
+	return isUnsupportedFeatureError(err) ||
 		strings.Contains(msg, "unknown command") ||
 		strings.Contains(msg, "bad flag") ||
 		strings.Contains(msg, "usage: refresh-client") ||

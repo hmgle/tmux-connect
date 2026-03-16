@@ -67,8 +67,9 @@ func (s *realPTYSession) Name() string                { return s.file.Name() }
 func (s *realPTYSession) Wait() error                 { return s.cmd.Wait() }
 
 type Client struct {
-	runner Runner
-	socket string
+	runner       Runner
+	socket       string
+	capabilities capabilityCache
 }
 
 var injectBufferSeq atomic.Uint64
@@ -120,6 +121,9 @@ func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (str
 }
 
 func (c *Client) CapturePaneRich(ctx context.Context, target Target, lines int) (string, error) {
+	if !c.supportsRichCapture() {
+		return "", ErrRichCaptureUnsupported
+	}
 	return c.capturePane(ctx, target, lines, true)
 }
 
@@ -133,7 +137,12 @@ func (c *Client) capturePane(ctx context.Context, target Target, lines int, esca
 		args = append(args, "-e")
 	}
 	args = append(args, "-t", target.PaneID, "-S", start)
-	return c.run(ctx, nil, args...)
+	output, err := c.run(ctx, nil, args...)
+	if err != nil && escape && isUnsupportedFeatureError(err) {
+		c.markRichCaptureUnsupported()
+		return "", errors.Join(ErrRichCaptureUnsupported, err)
+	}
+	return output, err
 }
 
 func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) error {
