@@ -21,6 +21,7 @@ type Config struct {
 	PollTimeout   time.Duration
 	SnapshotLines int
 	FollowLines   int
+	FollowMinGap  time.Duration
 	APIBaseURL    string
 }
 
@@ -148,6 +149,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	)
 	replyBus := NewReplyBus(client, store)
 	follow := NewFollowManager(service, replyBus, cfg.FollowLines)
+	follow.minInterval = cfg.FollowMinGap
 	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats)
 
 	return &Runtime{
@@ -250,6 +252,7 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", 20*time.Second, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
 	fs.IntVar(&cfg.FollowLines, "follow-lines", 80, "initial line count when starting /follow")
+	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", 700*time.Millisecond, "default minimum interval between /follow pushes")
 	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_API_BASE")), "telegram bot api base url")
 	fs.Var(allowChats, "allow-chat", "allowed telegram chat id (repeatable or comma-separated)")
 
@@ -265,6 +268,9 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	}
 	if cfg.FollowLines <= 0 {
 		return Config{}, tagb.UsageError("--follow-lines must be > 0")
+	}
+	if cfg.FollowMinGap <= 0 {
+		return Config{}, tagb.UsageError("--follow-min-interval must be > 0")
 	}
 	if requireRun && strings.TrimSpace(cfg.TelegramToken) == "" {
 		return Config{}, tagb.UsageError("daemon run requires --telegram-token or TAGB_TELEGRAM_TOKEN")
@@ -301,5 +307,6 @@ Common flags:
   --poll-timeout 20s
   --snapshot-lines 120
   --follow-lines 80
+  --follow-min-interval 700ms
 `)
 }

@@ -14,17 +14,22 @@ type FollowManager struct {
 	service       paneService
 	replyBus      *ReplyBus
 	initialLines  int
-	flushInterval time.Duration
+	minInterval   time.Duration
 	maxMessageLen int
 
 	mu       sync.Mutex
 	sessions map[int64]*followSession
 }
 
+type FollowOptions struct {
+	MinInterval time.Duration
+}
+
 type followSession struct {
-	chatID  int64
-	paneKey string
-	cancel  context.CancelFunc
+	chatID      int64
+	paneKey     string
+	minInterval time.Duration
+	cancel      context.CancelFunc
 }
 
 func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int) *FollowManager {
@@ -32,17 +37,22 @@ func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int)
 		service:       service,
 		replyBus:      replyBus,
 		initialLines:  initialLines,
-		flushInterval: 700 * time.Millisecond,
+		minInterval:   700 * time.Millisecond,
 		maxMessageLen: 3500,
 		sessions:      make(map[int64]*followSession),
 	}
 }
 
 func (m *FollowManager) Enable(ctx context.Context, chatID int64, paneKey string) error {
+	return m.EnableWithOptions(ctx, chatID, paneKey, FollowOptions{})
+}
+
+func (m *FollowManager) EnableWithOptions(ctx context.Context, chatID int64, paneKey string, opts FollowOptions) error {
 	paneKey = strings.TrimSpace(paneKey)
 	if paneKey == "" {
 		return fmt.Errorf("pane key is required")
 	}
+	opts = m.normalizeOptions(opts)
 
 	stream, err := m.service.OpenStream(ctx, paneKey, m.initialLines)
 	if err != nil {
@@ -51,9 +61,10 @@ func (m *FollowManager) Enable(ctx context.Context, chatID int64, paneKey string
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &followSession{
-		chatID:  chatID,
-		paneKey: stream.Pane.Target.PaneKey(),
-		cancel:  cancel,
+		chatID:      chatID,
+		paneKey:     stream.Pane.Target.PaneKey(),
+		minInterval: opts.MinInterval,
+		cancel:      cancel,
 	}
 
 	m.mu.Lock()
@@ -65,6 +76,17 @@ func (m *FollowManager) Enable(ctx context.Context, chatID int64, paneKey string
 
 	go m.run(runCtx, session, stream)
 	return nil
+}
+
+func (m *FollowManager) Options(chatID int64) FollowOptions {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	session := m.sessions[chatID]
+	if session == nil {
+		return FollowOptions{MinInterval: m.minInterval}
+	}
+	return FollowOptions{MinInterval: session.minInterval}
 }
 
 func (m *FollowManager) Disable(chatID int64) bool {
@@ -120,13 +142,18 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 	defer stream.Subscription.Close()
 	defer m.removeSession(session.chatID, session.paneKey)
 
+	lastSentText := ""
+	var lastSentAt time.Time
+
 	if initial := strings.TrimSpace(stream.Initial); initial != "" {
 		if err := m.replyBus.Reply(ctx, session.chatID, session.paneKey, "follow-initial", formatFollowMessage(session.paneKey, initial, m.maxMessageLen)); err != nil {
 			return
 		}
+		lastSentText = initial
+		lastSentAt = time.Now()
 	}
 
-	timer := time.NewTimer(m.flushInterval)
+	timer := time.NewTimer(session.minInterval)
 	if !timer.Stop() {
 		select {
 		case <-timer.C:
@@ -140,15 +167,47 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 	chunks := stream.Subscription.Chunks()
 	errs := stream.Subscription.Errs()
 
+	stopTimer := func() {
+		if !timerActive {
+			return
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timerActive = false
+	}
+	scheduleFlush := func(now time.Time) {
+		if timerActive {
+			return
+		}
+		wait := session.minInterval
+		if !lastSentAt.IsZero() {
+			wait = lastSentAt.Add(session.minInterval).Sub(now)
+			if wait < 0 {
+				wait = 0
+			}
+		}
+		timer.Reset(wait)
+		timerActive = true
+	}
 	flush := func(flushCtx context.Context) bool {
-		text := strings.TrimSpace(builder.String())
+		raw := strings.TrimSpace(builder.String())
 		builder.Reset()
-		if text == "" {
+		if raw == "" {
+			return true
+		}
+		text, changed := prepareFollowMessageDelta(lastSentText, raw)
+		if !changed {
 			return true
 		}
 		if err := m.replyBus.Reply(flushCtx, session.chatID, session.paneKey, "follow-output", formatFollowMessage(session.paneKey, text, m.maxMessageLen)); err != nil {
 			return false
 		}
+		lastSentText = raw
+		lastSentAt = time.Now()
 		return true
 	}
 	drainPendingChunks := func() {
@@ -202,20 +261,13 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 			}
 			builder.WriteString(chunk.Text)
 			if builder.Len() >= m.maxMessageLen {
+				stopTimer()
 				if !flush(ctx) {
 					return
 				}
-				timerActive = false
 				continue
 			}
-			if timerActive && !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(m.flushInterval)
-			timerActive = true
+			scheduleFlush(time.Now())
 		case <-timer.C:
 			timerActive = false
 			if !flush(ctx) {
@@ -223,6 +275,71 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 			}
 		}
 	}
+}
+
+func (m *FollowManager) normalizeOptions(opts FollowOptions) FollowOptions {
+	if opts.MinInterval <= 0 {
+		opts.MinInterval = m.minInterval
+	}
+	return opts
+}
+
+const followRepeatedPrefixMarker = "...[omitted repeated prefix]\n"
+
+func prepareFollowMessageDelta(previous string, current string) (string, bool) {
+	previous = strings.TrimSpace(previous)
+	current = strings.TrimSpace(current)
+	if current == "" {
+		return "", false
+	}
+	if previous == "" {
+		return current, true
+	}
+	if current == previous {
+		return "", false
+	}
+	if tail, ok := trimRepeatedPrefix(previous, current); ok {
+		return followRepeatedPrefixMarker + tail, true
+	}
+	return current, true
+}
+
+func trimRepeatedPrefix(previous string, current string) (string, bool) {
+	if strings.HasPrefix(current, previous) {
+		tail := strings.TrimLeft(strings.TrimPrefix(current, previous), "\n")
+		tail = strings.TrimSpace(tail)
+		if tail == "" {
+			return "", false
+		}
+		return tail, true
+	}
+
+	prevLines := strings.Split(previous, "\n")
+	currLines := strings.Split(current, "\n")
+	shared := commonPrefixLines(prevLines, currLines)
+	if shared == 0 {
+		return "", false
+	}
+	sharedText := strings.Join(currLines[:shared], "\n")
+	if shared < 2 || len([]rune(sharedText)) < 60 {
+		return "", false
+	}
+
+	tail := strings.TrimSpace(strings.Join(currLines[shared:], "\n"))
+	if tail == "" {
+		return "", false
+	}
+	return tail, true
+}
+
+func commonPrefixLines(left []string, right []string) int {
+	limit := min(len(left), len(right))
+	for i := 0; i < limit; i++ {
+		if left[i] != right[i] {
+			return i
+		}
+	}
+	return limit
 }
 
 func (m *FollowManager) removeSession(chatID int64, paneKey string) {

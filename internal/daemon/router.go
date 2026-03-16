@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/portgle/tmux-connect/internal/tagb"
 )
@@ -209,7 +210,7 @@ func (r *Router) handleBind(ctx context.Context, message IncomingMessage, args s
 	}
 	r.logInbound(ctx, message, paneKey, string(record.Metadata.Agent))
 	if r.follow.IsEnabled(chatID) {
-		if err := r.follow.Enable(ctx, chatID, paneKey); err != nil {
+		if err := r.follow.EnableWithOptions(ctx, chatID, paneKey, r.follow.Options(chatID)); err != nil {
 			return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("follow switch failed: %v", err))
 		}
 	}
@@ -302,7 +303,11 @@ func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error
 
 func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args string) error {
 	chatID := message.ChatID
-	mode := strings.ToLower(strings.TrimSpace(args))
+	mode, opts, err := parseFollowArgs(args)
+	if err != nil {
+		r.logInbound(ctx, message, "", "")
+		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
+	}
 	switch mode {
 	case "on":
 		paneKey, err := r.requireCurrentPane(ctx, chatID)
@@ -311,10 +316,11 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 			return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
 		}
 		r.logInbound(ctx, message, paneKey, "")
-		if err := r.follow.Enable(ctx, chatID, paneKey); err != nil {
+		if err := r.follow.EnableWithOptions(ctx, chatID, paneKey, opts); err != nil {
 			return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
 		}
-		return r.replyBus.Reply(ctx, chatID, paneKey, "follow", fmt.Sprintf("follow enabled for %s", paneKey))
+		resolved := r.follow.Options(chatID)
+		return r.replyBus.Reply(ctx, chatID, paneKey, "follow", fmt.Sprintf("follow enabled for %s (min interval %s)", paneKey, resolved.MinInterval))
 	case "off":
 		paneKey := r.follow.CurrentPane(chatID)
 		r.logInbound(ctx, message, paneKey, "")
@@ -324,7 +330,7 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 		return r.replyBus.Reply(ctx, chatID, paneKey, "follow", "follow disabled")
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on|off")
+		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
 	}
 }
 
@@ -391,6 +397,57 @@ func optionalInt(value string, fallback int) (int, error) {
 	return parsed, nil
 }
 
+func parseFollowArgs(value string) (string, FollowOptions, error) {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
+		return "", FollowOptions{}, fmt.Errorf("missing follow mode")
+	}
+
+	mode := strings.ToLower(fields[0])
+	switch mode {
+	case "off":
+		if len(fields) != 1 {
+			return "", FollowOptions{}, fmt.Errorf("unexpected follow args")
+		}
+		return mode, FollowOptions{}, nil
+	case "on":
+		if len(fields) == 1 {
+			return mode, FollowOptions{}, nil
+		}
+		if len(fields) != 2 {
+			return "", FollowOptions{}, fmt.Errorf("unexpected follow args")
+		}
+		interval, err := parsePositiveDuration(fields[1])
+		if err != nil {
+			return "", FollowOptions{}, err
+		}
+		return mode, FollowOptions{MinInterval: interval}, nil
+	default:
+		return "", FollowOptions{}, fmt.Errorf("unknown follow mode")
+	}
+}
+
+func parsePositiveDuration(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, fmt.Errorf("duration is required")
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds <= 0 {
+			return 0, fmt.Errorf("duration must be > 0")
+		}
+		return time.Duration(seconds) * time.Second, nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, err
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("duration must be > 0")
+	}
+	return parsed, nil
+}
+
 func formatCurrent(record tagb.PaneRecord, following bool) string {
 	lines := []string{
 		"Current pane: " + record.Info.Target.PaneKey(),
@@ -417,7 +474,7 @@ func helpText() string {
 		"/send <text>",
 		"/enter",
 		"/ctrlc",
-		"/follow on|off",
+		"/follow on [interval]|off",
 	}, "\n")
 }
 

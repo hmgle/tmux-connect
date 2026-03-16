@@ -37,3 +37,44 @@ func TestFormatFollowMessageEmptyAfterTrim(t *testing.T) {
 		t.Fatalf("formatFollowMessage() = %q, want %q", got, want)
 	}
 }
+
+func TestPrepareFollowMessageDeltaSkipsExactDuplicate(t *testing.T) {
+	t.Parallel()
+
+	got, changed := prepareFollowMessageDelta("same output", "same output")
+	if changed {
+		t.Fatalf("prepareFollowMessageDelta() changed = true, got %q", got)
+	}
+	if got != "" {
+		t.Fatalf("prepareFollowMessageDelta() = %q, want empty", got)
+	}
+}
+
+func TestPrepareFollowMessageDeltaOmitsRepeatedPrefix(t *testing.T) {
+	t.Parallel()
+
+	previous := strings.Join([]string{
+		"build step 1 finished successfully",
+		"build step 2 finished successfully",
+		"waiting for next action",
+	}, "\n")
+	current := strings.Join([]string{
+		"build step 1 finished successfully",
+		"build step 2 finished successfully",
+		"To continue this session, run /resume",
+	}, "\n")
+
+	got, changed := prepareFollowMessageDelta(previous, current)
+	if !changed {
+		t.Fatal("prepareFollowMessageDelta() changed = false, want true")
+	}
+	if !strings.HasPrefix(got, followRepeatedPrefixMarker) {
+		t.Fatalf("prepareFollowMessageDelta() = %q, want repeated-prefix marker", got)
+	}
+	if !strings.Contains(got, "To continue this session, run /resume") {
+		t.Fatalf("prepareFollowMessageDelta() = %q, want preserved tail", got)
+	}
+	if strings.Contains(got, "build step 1 finished successfully") {
+		t.Fatalf("prepareFollowMessageDelta() = %q, want repeated prefix omitted", got)
+	}
+}

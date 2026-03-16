@@ -206,7 +206,7 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store)
 	follow := NewFollowManager(service, replyBus, 20)
-	follow.flushInterval = 5 * time.Second
+	follow.minInterval = 5 * time.Second
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
@@ -229,6 +229,106 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 		}
 		return false
 	}, messenger)
+}
+
+func TestRouterFollowSupportsCustomInterval(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store)
+	follow := NewFollowManager(service, replyBus, 20)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
+		t.Fatalf("HandleMessage(bind) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 2s"}); err != nil {
+		t.Fatalf("HandleMessage(follow on 2s) error = %v", err)
+	}
+
+	if got := follow.Options(7).MinInterval; got != 2*time.Second {
+		t.Fatalf("follow interval = %s, want %s", got, 2*time.Second)
+	}
+
+	messages := messenger.snapshot()
+	found := false
+	for _, msg := range messages {
+		if strings.Contains(msg.Text, "min interval 2s") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("unexpected follow confirmation %#v", messages)
+	}
+}
+
+func TestRouterFollowOmitsRepeatedPrefixFromLaterPushes(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store)
+	follow := NewFollowManager(service, replyBus, 20)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
+		t.Fatalf("HandleMessage(bind) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 10ms"}); err != nil {
+		t.Fatalf("HandleMessage(follow on 10ms) error = %v", err)
+	}
+
+	first := strings.Join([]string{
+		"step 1 output is a bit verbose and intentionally long",
+		"step 2 output is a bit verbose and intentionally long",
+		"waiting for input",
+	}, "\n")
+	second := strings.Join([]string{
+		"step 1 output is a bit verbose and intentionally long",
+		"step 2 output is a bit verbose and intentionally long",
+		"To continue this session, run /resume",
+	}, "\n")
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: first, ReceivedAt: time.Now()})
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, "waiting for input") {
+				return true
+			}
+		}
+		return false
+	}, messenger)
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: second, ReceivedAt: time.Now()})
+	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
+		for _, msg := range messages {
+			if strings.Contains(msg.Text, followRepeatedPrefixMarker) {
+				return true
+			}
+		}
+		return false
+	}, messenger)
+
+	messages := messenger.snapshot()
+	latest := messages[len(messages)-1].Text
+	if !strings.Contains(latest, "To continue this session, run /resume") {
+		t.Fatalf("latest message = %q, want preserved tail", latest)
+	}
+	if strings.Contains(latest, "step 1 output is a bit verbose and intentionally long") {
+		t.Fatalf("latest message = %q, want repeated prefix omitted", latest)
+	}
 }
 
 func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
