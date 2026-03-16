@@ -15,14 +15,15 @@ type messenger interface {
 }
 
 type ReplyBus struct {
-	messenger messenger
-	store     *Store
+	messenger             messenger
+	store                 *Store
+	snapshotRenderOptions termrender.Options
 }
 
 const telegramPlatform = "telegram"
 
-func NewReplyBus(m messenger, store *Store) *ReplyBus {
-	return &ReplyBus{messenger: m, store: store}
+func NewReplyBus(m messenger, store *Store, snapshotRenderOptions termrender.Options) *ReplyBus {
+	return &ReplyBus{messenger: m, store: store, snapshotRenderOptions: snapshotRenderOptions}
 }
 
 func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind string, text string) error {
@@ -38,7 +39,7 @@ func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind
 
 func (b *ReplyBus) ReplySnapshot(ctx context.Context, chatID int64, paneKey string, text string, richText string) error {
 	state := b.prepareOutbound(ctx, chatID, paneKey)
-	if data, err := termrender.RenderPNG(richText, termrender.Options{}); err == nil {
+	if data, err := termrender.RenderPNG(richText, b.snapshotRenderOptions); err == nil {
 		message, sendErr := b.messenger.SendPhoto(ctx, chatID, "pane-snapshot.png", data, formatSnapshotCaption(paneKey), telegram.SendOptions{
 			ReplyToMessageID: state.replyToMessageID,
 		})

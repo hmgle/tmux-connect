@@ -12,18 +12,22 @@ import (
 
 	"github.com/portgle/tmux-connect/internal/tagb"
 	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/portgle/tmux-connect/internal/termrender"
 )
 
 type Config struct {
-	TelegramToken string
-	DBPath        string
-	AllowChats    []int64
-	PollTimeout   time.Duration
-	SnapshotLines int
-	FollowLines   int
-	FollowMinGap  time.Duration
-	FollowDebug   bool
-	APIBaseURL    string
+	TelegramToken    string
+	DBPath           string
+	AllowChats       []int64
+	PollTimeout      time.Duration
+	SnapshotLines    int
+	SnapshotTheme    string
+	SnapshotFontSize float64
+	SnapshotFontFile string
+	FollowLines      int
+	FollowMinGap     time.Duration
+	FollowDebug      bool
+	APIBaseURL       string
 }
 
 type Runtime struct {
@@ -148,7 +152,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		telegram.WithBaseURL(cfg.APIBaseURL),
 		telegram.WithPollTimeout(cfg.PollTimeout),
 	)
-	replyBus := NewReplyBus(client, store)
+	replyBus := NewReplyBus(client, store, snapshotRenderOptions(cfg))
 	follow := NewFollowManager(service, replyBus, cfg.FollowLines)
 	follow.minInterval = cfg.FollowMinGap
 	if cfg.FollowDebug {
@@ -249,12 +253,20 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
+	snapshotFontSize, err := envFloat64("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", 14)
+	if err != nil {
+		return Config{}, tagb.UsageError("%v", err)
+	}
+
 	allowChats := &int64ListFlag{}
 	cfg := Config{}
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_TOKEN")), "telegram bot token")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", defaultDBPath()), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", 20*time.Second, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
+	fs.StringVar(&cfg.SnapshotTheme, "telegram-snapshot-theme", envOrDefault("TAGB_TELEGRAM_SNAPSHOT_THEME", termrender.ThemeDark), "theme for Telegram snapshot images (dark|light)")
+	fs.Float64Var(&cfg.SnapshotFontSize, "telegram-snapshot-font-size", snapshotFontSize, "font size for Telegram snapshot images")
+	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_SNAPSHOT_FONT_FILE")), "path to a .ttf or .otf font for Telegram snapshot images")
 	fs.IntVar(&cfg.FollowLines, "follow-lines", 80, "initial line count when starting /follow")
 	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", 700*time.Millisecond, "default minimum interval between /follow pushes")
 	fs.BoolVar(&cfg.FollowDebug, "follow-debug", envBool("TAGB_FOLLOW_DEBUG"), "log follow chunk/flush debug data to stderr")
@@ -271,6 +283,9 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	if cfg.SnapshotLines <= 0 {
 		return Config{}, tagb.UsageError("--snapshot-lines must be > 0")
 	}
+	if err := termrender.ValidateOptions(snapshotRenderOptions(cfg)); err != nil {
+		return Config{}, tagb.UsageError("%v", err)
+	}
 	if cfg.FollowLines <= 0 {
 		return Config{}, tagb.UsageError("--follow-lines must be > 0")
 	}
@@ -286,12 +301,32 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	return cfg, nil
 }
 
+func snapshotRenderOptions(cfg Config) termrender.Options {
+	return termrender.Options{
+		FontSize:  cfg.SnapshotFontSize,
+		FontFile:  cfg.SnapshotFontFile,
+		ThemeName: cfg.SnapshotTheme,
+	}
+}
+
 func envOrDefault(key string, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value != "" {
 		return value
 	}
 	return fallback
+}
+
+func envFloat64(key string, fallback float64) (float64, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a number", key)
+	}
+	return parsed, nil
 }
 
 func envBool(key string) bool {
@@ -321,6 +356,9 @@ Common flags:
   --allow-chat 123456
   --poll-timeout 20s
   --snapshot-lines 120
+  --telegram-snapshot-theme dark
+  --telegram-snapshot-font-size 14
+  --telegram-snapshot-font-file /path/to/font.ttf
   --follow-lines 80
   --follow-min-interval 700ms
   --follow-debug

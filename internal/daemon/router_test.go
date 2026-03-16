@@ -1,7 +1,10 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"image/color"
+	"image/png"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/portgle/tmux-connect/internal/tagb"
 	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/portgle/tmux-connect/internal/termrender"
 	"github.com/portgle/tmux-connect/internal/tmux"
 )
 
@@ -142,7 +146,7 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
@@ -184,7 +188,7 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
@@ -207,6 +211,41 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	}
 }
 
+func TestReplyBusReplySnapshotUsesConfiguredRenderOptions(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{
+		ThemeName: termrender.ThemeLight,
+		FontSize:  20,
+	})
+
+	if err := replyBus.ReplySnapshot(ctx, 7, "default:%5", "plain text", "\x1b[31merror\x1b[0m"); err != nil {
+		t.Fatalf("ReplySnapshot() error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if len(last.Photo) == 0 {
+		t.Fatalf("expected photo message, got %#v", last)
+	}
+
+	img, err := png.Decode(bytes.NewReader(last.Photo))
+	if err != nil {
+		t.Fatalf("png decode error = %v", err)
+	}
+	got := color.RGBAModel.Convert(img.At(0, 0)).(color.RGBA)
+	want := color.RGBA{R: 248, G: 250, B: 252, A: 255}
+	if got != want {
+		t.Fatalf("background = %#v, want %#v", got, want)
+	}
+}
+
 func TestRouterFollow(t *testing.T) {
 	t.Parallel()
 
@@ -217,7 +256,7 @@ func TestRouterFollow(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
@@ -278,7 +317,7 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	follow.minInterval = 5 * time.Second
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
@@ -315,7 +354,7 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
@@ -354,7 +393,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	service := newFakePaneService()
 	service.initialOutput = "ready\ncalc> "
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
@@ -418,7 +457,7 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 	}
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
-	replyBus := NewReplyBus(messenger, store)
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 

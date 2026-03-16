@@ -336,6 +336,8 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 ```bash
 # 方式一：使用环境变量
 export TAGB_TELEGRAM_TOKEN="123456:ABC-DEF..."
+export TAGB_TELEGRAM_SNAPSHOT_THEME="light"
+export TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE="16"
 tagb daemon run \
   --db ~/.tagb/tagb.db \
   --allow-chat 987654321
@@ -344,6 +346,9 @@ tagb daemon run \
 tagb daemon run \
   --telegram-token "123456:ABC-DEF..." \
   --db ~/.tagb/tagb.db \
+  --telegram-snapshot-theme light \
+  --telegram-snapshot-font-size 16 \
+  --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
   --allow-chat 987654321
 ```
 
@@ -353,6 +358,9 @@ tagb daemon run \
 |------|------|
 | `--telegram-token` | Telegram Bot token（也可用 `TAGB_TELEGRAM_TOKEN` 环境变量） |
 | `--db` | SQLite 数据库路径（自动创建） |
+| `--telegram-snapshot-theme` | 快照图片主题，支持 `dark`、`light`，默认 `dark` |
+| `--telegram-snapshot-font-size` | 快照图片字号，默认 `14` |
+| `--telegram-snapshot-font-file` | 快照图片字体文件路径，支持 `.ttf`、`.otf`；不设置时使用内置等宽字体 |
 | `--allow-chat` | 允许的 chat ID（不设置则接受所有聊天） |
 
 Daemon 启动后会：

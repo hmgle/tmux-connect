@@ -15,6 +15,9 @@ Flags:
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
 - `--snapshot-lines 120`
+- `--telegram-snapshot-theme dark|light`
+- `--telegram-snapshot-font-size 14`
+- `--telegram-snapshot-font-file /path/to/font.ttf`
 - `--follow-lines 80`
 - `--telegram-api-base URL`
 
@@ -22,6 +25,9 @@ Env vars:
 
 - `TAGB_TELEGRAM_TOKEN`
 - `TAGB_DB_PATH`
+- `TAGB_TELEGRAM_SNAPSHOT_THEME`
+- `TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE`
+- `TAGB_TELEGRAM_SNAPSHOT_FONT_FILE`
 - `TAGB_TELEGRAM_API_BASE`
 
 ### `tagb daemon doctor`
@@ -74,7 +80,7 @@ Shows the current pane and basic metadata for the chat.
 
 ### `/snapshot [lines] [image|text]`
 
-Returns a recent pane capture for the current pane. Default mode is `image`; pass `text` to force Telegram text output.
+Returns a recent pane capture for the current pane. Default mode is `image`; pass `text` to force Telegram text output. Image mode defaults to the built-in `gomono` font, `14` pt, and the `dark` theme, and can be customized with the snapshot image flags or env vars above.
 
 ### `/send <text>`
 

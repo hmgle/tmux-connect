@@ -27,6 +27,8 @@ Using an env var:
 
 ```bash
 export TAGB_TELEGRAM_TOKEN=123456:example-token
+export TAGB_TELEGRAM_SNAPSHOT_THEME=light
+export TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE=16
 go run ./cmd/tagb daemon run --db ~/.tagb/tagb.db --allow-chat 123456789
 ```
 
@@ -36,6 +38,9 @@ Using a flag:
 go run ./cmd/tagb daemon run \
   --telegram-token 123456:example-token \
   --db ~/.tagb/tagb.db \
+  --telegram-snapshot-theme light \
+  --telegram-snapshot-font-size 16 \
+  --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
   --allow-chat 123456789
 ```
 
@@ -82,6 +87,8 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - If `--allow-chat` is used, chats not in the allowlist are rejected
 - `/bind` only works on managed panes; use `/attach` first if needed
 - `/snapshot` defaults to `image`; use `/snapshot text` to receive Telegram text instead of an image
+- snapshot images default to the built-in `gomono` font, `14` pt, and the `dark` theme
+- use `--telegram-snapshot-theme`, `--telegram-snapshot-font-size`, or `--telegram-snapshot-font-file` to customize snapshot image rendering
 - `/detach` clears chat bindings and stops any follow sessions that point to that pane
 - if the current pane disappears, the daemon clears that chat's current-pane state and asks the user to bind again
 - follow mode is one active subscription per chat

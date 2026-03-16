@@ -90,6 +90,9 @@ Start the daemon:
 go run ./cmd/tagb daemon run \
   --telegram-token "$TAGB_TELEGRAM_TOKEN" \
   --db ~/.tagb/tagb.db \
+  --telegram-snapshot-theme light \
+  --telegram-snapshot-font-size 16 \
+  --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
   --allow-chat 123456789
 ```
 
@@ -114,6 +117,7 @@ Supported Telegram commands:
 - `/follow on|off`
 
 `/snapshot` defaults to `image`. Use `/snapshot text` when you need the pane content as Telegram text.
+Telegram snapshot images default to the built-in `gomono` font, `14` pt, and the `dark` theme. Override them with `--telegram-snapshot-theme`, `--telegram-snapshot-font-size`, or `--telegram-snapshot-font-file` (or the matching `TAGB_TELEGRAM_SNAPSHOT_*` env vars).
 
 Detailed daemon and Telegram docs:
 
