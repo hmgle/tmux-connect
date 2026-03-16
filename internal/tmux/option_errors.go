@@ -2,7 +2,6 @@ package tmux
 
 import (
 	"errors"
-	"os/exec"
 	"strings"
 )
 
@@ -12,12 +11,18 @@ func classifyOptionError(err error) error {
 	if err == nil || errors.Is(err, ErrTmuxOptionUnavailable) {
 		return err
 	}
+	if cmdErr := (*TmuxCommandError)(nil); errors.As(err, &cmdErr) {
+		msg := strings.ToLower(cmdErr.Result.Stderr)
+		if strings.Contains(msg, "invalid option") || strings.Contains(msg, "unknown option") {
+			return errors.Join(ErrTmuxOptionUnavailable, err)
+		}
+		if cmdErr.Result.ExitCode == 1 {
+			return errors.Join(ErrTmuxOptionUnavailable, err)
+		}
+		return err
+	}
 	msg := strings.ToLower(err.Error())
 	if strings.Contains(msg, "invalid option") || strings.Contains(msg, "unknown option") {
-		return errors.Join(ErrTmuxOptionUnavailable, err)
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return errors.Join(ErrTmuxOptionUnavailable, err)
 	}
 	return err

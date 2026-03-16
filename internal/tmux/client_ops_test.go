@@ -18,7 +18,7 @@ type runnerCall struct {
 }
 
 type fakeRunner struct {
-	runFn      func(context.Context, []byte, ...string) (string, error)
+	runFn      func(context.Context, []byte, ...string) (RunResult, error)
 	startPTYFn func(context.Context, ...string) (PTYSession, error)
 	calls      []runnerCall
 }
@@ -31,7 +31,11 @@ type fakePTYSession struct {
 	waitHits  atomic.Int32
 }
 
-func (r *fakeRunner) Run(ctx context.Context, stdin []byte, args ...string) (string, error) {
+func stdoutResult(stdout string) RunResult {
+	return RunResult{Stdout: stdout}
+}
+
+func (r *fakeRunner) Run(ctx context.Context, stdin []byte, args ...string) (RunResult, error) {
 	call := runnerCall{
 		stdin: append([]byte(nil), stdin...),
 		args:  append([]string(nil), args...),
@@ -40,7 +44,7 @@ func (r *fakeRunner) Run(ctx context.Context, stdin []byte, args ...string) (str
 	if r.runFn != nil {
 		return r.runFn(ctx, stdin, args...)
 	}
-	return "", nil
+	return RunResult{}, nil
 }
 
 func (r *fakeRunner) StartPTY(ctx context.Context, args ...string) (PTYSession, error) {
@@ -72,11 +76,11 @@ func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n", nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -104,11 +108,11 @@ func TestGetPaneUsesTargetedListCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n", nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -129,11 +133,11 @@ func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n", nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -234,15 +238,15 @@ func TestTouchMetadataUpdatesLastActivityOnlyForManagedPanes(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			switch args[0] {
 			case "show-options":
-				return "1\n", nil
+				return stdoutResult("1\n"), nil
 			case "set-option":
-				return "", nil
+				return RunResult{}, nil
 			default:
 				t.Fatalf("unexpected command: %v", args)
-				return "", nil
+				return RunResult{}, nil
 			}
 		},
 	}
@@ -332,8 +336,8 @@ func TestDeleteUserOptionIgnoresUnsetErrors(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, _ ...string) (string, error) {
-			return "", errors.New("exit status 1: unknown option")
+		runFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
+			return RunResult{}, errors.New("exit status 1: unknown option")
 		},
 	}
 	client := NewClient(runner, "")
@@ -349,6 +353,10 @@ func TestClassifyOptionErrorMarksUnavailableOptions(t *testing.T) {
 	for _, err := range []error{
 		errors.New("exit status 1: unknown option"),
 		errors.New("exit status 1: invalid option"),
+		&TmuxCommandError{
+			Result: RunResult{Stderr: "unknown option", ExitCode: 1},
+			Err:    errors.New("exit status 1"),
+		},
 	} {
 		if !errors.Is(classifyOptionError(err), ErrTmuxOptionUnavailable) {
 			t.Fatalf("classifyOptionError(%v) should mark option unavailable", err)
@@ -361,12 +369,12 @@ func TestStartPollingSubscriptionHonorsLinesAndClose(t *testing.T) {
 
 	captured := make(chan []string, 1)
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if args[0] != "capture-pane" {
 				t.Fatalf("unexpected command: %v", args)
 			}
 			captured <- append([]string(nil), args...)
-			return "one\ntwo", nil
+			return stdoutResult("one\ntwo"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -395,16 +403,16 @@ func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
 	captures := []string{"one", "one\ntwo"}
 	var captureIndex int
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if args[0] != "capture-pane" {
 				t.Fatalf("unexpected command: %v", args)
 			}
 			if captureIndex >= len(captures) {
-				return captures[len(captures)-1], nil
+				return stdoutResult(captures[len(captures)-1]), nil
 			}
 			body := captures[captureIndex]
 			captureIndex++
-			return body, nil
+			return stdoutResult(body), nil
 		},
 		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
 			return nil, fmt.Errorf("%w: disabled for test", ErrControlUnsupported)
@@ -462,22 +470,22 @@ func TestStartControlSubscriptionUsesSessionScopedPaneListAndWaitsForExitOnClose
 	var startCtx context.Context
 	session := &fakePTYSession{name: "/tmp/fake-tty"}
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (string, error) {
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			switch args[0] {
 			case "list-clients":
-				return "/tmp/fake-tty\t1\n", nil
+				return stdoutResult("/tmp/fake-tty\t1\n"), nil
 			case "list-panes":
 				if len(args) < 4 || args[1] != "-t" || args[2] != "dev" {
 					t.Fatalf("expected session-scoped list-panes, got %v", args)
 				}
-				return "%9\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n%10\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n", nil
+				return stdoutResult("%9\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n%10\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n"), nil
 			case "refresh-client":
-				return "", nil
+				return RunResult{}, nil
 			case "detach-client":
-				return "", nil
+				return RunResult{}, nil
 			default:
 				t.Fatalf("unexpected command: %v", args)
-				return "", nil
+				return RunResult{}, nil
 			}
 		},
 		startPTYFn: func(ctx context.Context, args ...string) (PTYSession, error) {
@@ -543,8 +551,8 @@ func TestCapturePaneRichCachesUnsupportedCapability(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, _ ...string) (string, error) {
-			return "", errors.New("invalid option")
+		runFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
+			return RunResult{}, errors.New("invalid option")
 		},
 	}
 	client := NewClient(runner, "")

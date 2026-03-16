@@ -33,6 +33,22 @@ func isUnsupportedFeatureError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if cmdErr := (*TmuxCommandError)(nil); errors.As(err, &cmdErr) {
+		msg := strings.ToLower(cmdErr.Result.Stderr)
+		for _, marker := range []string{
+			"unknown option",
+			"unknown flag",
+			"unknown format",
+			"bad flag",
+			"invalid option",
+			"invalid flag",
+		} {
+			if strings.Contains(msg, marker) {
+				return true
+			}
+		}
+		return false
+	}
 	msg := strings.ToLower(err.Error())
 	for _, marker := range []string{
 		"unknown option",

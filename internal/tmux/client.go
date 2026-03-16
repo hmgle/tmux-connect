@@ -2,7 +2,6 @@ package tmux
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,29 +20,10 @@ import (
 const paneFieldSep = "\x1f"
 const paneFieldSepEscaped = `\037`
 
-type Runner interface {
-	Run(ctx context.Context, stdin []byte, args ...string) (string, error)
-	StartPTY(ctx context.Context, args ...string) (PTYSession, error)
-}
-
 type PTYSession interface {
 	io.ReadWriteCloser
 	Name() string
 	Wait() error
-}
-
-type RealRunner struct{}
-
-func (RealRunner) Run(ctx context.Context, stdin []byte, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
-	if len(stdin) > 0 {
-		cmd.Stdin = bytes.NewReader(stdin)
-	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(output), fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return string(output), nil
 }
 
 func (RealRunner) StartPTY(ctx context.Context, args ...string) (PTYSession, error) {
@@ -370,7 +350,8 @@ func (c *Client) run(ctx context.Context, stdin []byte, args ...string) (string,
 		fullArgs = append(fullArgs, "-L", socket)
 	}
 	fullArgs = append(fullArgs, args...)
-	return c.runner.Run(ctx, stdin, fullArgs...)
+	result, err := c.runner.Run(ctx, stdin, fullArgs...)
+	return result.Stdout, err
 }
 
 func parseUserOptions(output string) map[string]string {
