@@ -20,6 +20,9 @@ type fakeMessenger struct {
 
 type sentMessage struct {
 	Text             string
+	Caption          string
+	FileName         string
+	Photo            []byte
 	ParseMode        telegram.ParseMode
 	ReplyToMessageID int64
 }
@@ -29,6 +32,19 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opt
 	defer m.mu.Unlock()
 	m.messages = append(m.messages, sentMessage{
 		Text:             text,
+		ParseMode:        opts.ParseMode,
+		ReplyToMessageID: opts.ReplyToMessageID,
+	})
+	return telegram.Message{MessageID: int64(len(m.messages))}, nil
+}
+
+func (m *fakeMessenger) SendPhoto(_ context.Context, _ int64, fileName string, photo []byte, caption string, opts telegram.SendOptions) (telegram.Message, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.messages = append(m.messages, sentMessage{
+		Caption:          caption,
+		FileName:         fileName,
+		Photo:            append([]byte(nil), photo...),
 		ParseMode:        opts.ParseMode,
 		ReplyToMessageID: opts.ReplyToMessageID,
 	})
@@ -47,6 +63,7 @@ type fakePaneService struct {
 	records       map[string]tagb.PaneRecord
 	sub           *tmux.Subscription
 	snapshotText  string
+	snapshotRich  string
 	initialOutput string
 }
 
@@ -66,6 +83,7 @@ func newFakePaneService() *fakePaneService {
 		},
 		sub:           tmux.NewSubscriptionForTest(),
 		snapshotText:  "hello from pane",
+		snapshotRich:  "\x1b[32mhello from pane\x1b[0m",
 		initialOutput: "initial output",
 	}
 }
@@ -94,6 +112,10 @@ func (s *fakePaneService) Inspect(_ context.Context, ref string) (tagb.PaneRecor
 
 func (s *fakePaneService) Snapshot(context.Context, string, int) (string, error) {
 	return s.snapshotText, nil
+}
+
+func (s *fakePaneService) SnapshotRich(context.Context, string, int) (string, error) {
+	return s.snapshotRich, nil
 }
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
@@ -138,11 +160,14 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 		t.Fatalf("HandleMessage(snapshot) error = %v", err)
 	}
 	messages := messenger.snapshot()
-	if len(messages) < 2 || !strings.Contains(messages[len(messages)-1].Text, "hello from pane") {
+	if len(messages) < 2 || len(messages[len(messages)-1].Photo) == 0 {
 		t.Fatalf("unexpected messages %#v", messages)
 	}
-	if got := messages[len(messages)-1].ParseMode; got != telegram.ParseModeHTML {
-		t.Fatalf("snapshot parse mode = %q, want %q", got, telegram.ParseModeHTML)
+	if got := messages[len(messages)-1].Caption; got != "default:%5 snapshot" {
+		t.Fatalf("snapshot caption = %q, want %q", got, "default:%5 snapshot")
+	}
+	if got := messages[len(messages)-1].FileName; got != "pane-snapshot.png" {
+		t.Fatalf("snapshot filename = %q, want %q", got, "pane-snapshot.png")
 	}
 	if got := messages[len(messages)-1].ReplyToMessageID; got != 2 {
 		t.Fatalf("snapshot reply_to = %d, want 2", got)

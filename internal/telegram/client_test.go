@@ -3,6 +3,9 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -195,5 +198,80 @@ func TestSendMessageWithParseMode(t *testing.T) {
 	}
 	if message.MessageID != 101 {
 		t.Fatalf("message_id = %d, want 101", message.MessageID)
+	}
+}
+
+func TestSendPhoto(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			t.Fatalf("ParseMediaType() error = %v", err)
+		}
+		if mediaType != "multipart/form-data" {
+			t.Fatalf("mediaType = %q, want multipart/form-data", mediaType)
+		}
+		reader := multipart.NewReader(r.Body, params["boundary"])
+
+		fields := map[string]string{}
+		var fileName string
+		var fileBody []byte
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("NextPart() error = %v", err)
+			}
+			data, err := io.ReadAll(part)
+			if err != nil {
+				t.Fatalf("ReadAll() error = %v", err)
+			}
+			if part.FormName() == "photo" {
+				fileName = part.FileName()
+				fileBody = data
+				continue
+			}
+			fields[part.FormName()] = string(data)
+		}
+
+		if fields["chat_id"] != "1" {
+			t.Fatalf("chat_id = %q, want 1", fields["chat_id"])
+		}
+		if fields["caption"] != "pane snapshot" {
+			t.Fatalf("caption = %q, want pane snapshot", fields["caption"])
+		}
+		if fields["reply_parameters"] != "{\"message_id\":42}" {
+			t.Fatalf("reply_parameters = %q, want %q", fields["reply_parameters"], "{\"message_id\":42}")
+		}
+		if fileName != "snapshot.png" {
+			t.Fatalf("filename = %q, want snapshot.png", fileName)
+		}
+		if string(fileBody) != "pngbytes" {
+			t.Fatalf("file body = %q, want pngbytes", string(fileBody))
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": 102,
+				"chat": map[string]any{
+					"id":   1,
+					"type": "private",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("token", WithBaseURL(server.URL))
+	message, err := client.SendPhoto(context.Background(), 1, "snapshot.png", []byte("pngbytes"), "pane snapshot", SendOptions{ReplyToMessageID: 42})
+	if err != nil {
+		t.Fatalf("SendPhoto() error = %v", err)
+	}
+	if message.MessageID != 102 {
+		t.Fatalf("message_id = %d, want 102", message.MessageID)
 	}
 }

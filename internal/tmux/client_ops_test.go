@@ -256,3 +256,27 @@ func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
 		t.Fatal("expected polling diff chunk")
 	}
 }
+
+func TestCapturePaneRichUsesEscapeFlag(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	client := NewClient(runner, "")
+
+	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); err != nil {
+		t.Fatalf("CapturePaneRich() error = %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	}
+	got := runner.calls[0].args
+	want := []string{"capture-pane", "-p", "-J", "-e", "-t", "%5", "-S", "-19"}
+	if len(got) != len(want) {
+		t.Fatalf("args = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("args[%d] = %q, want %q in %v", i, got[i], want[i], got)
+		}
+	}
+}

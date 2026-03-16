@@ -15,6 +15,7 @@ type paneService interface {
 	Detach(context.Context, string) error
 	Inspect(context.Context, string) (tagb.PaneRecord, error)
 	Snapshot(context.Context, string, int) (string, error)
+	SnapshotRich(context.Context, string, int) (string, error)
 	Send(context.Context, string, string, bool) error
 	Enter(context.Context, string) error
 	CtrlC(context.Context, string) error

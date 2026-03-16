@@ -252,6 +252,10 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 	if err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
 	}
+	richBody, richErr := r.service.SnapshotRich(ctx, paneKey, lines)
+	if richErr == nil && strings.TrimSpace(richBody) != "" {
+		return r.replyBus.ReplySnapshot(ctx, chatID, paneKey, body, richBody)
+	}
 	return r.replyBus.Reply(ctx, chatID, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
 }
 

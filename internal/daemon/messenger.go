@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/portgle/tmux-connect/internal/termrender"
 )
 
 type messenger interface {
 	SendMessage(context.Context, int64, string, telegram.SendOptions) (telegram.Message, error)
+	SendPhoto(context.Context, int64, string, []byte, string, telegram.SendOptions) (telegram.Message, error)
 }
 
 type ReplyBus struct {
@@ -24,51 +26,90 @@ func NewReplyBus(m messenger, store *Store) *ReplyBus {
 }
 
 func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind string, text string) error {
+	state := b.prepareOutbound(ctx, chatID, paneKey)
+	sendText, sendOpts := decorateTelegramMessage(kind, text, telegram.SendOptions{ReplyToMessageID: state.replyToMessageID})
+	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
+	if err != nil {
+		return err
+	}
+	b.recordOutbound(ctx, chatID, state, kind, text, message.MessageID)
+	return nil
+}
+
+func (b *ReplyBus) ReplySnapshot(ctx context.Context, chatID int64, paneKey string, text string, richText string) error {
+	state := b.prepareOutbound(ctx, chatID, paneKey)
+	if data, err := termrender.RenderPNG(richText, termrender.Options{}); err == nil {
+		message, sendErr := b.messenger.SendPhoto(ctx, chatID, "pane-snapshot.png", data, formatSnapshotCaption(paneKey), telegram.SendOptions{
+			ReplyToMessageID: state.replyToMessageID,
+		})
+		if sendErr == nil {
+			b.recordOutbound(ctx, chatID, state, "snapshot", text, message.MessageID)
+			return nil
+		}
+		log.Printf("warn: reply bus send snapshot photo: %v", sendErr)
+	} else if strings.TrimSpace(richText) != "" {
+		log.Printf("warn: reply bus render snapshot photo: %v", err)
+	}
+
+	sendText, sendOpts := decorateTelegramMessage("snapshot", formatFollowMessage(paneKey, text, 3500), telegram.SendOptions{
+		ReplyToMessageID: state.replyToMessageID,
+	})
+	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
+	if err != nil {
+		return err
+	}
+	b.recordOutbound(ctx, chatID, state, "snapshot", text, message.MessageID)
+	return nil
+}
+
+type outboundState struct {
+	paneKey          string
+	sessionKey       string
+	replyToMessageID int64
+}
+
+func (b *ReplyBus) prepareOutbound(ctx context.Context, chatID int64, paneKey string) outboundState {
 	paneKey = strings.TrimSpace(paneKey)
-	sessionKey := ""
-	replyToMessageID := int64(0)
+	state := outboundState{paneKey: paneKey}
 	if paneKey != "" {
 		session, err := b.store.EnsureSession(ctx, telegramPlatform, chatID, paneKey, "")
 		if err != nil {
 			b.warnStoreError("ensure outbound session", err)
 		} else {
-			sessionKey = session.SessionKey
-			replyToMessageID = session.LastInboundMessageID
+			state.sessionKey = session.SessionKey
+			state.replyToMessageID = session.LastInboundMessageID
 		}
 	}
+	return state
+}
 
-	sendText, sendOpts := decorateTelegramMessage(kind, text, telegram.SendOptions{ReplyToMessageID: replyToMessageID})
-	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
-	if err != nil {
-		return err
-	}
+func (b *ReplyBus) recordOutbound(ctx context.Context, chatID int64, state outboundState, kind string, text string, messageID int64) {
 	if err := b.store.LogMessage(ctx, MessageRecord{
 		ChatID:            chatID,
-		PaneKey:           paneKey,
+		PaneKey:           state.paneKey,
 		Direction:         "out",
 		Kind:              strings.TrimSpace(kind),
-		TelegramMessageID: message.MessageID,
+		TelegramMessageID: messageID,
 		BodyPreview:       text,
 	}); err != nil {
 		b.warnStoreError("log outbound message", err)
 	}
-	if sessionKey != "" {
-		if err := b.store.TouchSessionOutbound(ctx, sessionKey, message.MessageID); err != nil {
+	if state.sessionKey != "" {
+		if err := b.store.TouchSessionOutbound(ctx, state.sessionKey, messageID); err != nil {
 			b.warnStoreError("touch outbound session", err)
 		}
 		if err := b.store.CreateMessageLink(ctx, MessageLinkRecord{
 			Platform:          telegramPlatform,
 			ChatID:            chatID,
-			PaneKey:           paneKey,
-			SessionKey:        sessionKey,
+			PaneKey:           state.paneKey,
+			SessionKey:        state.sessionKey,
 			Kind:              strings.TrimSpace(kind),
-			OutboundMessageID: message.MessageID,
-			ReplyToMessageID:  replyToMessageID,
+			OutboundMessageID: messageID,
+			ReplyToMessageID:  state.replyToMessageID,
 		}); err != nil {
 			b.warnStoreError("create outbound message link", err)
 		}
 	}
-	return nil
 }
 
 func (b *ReplyBus) LogInbound(ctx context.Context, chatID int64, paneKey string, agent string, messageID int64, kind string, text string) {

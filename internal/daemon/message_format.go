@@ -42,3 +42,11 @@ func renderTelegramTerminalHTML(text string) string {
 	}
 	return "<b>" + html.EscapeString(header) + "</b>\n<pre>" + html.EscapeString(body) + "</pre>"
 }
+
+func formatSnapshotCaption(paneKey string) string {
+	paneKey = strings.TrimSpace(paneKey)
+	if paneKey == "" {
+		return "pane snapshot"
+	}
+	return paneKey + " snapshot"
+}

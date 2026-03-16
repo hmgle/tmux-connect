@@ -116,6 +116,18 @@ func (s *Service) Snapshot(ctx context.Context, ref string, lines int) (string, 
 	return body, nil
 }
 
+func (s *Service) SnapshotRich(ctx context.Context, ref string, lines int) (string, error) {
+	pane, err := s.ResolvePane(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	body, err := s.tmux.CapturePaneRich(ctx, pane.Target, lines)
+	if err != nil {
+		return "", TmuxError("capture rich pane %s: %v", pane.Target.PaneKey(), err)
+	}
+	return body, nil
+}
+
 func (s *Service) Send(ctx context.Context, ref string, text string, sendEnter bool) error {
 	pane, err := s.ResolvePane(ctx, ref)
 	if err != nil {

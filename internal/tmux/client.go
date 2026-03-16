@@ -129,6 +129,14 @@ func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (str
 	return c.run(ctx, nil, "capture-pane", "-p", "-J", "-t", target.PaneID, "-S", start)
 }
 
+func (c *Client) CapturePaneRich(ctx context.Context, target Target, lines int) (string, error) {
+	if lines <= 0 {
+		lines = 120
+	}
+	start := strconv.Itoa(-(lines - 1))
+	return c.run(ctx, nil, "capture-pane", "-p", "-J", "-e", "-t", target.PaneID, "-S", start)
+}
+
 func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) error {
 	if len(data) == 0 {
 		return nil

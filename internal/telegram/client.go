@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -174,6 +175,57 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, opt
 	return resp.Result, nil
 }
 
+func (c *Client) SendPhoto(ctx context.Context, chatID int64, fileName string, photo []byte, caption string, opts SendOptions) (Message, error) {
+	if len(photo) == 0 {
+		return Message{}, fmt.Errorf("telegram photo is required")
+	}
+	if strings.TrimSpace(fileName) == "" {
+		fileName = "snapshot.png"
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	if err := writer.WriteField("chat_id", fmt.Sprintf("%d", chatID)); err != nil {
+		return Message{}, fmt.Errorf("write telegram photo chat_id: %w", err)
+	}
+	if strings.TrimSpace(caption) != "" {
+		if err := writer.WriteField("caption", caption); err != nil {
+			return Message{}, fmt.Errorf("write telegram photo caption: %w", err)
+		}
+	}
+	if opts.ParseMode != "" {
+		if err := writer.WriteField("parse_mode", string(opts.ParseMode)); err != nil {
+			return Message{}, fmt.Errorf("write telegram photo parse_mode: %w", err)
+		}
+	}
+	if opts.ReplyToMessageID > 0 {
+		replyBody, err := json.Marshal(replyParameters{MessageID: opts.ReplyToMessageID})
+		if err != nil {
+			return Message{}, fmt.Errorf("marshal telegram photo reply_parameters: %w", err)
+		}
+		if err := writer.WriteField("reply_parameters", string(replyBody)); err != nil {
+			return Message{}, fmt.Errorf("write telegram photo reply_parameters: %w", err)
+		}
+	}
+	part, err := writer.CreateFormFile("photo", fileName)
+	if err != nil {
+		return Message{}, fmt.Errorf("write telegram photo file header: %w", err)
+	}
+	if _, err := part.Write(photo); err != nil {
+		return Message{}, fmt.Errorf("write telegram photo bytes: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return Message{}, fmt.Errorf("close telegram photo body: %w", err)
+	}
+
+	var resp apiResponse[Message]
+	if err := c.callMultipart(ctx, "sendPhoto", &body, writer.FormDataContentType(), &resp); err != nil {
+		return Message{}, err
+	}
+	return resp.Result, nil
+}
+
 func (c *Client) call(ctx context.Context, method string, payload any, dest any) error {
 	if strings.TrimSpace(c.token) == "" {
 		return fmt.Errorf("telegram token is required")
@@ -199,6 +251,33 @@ func (c *Client) call(ctx context.Context, method string, payload any, dest any)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	return c.do(req, method, dest)
+}
+
+func (c *Client) callMultipart(ctx context.Context, method string, body *bytes.Buffer, contentType string, dest any) error {
+	if strings.TrimSpace(c.token) == "" {
+		return fmt.Errorf("telegram token is required")
+	}
+	method = strings.TrimSpace(method)
+	if method == "" {
+		return fmt.Errorf("telegram method is required")
+	}
+
+	endpoint, err := url.JoinPath(c.baseURL, "bot"+c.token, method)
+	if err != nil {
+		return fmt.Errorf("build telegram url: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+	if err != nil {
+		return fmt.Errorf("build telegram request: %w", err)
+	}
+	req.Header.Set("Content-Type", contentType)
+
+	return c.do(req, method, dest)
+}
+
+func (c *Client) do(req *http.Request, method string, dest any) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("telegram %s: %w", method, err)
