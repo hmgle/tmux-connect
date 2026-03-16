@@ -62,17 +62,17 @@ The last implementation slice added:
 
 Important code paths:
 
-- [store.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store.go)
-- [messenger.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/messenger.go)
-- [router.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router.go)
-- [follow.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/follow.go)
-- [client.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client.go)
+- [store.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store.go)
+- [messenger.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/messenger.go)
+- [router.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router.go)
+- [follow.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/follow.go)
+- [client.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client.go)
 
 Tests that describe the new baseline:
 
-- [store_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store_test.go)
-- [router_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router_test.go)
-- [client_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client_test.go)
+- [store_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store_test.go)
+- [router_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router_test.go)
+- [client_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client_test.go)
 
 ## 4. Current Limits You Must Remember
 
@@ -115,7 +115,7 @@ Recommended order:
 
 Reference project path:
 
-- `/Users/portgle/code-x/aihub/cc-connect/`
+- `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/`
 
 Patterns worth borrowing:
 

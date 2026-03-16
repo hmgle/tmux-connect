@@ -41,10 +41,10 @@
 
 ## Files That Matter Most Now
 
-- [store.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store.go)
-- [messenger.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/messenger.go)
-- [router.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router.go)
-- [client.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client.go)
-- [store_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store_test.go)
-- [router_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router_test.go)
-- [client_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client_test.go)
+- [store.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store.go)
+- [messenger.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/messenger.go)
+- [router.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router.go)
+- [client.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client.go)
+- [store_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store_test.go)
+- [router_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router_test.go)
+- [client_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client_test.go)

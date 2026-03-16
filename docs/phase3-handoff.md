@@ -61,39 +61,39 @@ Do not drift into these `cc-connect` assumptions:
 
 Core entrypoints:
 
-- [main.go](/Users/portgle/code-x/aihub/tmux-connect-cx/cmd/tagb/main.go)
-- [app.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tagb/app.go)
+- [main.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/cmd/tagb/main.go)
+- [app.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tagb/app.go)
 
 Phase 1 bridge service:
 
-- [service.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tagb/service.go)
-- [server.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/httpapi/server.go)
+- [service.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tagb/service.go)
+- [server.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/httpapi/server.go)
 
 tmux runtime layer:
 
-- [client.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tmux/client.go)
-- [control.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tmux/control.go)
-- [polling.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tmux/polling.go)
-- [metadata.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/tmux/metadata.go)
+- [client.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tmux/client.go)
+- [control.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tmux/control.go)
+- [polling.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tmux/polling.go)
+- [metadata.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/tmux/metadata.go)
 
 Phase 2 daemon:
 
-- [cli.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/cli.go)
-- [router.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router.go)
-- [follow.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/follow.go)
-- [registry.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/registry.go)
-- [store.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store.go)
-- [messenger.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/messenger.go)
+- [cli.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/cli.go)
+- [router.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router.go)
+- [follow.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/follow.go)
+- [registry.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/registry.go)
+- [store.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store.go)
+- [messenger.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/messenger.go)
 
 Telegram client:
 
-- [client.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client.go)
+- [client.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client.go)
 
 Tests that describe intended behavior:
 
-- [router_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/router_test.go)
-- [store_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/daemon/store_test.go)
-- [client_test.go](/Users/portgle/code-x/aihub/tmux-connect-cx/internal/telegram/client_test.go)
+- [router_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/router_test.go)
+- [store_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/daemon/store_test.go)
+- [client_test.go](/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect-cx/internal/telegram/client_test.go)
 
 ## 4. Current Limits You Must Remember
 
@@ -137,26 +137,25 @@ Recommended order:
 
 Reference project path:
 
-- `/Users/portgle/code-x/aihub/cc-connect/`
+- `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/`
 
 Useful reference docs:
 
-- `/Users/portgle/code-x/aihub/cc-connect/README.md`
-- `/Users/portgle/code-x/aihub/cc-connect/AGENTS.md`
-- `/Users/portgle/code-x/aihub/cc-connect/docs/telegram.md`
-- `/Users/portgle/code-x/aihub/cc-connect/docs/design-tmux-bridge.md`
+- `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/README.md`
+- `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/AGENTS.md`
+- `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/docs/telegram.md`
 
 Useful code to study:
 
 - Telegram long-poll and update filtering:
-  - `/Users/portgle/code-x/aihub/cc-connect/platform/telegram/telegram.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/platform/telegram/telegram.go`
 - daemon lifecycle and CLI shape:
-  - `/Users/portgle/code-x/aihub/cc-connect/cmd/cc-connect/daemon.go`
-  - `/Users/portgle/code-x/aihub/cc-connect/daemon/manager.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/cmd/cc-connect/daemon.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/daemon/manager.go`
 - session and binding persistence patterns:
-  - `/Users/portgle/code-x/aihub/cc-connect/core/session.go`
-  - `/Users/portgle/code-x/aihub/cc-connect/core/relay.go`
-  - `/Users/portgle/code-x/aihub/cc-connect/core/workspace_binding.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/core/session.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/core/relay.go`
+  - `/home/gle/tmp/ext4/data/codedata/ai-hub/cc-connect/core/workspace_binding.go`
 
 What is worth borrowing:
 
