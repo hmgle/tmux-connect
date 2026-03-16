@@ -94,6 +94,9 @@ func TestSendMessage(t *testing.T) {
 		if payload["text"] != "hello" {
 			t.Fatalf("text = %#v, want %q", payload["text"], "hello")
 		}
+		if _, ok := payload["parse_mode"]; ok {
+			t.Fatalf("unexpected parse_mode in %#v", payload)
+		}
 		if _, ok := payload["reply_parameters"]; ok {
 			t.Fatalf("unexpected reply_parameters in %#v", payload)
 		}
@@ -157,5 +160,40 @@ func TestSendMessageWithReplyTarget(t *testing.T) {
 	}
 	if message.MessageID != 100 {
 		t.Fatalf("message_id = %d, want 100", message.MessageID)
+	}
+}
+
+func TestSendMessageWithParseMode(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["parse_mode"] != "HTML" {
+			t.Fatalf("parse_mode = %#v, want %q", payload["parse_mode"], "HTML")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": 101,
+				"text":       "<b>hello</b>",
+				"chat": map[string]any{
+					"id":   1,
+					"type": "private",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("token", WithBaseURL(server.URL))
+	message, err := client.SendMessage(context.Background(), 1, "<b>hello</b>", SendOptions{ParseMode: ParseModeHTML})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if message.MessageID != 101 {
+		t.Fatalf("message_id = %d, want 101", message.MessageID)
 	}
 }

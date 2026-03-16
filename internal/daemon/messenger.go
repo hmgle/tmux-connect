@@ -37,7 +37,8 @@ func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind
 		}
 	}
 
-	message, err := b.messenger.SendMessage(ctx, chatID, text, telegram.SendOptions{ReplyToMessageID: replyToMessageID})
+	sendText, sendOpts := decorateTelegramMessage(kind, text, telegram.SendOptions{ReplyToMessageID: replyToMessageID})
+	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
 	if err != nil {
 		return err
 	}

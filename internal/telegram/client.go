@@ -96,8 +96,15 @@ type getUpdatesRequest struct {
 type sendMessageRequest struct {
 	ChatID          int64            `json:"chat_id"`
 	Text            string           `json:"text"`
+	ParseMode       string           `json:"parse_mode,omitempty"`
 	ReplyParameters *replyParameters `json:"reply_parameters,omitempty"`
 }
+
+type ParseMode string
+
+const (
+	ParseModeHTML ParseMode = "HTML"
+)
 
 type replyParameters struct {
 	MessageID int64 `json:"message_id"`
@@ -105,6 +112,7 @@ type replyParameters struct {
 
 type SendOptions struct {
 	ReplyToMessageID int64
+	ParseMode        ParseMode
 }
 
 type apiResponse[T any] struct {
@@ -152,6 +160,9 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, opt
 	req := sendMessageRequest{
 		ChatID: chatID,
 		Text:   text,
+	}
+	if opts.ParseMode != "" {
+		req.ParseMode = string(opts.ParseMode)
 	}
 	if opts.ReplyToMessageID > 0 {
 		req.ReplyParameters = &replyParameters{MessageID: opts.ReplyToMessageID}

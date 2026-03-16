@@ -20,6 +20,7 @@ type fakeMessenger struct {
 
 type sentMessage struct {
 	Text             string
+	ParseMode        telegram.ParseMode
 	ReplyToMessageID int64
 }
 
@@ -28,6 +29,7 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opt
 	defer m.mu.Unlock()
 	m.messages = append(m.messages, sentMessage{
 		Text:             text,
+		ParseMode:        opts.ParseMode,
 		ReplyToMessageID: opts.ReplyToMessageID,
 	})
 	return telegram.Message{MessageID: int64(len(m.messages))}, nil
@@ -139,6 +141,9 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	if len(messages) < 2 || !strings.Contains(messages[len(messages)-1].Text, "hello from pane") {
 		t.Fatalf("unexpected messages %#v", messages)
 	}
+	if got := messages[len(messages)-1].ParseMode; got != telegram.ParseModeHTML {
+		t.Fatalf("snapshot parse mode = %q, want %q", got, telegram.ParseModeHTML)
+	}
 	if got := messages[len(messages)-1].ReplyToMessageID; got != 2 {
 		t.Fatalf("snapshot reply_to = %d, want 2", got)
 	}
@@ -190,6 +195,13 @@ func TestRouterFollow(t *testing.T) {
 	}
 	if !strings.Contains(joined, "delta output") {
 		t.Fatalf("missing streamed output in %q", joined)
+	}
+	for _, msg := range messages {
+		if strings.Contains(msg.Text, "initial output") || strings.Contains(msg.Text, "delta output") {
+			if msg.ParseMode != telegram.ParseModeHTML {
+				t.Fatalf("follow output parse mode = %q, want %q for %#v", msg.ParseMode, telegram.ParseModeHTML, msg)
+			}
+		}
 	}
 	for _, msg := range messages[1:] {
 		if msg.ReplyToMessageID != 2 {
@@ -298,7 +310,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	service.sub.PushChunk(tmux.OutputChunk{Text: "1", ReceivedAt: time.Now()})
 	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
 		for _, msg := range messages {
-			if strings.Contains(msg.Text, "calc> 1") {
+			if strings.Contains(msg.Text, "calc&gt; 1") {
 				return true
 			}
 		}
@@ -308,7 +320,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	service.sub.PushChunk(tmux.OutputChunk{Text: "+", ReceivedAt: time.Now()})
 	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
 		for _, msg := range messages {
-			if strings.Contains(msg.Text, "calc> 1+") {
+			if strings.Contains(msg.Text, "calc&gt; 1+") {
 				return true
 			}
 		}
@@ -318,7 +330,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	service.sub.PushChunk(tmux.OutputChunk{Text: "2", ReceivedAt: time.Now()})
 	waitForMessages(t, time.Second, func(messages []sentMessage) bool {
 		for _, msg := range messages {
-			if strings.Contains(msg.Text, "calc> 1+2") {
+			if strings.Contains(msg.Text, "calc&gt; 1+2") {
 				return true
 			}
 		}
@@ -330,7 +342,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	if !strings.Contains(latest, "ready") {
 		t.Fatalf("latest message = %q, want previous context", latest)
 	}
-	if !strings.Contains(latest, "calc> 1+2") {
+	if !strings.Contains(latest, "calc&gt; 1+2") {
 		t.Fatalf("latest message = %q, want complete updated line", latest)
 	}
 	if strings.HasSuffix(latest, "\n1") || strings.HasSuffix(latest, "\n+") || strings.HasSuffix(latest, "\n2") {
