@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +18,10 @@ type FollowManager struct {
 	initialLines  int
 	minInterval   time.Duration
 	maxMessageLen int
+	debugWriter   io.Writer
 
 	mu       sync.Mutex
+	debugMu  sync.Mutex
 	sessions map[int64]*followSession
 }
 
@@ -45,6 +49,12 @@ func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int)
 
 func (m *FollowManager) Enable(ctx context.Context, chatID int64, paneKey string) error {
 	return m.EnableWithOptions(ctx, chatID, paneKey, FollowOptions{})
+}
+
+func (m *FollowManager) SetDebugWriter(w io.Writer) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.debugWriter = w
 }
 
 func (m *FollowManager) EnableWithOptions(ctx context.Context, chatID int64, paneKey string, opts FollowOptions) error {
@@ -150,6 +160,7 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		if err := m.replyBus.Reply(ctx, session.chatID, session.paneKey, "follow-initial", formatFollowMessage(session.paneKey, initial, m.maxMessageLen)); err != nil {
 			return
 		}
+		m.debugf(session, "initial sent initial_len=%d initial_preview=%s", len([]rune(stream.Initial)), debugPreview(stream.Initial, 180))
 		lastSentTranscript = stream.Initial
 		lastSentAt = time.Now()
 	}
@@ -199,9 +210,12 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		if !dirty {
 			return true
 		}
+		currentView := buildRecentFollowContext(transcript, 6, 600)
+		previousView := buildRecentFollowContext(lastSentTranscript, 6, 600)
 		text, changed := buildFollowUpdate(lastSentTranscript, transcript)
 		dirty = false
 		pendingRunes = 0
+		m.debugf(session, "flush changed=%t transcript_len=%d prev_view=%s curr_view=%s send=%s", changed, len([]rune(transcript)), debugPreview(previousView, 160), debugPreview(currentView, 160), debugPreview(text, 180))
 		if !changed {
 			return true
 		}
@@ -219,6 +233,7 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		transcript = appendFollowTranscript(transcript, text, m.maxMessageLen*8)
 		pendingRunes += len([]rune(text))
 		dirty = true
+		m.debugf(session, "chunk appended chunk_len=%d pending=%d transcript_len=%d chunk_preview=%s", len([]rune(text)), pendingRunes, len([]rune(transcript)), debugPreview(text, 180))
 	}
 	drainPendingChunks := func() {
 		for chunks != nil {
@@ -294,6 +309,25 @@ func (m *FollowManager) normalizeOptions(opts FollowOptions) FollowOptions {
 	return opts
 }
 
+func (m *FollowManager) debugf(session *followSession, format string, args ...any) {
+	m.mu.Lock()
+	w := m.debugWriter
+	m.mu.Unlock()
+	if w == nil {
+		return
+	}
+
+	label := "follow-debug"
+	if session != nil {
+		label = fmt.Sprintf("follow-debug chat=%d pane=%s", session.chatID, session.paneKey)
+	}
+	message := fmt.Sprintf(format, args...)
+
+	m.debugMu.Lock()
+	defer m.debugMu.Unlock()
+	fmt.Fprintf(w, "%s %s %s\n", time.Now().Format(time.RFC3339Nano), label, message)
+}
+
 const followRepeatedPrefixMarker = "...[omitted repeated prefix]\n"
 
 func buildFollowUpdate(previous string, current string) (string, bool) {
@@ -308,9 +342,14 @@ func buildFollowUpdate(previous string, current string) (string, bool) {
 	}
 	if strings.HasPrefix(current, previous) {
 		delta := current[len(previous):]
+		currentView := buildRecentFollowContext(current, 6, 600)
+		previousView := buildRecentFollowContext(previous, 6, 600)
+		if shouldPreferFollowContextView(delta, previousView, currentView) {
+			return currentView, true
+		}
 		if shouldSendFollowContext(current, delta) {
-			currentView := buildRecentFollowContext(current, 4, 240)
-			previousView := buildRecentFollowContext(previous, 4, 240)
+			currentView = buildRecentFollowContext(current, 4, 240)
+			previousView = buildRecentFollowContext(previous, 4, 240)
 			if currentView == "" || currentView == previousView {
 				return "", false
 			}
@@ -335,6 +374,28 @@ func buildFollowUpdate(previous string, current string) (string, bool) {
 	return currentView, true
 }
 
+func shouldPreferFollowContextView(delta string, previousView string, currentView string) bool {
+	delta = strings.TrimSpace(delta)
+	currentView = strings.TrimSpace(currentView)
+	previousView = strings.TrimSpace(previousView)
+	if delta == "" || currentView == "" || currentView == previousView {
+		return false
+	}
+	if !strings.Contains(delta, "\n") {
+		return false
+	}
+
+	deltaLen := len([]rune(delta))
+	viewLen := len([]rune(currentView))
+	if deltaLen >= 400 && viewLen <= 220 {
+		return true
+	}
+	if viewLen > 0 && deltaLen >= viewLen*3 {
+		return true
+	}
+	return false
+}
+
 func shouldSendFollowContext(current string, delta string) bool {
 	if !strings.HasSuffix(current, "\n") {
 		return true
@@ -347,17 +408,19 @@ func shouldSendFollowContext(current string, delta string) bool {
 }
 
 func buildRecentFollowContext(text string, maxLines int, maxLen int) string {
-	text = strings.TrimRight(text, "\r\n")
-	if text == "" {
+	lines := effectiveFollowLines(text)
+	if len(lines) == 0 {
 		return ""
 	}
 
-	lines := strings.Split(text, "\n")
 	selected := make([]string, 0, min(len(lines), maxLines))
 	used := 0
 
 	for i := len(lines) - 1; i >= 0 && len(selected) < maxLines; i-- {
-		line := lines[i]
+		line := strings.TrimSpace(lines[i])
+		if line == "" && used > 0 {
+			continue
+		}
 		lineLen := len([]rune(line))
 		added := lineLen
 		if len(selected) > 0 {
@@ -367,7 +430,7 @@ func buildRecentFollowContext(text string, maxLines int, maxLen int) string {
 			break
 		}
 		if used == 0 && lineLen > maxLen {
-			return strings.TrimSpace(line)
+			return truncateLineTail(line, maxLen)
 		}
 		selected = append(selected, line)
 		used += added
@@ -380,6 +443,58 @@ func buildRecentFollowContext(text string, maxLines int, maxLen int) string {
 		selected[left], selected[right] = selected[right], selected[left]
 	}
 	return strings.TrimSpace(strings.Join(selected, "\n"))
+}
+
+func effectiveFollowLines(text string) []string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.TrimRight(text, "\n")
+	if text == "" {
+		return nil
+	}
+
+	rawLines := strings.Split(text, "\n")
+	lines := make([]string, 0, len(rawLines))
+	for _, line := range rawLines {
+		if idx := strings.LastIndexByte(line, '\r'); idx >= 0 {
+			line = line[idx+1:]
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func truncateLineTail(line string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(line)
+	if len(runes) <= maxLen {
+		return line
+	}
+	const marker = "... "
+	markerRunes := []rune(marker)
+	if len(markerRunes) >= maxLen {
+		return string(runes[len(runes)-maxLen:])
+	}
+	tailLen := maxLen - len(markerRunes)
+	return marker + string(runes[len(runes)-tailLen:])
+}
+
+func debugPreview(text string, maxRunes int) string {
+	if maxRunes <= 0 {
+		maxRunes = 120
+	}
+	quoted := strconv.QuoteToASCII(text)
+	runes := []rune(quoted)
+	if len(runes) <= maxRunes {
+		return quoted
+	}
+	head := maxRunes / 2
+	tail := maxRunes - head - 3
+	if tail < 0 {
+		tail = 0
+	}
+	return string(runes[:head]) + "..." + string(runes[len(runes)-tail:])
 }
 
 func trimRepeatedPrefix(previous string, current string, minSharedLines int, minSharedRunes int) (string, bool) {

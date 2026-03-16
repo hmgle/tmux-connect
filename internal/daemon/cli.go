@@ -22,6 +22,7 @@ type Config struct {
 	SnapshotLines int
 	FollowLines   int
 	FollowMinGap  time.Duration
+	FollowDebug   bool
 	APIBaseURL    string
 }
 
@@ -150,6 +151,9 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	replyBus := NewReplyBus(client, store)
 	follow := NewFollowManager(service, replyBus, cfg.FollowLines)
 	follow.minInterval = cfg.FollowMinGap
+	if cfg.FollowDebug {
+		follow.SetDebugWriter(stderr)
+	}
 	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats)
 
 	return &Runtime{
@@ -253,6 +257,7 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
 	fs.IntVar(&cfg.FollowLines, "follow-lines", 80, "initial line count when starting /follow")
 	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", 700*time.Millisecond, "default minimum interval between /follow pushes")
+	fs.BoolVar(&cfg.FollowDebug, "follow-debug", envBool("TAGB_FOLLOW_DEBUG"), "log follow chunk/flush debug data to stderr")
 	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_API_BASE")), "telegram bot api base url")
 	fs.Var(allowChats, "allow-chat", "allowed telegram chat id (repeatable or comma-separated)")
 
@@ -289,6 +294,16 @@ func envOrDefault(key string, fallback string) string {
 	return fallback
 }
 
+func envBool(key string) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func printUsage(w io.Writer) {
 	fmt.Fprint(w, `tagb daemon manages Telegram relay access for tmux panes.
 
@@ -308,5 +323,6 @@ Common flags:
   --snapshot-lines 120
   --follow-lines 80
   --follow-min-interval 700ms
+  --follow-debug
 `)
 }

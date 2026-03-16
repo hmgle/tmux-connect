@@ -61,15 +61,71 @@ func (c *Client) startPollingSubscriptionWithBaseline(ctx context.Context, pane 
 }
 
 func snapshotDiff(previous string, current string) string {
+	if previous == current {
+		return ""
+	}
+
+	if strings.HasPrefix(current, previous) {
+		return trimLeadingSnapshotDelta(current[len(previous):])
+	}
+
+	if diff, ok := snapshotTailLineDiff(previous, current); ok {
+		return diff
+	}
+
 	prevLines := strings.Split(previous, "\n")
 	currLines := strings.Split(current, "\n")
 	maxOverlap := min(len(prevLines), len(currLines))
 	for overlap := maxOverlap; overlap > 0; overlap-- {
 		if slicesEqual(prevLines[len(prevLines)-overlap:], currLines[:overlap]) {
-			return strings.Join(currLines[overlap:], "\n")
+			return trimLeadingSnapshotDelta(strings.Join(currLines[overlap:], "\n"))
 		}
 	}
 	return current
+}
+
+func snapshotTailLineDiff(previous string, current string) (string, bool) {
+	prevLines := snapshotLines(previous)
+	currLines := snapshotLines(current)
+	if len(prevLines) == 0 || len(currLines) == 0 {
+		return "", false
+	}
+
+	shared := commonPrefixLines(prevLines, currLines)
+	if shared != len(prevLines)-1 {
+		return "", false
+	}
+	if shared >= len(currLines) {
+		return "", false
+	}
+	if !strings.HasPrefix(currLines[shared], prevLines[shared]) {
+		return "", false
+	}
+
+	first := strings.TrimPrefix(currLines[shared], prevLines[shared])
+	parts := make([]string, 0, len(currLines)-shared)
+	if first != "" {
+		parts = append(parts, first)
+	}
+	parts = append(parts, currLines[shared+1:]...)
+
+	diff := trimLeadingSnapshotDelta(strings.Join(parts, "\n"))
+	if diff == "" {
+		return "", false
+	}
+	return diff, true
+}
+
+func snapshotLines(text string) []string {
+	text = strings.TrimRight(text, "\n")
+	if text == "" {
+		return nil
+	}
+	return strings.Split(text, "\n")
+}
+
+func trimLeadingSnapshotDelta(text string) string {
+	return strings.TrimLeft(text, "\n")
 }
 
 func slicesEqual(left []string, right []string) bool {
@@ -82,6 +138,16 @@ func slicesEqual(left []string, right []string) bool {
 		}
 	}
 	return true
+}
+
+func commonPrefixLines(left []string, right []string) int {
+	limit := min(len(left), len(right))
+	for i := 0; i < limit; i++ {
+		if left[i] != right[i] {
+			return i
+		}
+	}
+	return limit
 }
 
 func min(a int, b int) int {

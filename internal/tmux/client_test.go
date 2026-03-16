@@ -50,6 +50,18 @@ func TestSnapshotDiff(t *testing.T) {
 			current:  "two\nthree\nfour",
 			want:     "four",
 		},
+		{
+			name:     "inline prompt grows on same line",
+			previous: ">>> ",
+			current:  ">>> 300",
+			want:     "300",
+		},
+		{
+			name:     "prompt grows then emits result and next prompt",
+			previous: ">>> 300 + 123",
+			current:  ">>> 300 + 123\n423\n>>> ",
+			want:     "423\n>>> ",
+		},
 	}
 
 	for _, tc := range tests {
