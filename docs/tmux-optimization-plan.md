@@ -13,6 +13,36 @@
   - 明确的能力探测和错误分类。
 - 当前项目最优先的问题，不是 API 风格，而是并发安全、子进程生命周期、命令次数和热路径上的重复查询。
 
+## 进展同步
+
+截至当前工作树，这些优化已经完成并提交：
+
+- `e61f906` `feat: optimize tmux metadata and daemon persistence paths`
+  - 修复 `InjectInput()` buffer 名冲突。
+  - control-mode PTY 生命周期回收。
+  - metadata 批量写入。
+  - ReplyBus / Store 的 SQLite 事务式批处理。
+- `f367e91` `feat: reduce targeted pane lookup overhead`
+  - 单 pane 操作改为目标化查询。
+  - daemon managed fast path，减少 `TouchMetadata()` 冗余读取。
+- `0062402` `feat: cache unsupported tmux capabilities`
+  - control-mode / rich capture 的不支持能力缓存。
+- `cd4760c` `feat: defer registry refresh until needed`
+  - `PaneRegistry` dirty-flag。
+  - `/attach`、`/detach` 不再立刻全量 refresh。
+- `52f9116` `feat: classify tmux option errors`
+  - 引入 `ErrTmuxOptionUnavailable`，收敛 option 不可用错误判断。
+- `ced889b` `feat: add structured tmux runner results`
+  - runner 返回结构化 `stdout/stderr/exitCode/args`。
+  - 错误分类优先使用结构化结果，字符串匹配仅作 fallback。
+
+尚未完成的重点项：
+
+- pane schema 的统一 descriptor 化。
+- 更完整的 typed error 体系，不止 option/control 两类。
+- registry 作为 `requireCurrentPane()` 的快速预检。
+- 是否需要更显式的 tmux 启动自检入口。
+
 ## 评估总表
 
 | ID | 项目 | 结论 | 说明 |
@@ -38,6 +68,8 @@
 
 ### 1.1 `SetMetadata()` / `ClearMetadata()` 合并为单次 tmux 调用
 
+状态：已完成
+
 当前：
 
 - `SetMetadata()` 遍历 `meta.ToOptions()`，每个字段单独调用一次 `set-option`。
@@ -59,6 +91,8 @@
 - 代码语义更清晰，测试更容易覆盖。
 
 ### 1.2 `TouchMetadata()` 增加 fast path
+
+状态：已完成
 
 当前：
 
@@ -83,6 +117,8 @@
 
 ### 1.3 `ResolvePane()` 降低全量扫描依赖
 
+状态：已部分完成
+
 当前：
 
 - `Inspect()`、`Snapshot()`、`Send()`、`Enter()`、`CtrlC()`、`OpenStream()` 都会先 `ResolvePane()`。
@@ -95,9 +131,12 @@
 
 建议：
 
-- 引入轻量 `ResolvedPane` 或 `PaneRef`，封装 `Target` 和最近一次 `PaneInfo`。
-- service 层允许“已知 pane key”直接执行目标命令，按需刷新。
-- 对 `socket:%pane` 这种已经精确到 pane 的引用，减少不必要的全量 list。
+- 当前已完成：
+  - `GetPane()` / `GetPaneState()` 目标化查询。
+  - `Inspect()` 单次取回 pane 信息和 metadata。
+  - managed 路径减少不必要的额外读取。
+- 后续可选：
+  - 评估是否还需要显式 `PaneRef` / `ResolvedPane` 类型。
 
 注意：
 
@@ -107,6 +146,8 @@
 ## 2. control-mode 稳定性与生命周期
 
 ### 2.1 回收 PTY 子进程
+
+状态：已完成
 
 当前：
 
@@ -127,6 +168,8 @@
 
 ### 2.2 缩小 control-mode 初始化范围
 
+状态：已完成
+
 当前：
 
 - `startControlSubscription()` 会先 `ListPanes()`，再筛选 `SessionName` 相同的 pane。
@@ -141,6 +184,8 @@
 - 保持 control 初始化只关注目标 session。
 
 ### 2.3 区分“可降级错误”和“必须暴露错误”
+
+状态：已完成
 
 当前：
 
@@ -164,6 +209,8 @@
 
 ### 3.1 ReplyBus 出站写入合并事务
 
+状态：已完成
+
 当前：
 
 - `recordOutbound()` 会顺序调用：
@@ -182,6 +229,8 @@
 - 把 3 条 SQL 合并成一个事务脚本，单次 `sqlite3` 调用完成。
 
 ### 3.2 入站写入也做同样合并
+
+状态：已完成
 
 当前：
 
@@ -205,6 +254,8 @@
 
 ### 4.1 `PaneRegistry` 可做延迟刷新，但收益中等
 
+状态：已完成
+
 当前：
 
 - `/panes`、`/attach`、`/detach` 会显式调用 `registry.Refresh()`。
@@ -224,6 +275,8 @@
 
 ### 4.2 `requireCurrentPane()` 参考 registry 只能算部分优化
 
+状态：未开始
+
 判断：
 
 - registry 的确是缓存，但它可能过期。
@@ -239,6 +292,8 @@
 ## 5. 输出协议、命令层和错误模型
 
 ### 5.1 收敛 tmux list schema
+
+状态：未开始
 
 当前：
 
@@ -266,6 +321,8 @@
 
 ### 5.2 命令执行结果结构化
 
+状态：已完成
+
 当前：
 
 - `RealRunner.Run()` 只返回字符串和 error。
@@ -282,22 +339,26 @@
 
 ### 5.3 增加能力探测
 
+状态：已部分完成
+
 当前：
 
 - 没有统一的 tmux 版本或 capability 检测。
 
 建议：
 
-- 增加启动时或首次使用时的能力缓存：
-  - tmux 是否存在。
-  - socket 是否可达。
-  - control-mode 是否可用。
-  - `capture-pane -e` 是否可用。
-  - 未来若引入更多新版能力，也可复用同一入口。
+- 当前已完成：
+  - control-mode unsupported 缓存。
+  - rich capture unsupported 缓存。
+- 后续可选：
+  - 增加更显式的 startup doctor / capability probe。
+  - 把 tmux 存在性、socket 可达性纳入统一入口。
 
 ## 6. 并发安全
 
 ### 6.1 `InjectInput()` buffer 命名改为唯一值
+
+状态：已完成
 
 当前：
 
@@ -330,28 +391,44 @@
 
 ## P0
 
+状态：已完成
+
 - 修复 `InjectInput()` buffer 名冲突。
 - 修复 control-mode PTY 生命周期和 `Wait()` 回收。
 - 增加 control-mode 错误分类，限制“无差别降级”。
 
 ## P1
 
-- 合并 `SetMetadata()` / `ClearMetadata()` 为单次 tmux 调用。
-- 为 `TouchMetadata()` 增加 managed fast path。
-- 把 `startControlSubscription()` 的 pane 查询改为 session-scoped。
-- 把 ReplyBus 的入站/出站存储合并为事务式单次 sqlite3 调用。
+状态：已大体完成
+
+- 已完成：
+  - 合并 `SetMetadata()` / `ClearMetadata()` 为单次 tmux 调用。
+  - 为 `TouchMetadata()` 增加 managed fast path。
+  - 把 `startControlSubscription()` 的 pane查询改为 session-scoped。
+  - 把 ReplyBus 的入站/出站存储合并为事务式单次 sqlite3 调用。
 
 ## P2
 
-- 引入轻量 `PaneRef` / `ResolvedPane`，减少单 pane 操作对全量 `ListPanes()` 的依赖。
-- 收敛 pane schema，统一 format string 和 parser。
-- 引入结构化 runner result 与 typed error。
-- 增加 tmux capability probe。
+状态：部分完成
+
+- 已完成：
+  - 单 pane 目标化查询，减少对全量 `ListPanes()` 的依赖。
+  - 结构化 runner result。
+  - option/control/capability 相关的一部分 typed error / sentinel error。
+  - runtime unsupported capability caching。
+- 未完成：
+  - pane schema 的统一 descriptor。
+  - 更完整的一般化 tmux typed error。
+  - 是否要引入显式 `PaneRef` 类型，仍待评估。
 
 ## P3
 
-- 评估 registry dirty-flag / 延迟刷新。
-- 评估 registry 作为 `requireCurrentPane()` 的快速预检。
+状态：部分完成
+
+- 已完成：
+  - registry dirty-flag / 延迟刷新。
+- 未完成：
+  - registry 作为 `requireCurrentPane()` 的快速预检。
 
 ## 测试补充建议
 
