@@ -79,10 +79,12 @@ func (c *Client) GetPane(ctx context.Context, target Target) (PaneInfo, error) {
 	if err != nil {
 		return PaneInfo{}, err
 	}
-	if len(panes) == 0 {
-		return PaneInfo{}, fmt.Errorf("pane not found: %s", target.PaneID)
+	for _, pane := range panes {
+		if pane.Target.Matches(target) {
+			return pane, nil
+		}
 	}
-	return panes[0], nil
+	return PaneInfo{}, fmt.Errorf("pane not found: %s", target.PaneID)
 }
 
 func (c *Client) GetPaneState(ctx context.Context, target Target) (PaneState, error) {
@@ -90,10 +92,12 @@ func (c *Client) GetPaneState(ctx context.Context, target Target) (PaneState, er
 	if err != nil {
 		return PaneState{}, err
 	}
-	if len(states) == 0 {
-		return PaneState{}, fmt.Errorf("pane not found: %s", target.PaneID)
+	for _, state := range states {
+		if state.Info.Target.Matches(target) {
+			return state, nil
+		}
 	}
-	return states[0], nil
+	return PaneState{}, fmt.Errorf("pane not found: %s", target.PaneID)
 }
 
 func (c *Client) CapturePane(ctx context.Context, target Target, lines int) (string, error) {

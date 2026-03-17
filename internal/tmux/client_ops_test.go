@@ -129,6 +129,31 @@ func TestGetPaneUsesTargetedListCommand(t *testing.T) {
 	}
 }
 
+func TestGetPaneFiltersTargetedListToRequestedPane(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%507" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			return stdoutResult(strings.Join([]string{
+				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f0\x1f120\x1f40",
+				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f0\x1f120\x1f40",
+			}, "\n") + "\n"), nil
+		},
+	}
+	client := NewClient(runner, "")
+
+	pane, err := client.GetPane(context.Background(), Target{PaneID: "%507"})
+	if err != nil {
+		t.Fatalf("GetPane() error = %v", err)
+	}
+	if pane.Target.PaneID != "%507" || pane.PaneTitle != "right" {
+		t.Fatalf("unexpected pane %#v", pane)
+	}
+}
+
 func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 	t.Parallel()
 
@@ -151,6 +176,31 @@ func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 	}
 	if len(runner.calls) != 1 {
 		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	}
+}
+
+func TestGetPaneStateFiltersTargetedListToRequestedPane(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%507" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			return stdoutResult(strings.Join([]string{
+				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fold\x1fmanual-attach\x1f1700000000",
+				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fnew\x1fmanual-attach\x1f1700000001",
+			}, "\n") + "\n"), nil
+		},
+	}
+	client := NewClient(runner, "")
+
+	state, err := client.GetPaneState(context.Background(), Target{PaneID: "%507"})
+	if err != nil {
+		t.Fatalf("GetPaneState() error = %v", err)
+	}
+	if state.Info.Target.PaneID != "%507" || state.Metadata.Label != "new" {
+		t.Fatalf("unexpected state %#v", state)
 	}
 }
 
