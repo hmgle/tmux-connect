@@ -3,10 +3,12 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"html"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/portgle/tmux-connect/internal/tagb"
 	"github.com/portgle/tmux-connect/internal/tmux"
@@ -472,29 +474,77 @@ func formatCurrent(record tagb.PaneRecord, following bool) string {
 }
 
 func formatPaneList(records []tagb.PaneRecord, current string, following bool) string {
-	lines := []string{
-		"Panes:",
-		"Now | Pane | Cmd | Dir | Where",
-	}
 	if len(records) == 0 {
-		lines = append(lines, "- | none | - | - | -")
-	} else {
-		for _, record := range records {
-			marker := "·"
-			if record.Info.Target.PaneKey() == current {
-				marker = "👉"
-			}
-			lines = append(lines, strings.Join([]string{
-				marker,
-				displayPaneKey(record.Info.Target.PaneKey()),
-				shortenDisplay(displayValue(record.Info.CurrentCmd), 16),
-				formatPaneDir(record.Info.CurrentPath),
-				shortenDisplay(formatPaneWhere(record.Info), 20),
-			}, " | "))
+		return "No managed panes.\n\nCurrent: none · Follow: " + onOff(following)
+	}
+
+	type row struct {
+		marker string
+		pane   string
+		cmd    string
+		dir    string
+		where  string
+	}
+
+	rows := make([]row, len(records))
+	header := row{marker: " ", pane: "Pane", cmd: "Cmd", dir: "Dir", where: "Where"}
+	wPane := utf8.RuneCountInString(header.pane)
+	wCmd := utf8.RuneCountInString(header.cmd)
+	wDir := utf8.RuneCountInString(header.dir)
+
+	for i, rec := range records {
+		r := row{
+			marker: " ",
+			pane:   displayPaneKey(rec.Info.Target.PaneKey()),
+			cmd:    shortenDisplay(displayValue(rec.Info.CurrentCmd), 16),
+			dir:    formatPaneDir(rec.Info.CurrentPath),
+			where:  shortenDisplay(formatPaneWhere(rec.Info), 20),
+		}
+		if rec.Info.Target.PaneKey() == current {
+			r.marker = ">"
+		}
+		rows[i] = r
+		if n := utf8.RuneCountInString(r.pane); n > wPane {
+			wPane = n
+		}
+		if n := utf8.RuneCountInString(r.cmd); n > wCmd {
+			wCmd = n
+		}
+		if n := utf8.RuneCountInString(r.dir); n > wDir {
+			wDir = n
 		}
 	}
-	lines = append(lines, "", fmt.Sprintf("Current: %s | Follow: %s", displayCurrent(current), onOff(following)))
-	return strings.Join(lines, "\n")
+
+	var b strings.Builder
+	b.WriteString("<b>Panes:</b>\n<pre>")
+	writeRow := func(r row) {
+		b.WriteString(r.marker)
+		b.WriteByte(' ')
+		writePadded(&b, r.pane, wPane)
+		b.WriteString("  ")
+		writePadded(&b, r.cmd, wCmd)
+		b.WriteString("  ")
+		writePadded(&b, r.dir, wDir)
+		b.WriteString("  ")
+		b.WriteString(html.EscapeString(r.where))
+	}
+	writeRow(header)
+	for _, r := range rows {
+		b.WriteByte('\n')
+		writeRow(r)
+	}
+	b.WriteString("</pre>\nCurrent: ")
+	b.WriteString(html.EscapeString(displayCurrent(current)))
+	b.WriteString(" · Follow: ")
+	b.WriteString(onOff(following))
+	return b.String()
+}
+
+func writePadded(b *strings.Builder, s string, width int) {
+	b.WriteString(html.EscapeString(s))
+	for i := utf8.RuneCountInString(s); i < width; i++ {
+		b.WriteByte(' ')
+	}
 }
 
 func displayCurrent(current string) string {

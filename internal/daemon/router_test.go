@@ -142,14 +142,14 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	}
 	messages := messenger.snapshot()
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, "Now | Pane | Cmd | Dir | Where") {
-		t.Fatalf("last panes message = %q, want friendly header", last.Text)
+	if !strings.Contains(last.Text, "  Pane  Cmd    Dir           Where") {
+		t.Fatalf("last panes message = %q, want column header", last.Text)
 	}
-	if !strings.Contains(last.Text, "👉 | %5 | codex | tmux-connect | dev/shell") {
+	if !strings.Contains(last.Text, "> %5    codex  tmux-connect  dev/shell") {
 		t.Fatalf("last panes message = %q, want current pane row", last.Text)
 	}
-	if strings.Contains(last.Text, "managed") || strings.Contains(last.Text, "selected") {
-		t.Fatalf("last panes message = %q, want internal flags removed", last.Text)
+	if last.ParseMode != telegram.ParseModeHTML {
+		t.Fatalf("panes parse mode = %q, want HTML", last.ParseMode)
 	}
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/panes"}); err != nil {
@@ -331,10 +331,10 @@ func TestFormatPaneListShortensLongDirectoryNames(t *testing.T) {
 		},
 	}}, "default:%7", false)
 
-	if !strings.Contains(text, "👉 | %7 | claude | very-...agents | workspace/review") {
-		t.Fatalf("formatPaneList() = %q, want shortened directory name", text)
+	if !strings.Contains(text, "> %7    claude  very-...agents  workspace/review") {
+		t.Fatalf("formatPaneList() = %q, want padded row with shortened directory", text)
 	}
-	if !strings.Contains(text, "Current: %7 | Follow: off") {
+	if !strings.Contains(text, "Current: %7 · Follow: off") {
 		t.Fatalf("formatPaneList() = %q, want summary line", text)
 	}
 }

@@ -8,11 +8,19 @@ import (
 )
 
 func decorateTelegramMessage(kind string, text string, opts telegram.SendOptions) (string, telegram.SendOptions) {
+	if isPreformattedHTML(kind) {
+		opts.ParseMode = telegram.ParseModeHTML
+		return text, opts
+	}
 	if !usesTerminalHTML(kind) {
 		return text, opts
 	}
 	opts.ParseMode = telegram.ParseModeHTML
 	return renderTelegramTerminalHTML(text), opts
+}
+
+func isPreformattedHTML(kind string) bool {
+	return kind == "panes"
 }
 
 func usesTerminalHTML(kind string) bool {
