@@ -478,5 +478,8 @@ func isClosedConn(err error) bool {
 }
 
 func shouldFallbackToPolling(err error) bool {
-	return errors.Is(err, ErrControlUnsupported)
+	if err == nil {
+		return false
+	}
+	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }

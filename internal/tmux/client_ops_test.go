@@ -443,24 +443,46 @@ func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
 	}
 }
 
-func TestOpenPaneStreamReturnsControlErrorsThatAreNotExplicitlyUnsupported(t *testing.T) {
+func TestOpenPaneStreamFallsBackToPollingOnControlErrors(t *testing.T) {
 	t.Parallel()
 
+	captures := []string{"one", "one\ntwo"}
+	var captureIndex int
 	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+			if args[0] != "capture-pane" {
+				t.Fatalf("unexpected command: %v", args)
+			}
+			if captureIndex >= len(captures) {
+				return stdoutResult(captures[len(captures)-1]), nil
+			}
+			body := captures[captureIndex]
+			captureIndex++
+			return stdoutResult(body), nil
+		},
 		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
 			return nil, errors.New("control setup broke")
 		},
 	}
 	client := NewClient(runner, "")
-	_, _, err := client.OpenPaneStream(context.Background(), PaneInfo{
+	initial, sub, err := client.OpenPaneStream(context.Background(), PaneInfo{
 		Target:      Target{PaneID: "%9"},
 		SessionName: "dev",
 	}, 20)
-	if err == nil {
-		t.Fatal("expected control error")
+	if err != nil {
+		t.Fatalf("OpenPaneStream() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "control setup broke") {
-		t.Fatalf("unexpected error: %v", err)
+	defer sub.Close()
+	if initial != "one" {
+		t.Fatalf("initial = %q, want %q", initial, "one")
+	}
+	select {
+	case chunk := <-sub.Chunks():
+		if chunk.Text != "two" {
+			t.Fatalf("chunk.Text = %q, want %q", chunk.Text, "two")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected polling diff chunk")
 	}
 }
 

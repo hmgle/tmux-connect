@@ -102,7 +102,7 @@ func (s *fakePaneService) List(context.Context) ([]tagb.PaneRecord, error) {
 	return out, nil
 }
 
-func TestRouterAttachMarksRegistryDirtyAndDefersRefreshUntilPanes(t *testing.T) {
+func TestRouterPanesRefreshesLiveStateAfterAttach(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -127,7 +127,14 @@ func TestRouterAttachMarksRegistryDirtyAndDefersRefreshUntilPanes(t *testing.T) 
 		t.Fatalf("HandleMessage(panes) error = %v", err)
 	}
 	if service.listCalls != 1 {
-		t.Fatalf("expected panes to refresh registry once after dirty attach, got %d list calls", service.listCalls)
+		t.Fatalf("expected first panes to refresh registry, got %d list calls", service.listCalls)
+	}
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/panes"}); err != nil {
+		t.Fatalf("HandleMessage(second panes) error = %v", err)
+	}
+	if service.listCalls != 2 {
+		t.Fatalf("expected panes to refresh registry on every request, got %d list calls", service.listCalls)
 	}
 }
 

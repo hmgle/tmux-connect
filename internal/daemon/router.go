@@ -91,7 +91,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error {
 	chatID := message.ChatID
 	r.logInbound(ctx, message, "", "")
-	if err := r.registry.EnsureLoaded(ctx); err != nil {
+	if err := r.registry.Refresh(ctx); err != nil {
 		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("list panes failed: %v", err))
 	}
 	bindings, err := r.store.ListBindings(ctx, chatID)
