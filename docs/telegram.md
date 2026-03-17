@@ -7,9 +7,9 @@
 - you have created a Telegram bot through BotFather
 - you know the Telegram chat ID you want to allow, if using `--allow-chat`
 
-## Local Preparation
+## Optional Local Preparation
 
-1. Attach the pane you want to control:
+1. If you want to pre-label a pane before using Telegram, attach it locally:
 
 ```bash
 go run ./cmd/tagb attach --pane %5 --agent codex --label backend
@@ -20,6 +20,8 @@ go run ./cmd/tagb attach --pane %5 --agent codex --label backend
 ```bash
 go run ./cmd/tagb inspect --pane %5
 ```
+
+You can skip this section entirely and let `/select <pane>` auto-manage the pane from Telegram.
 
 ## Start the Daemon
 
@@ -61,9 +63,9 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 ## Telegram Commands
 
 - `/panes`
-- `/attach <pane>`
-- `/detach <pane>`
-- `/bind <pane>`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
 - `/current`
 - `/snapshot [lines] [image|text]`
 - `/send <text>`
@@ -76,7 +78,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 1. Start the daemon
 2. Open the bot in Telegram
 3. Run `/panes`
-4. Bind the chat to a managed pane with `/bind %5`
+4. Select a pane with `/select %5`
 5. Inspect the current pane with `/current`
 6. Read output with `/snapshot`
 7. Continue the session with `/send continue`
@@ -85,10 +87,11 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 ## Operational Notes
 
 - If `--allow-chat` is used, chats not in the allowlist are rejected
-- `/bind` only works on managed panes; use `/attach` first if needed
+- `/select` automatically manages the pane if it is not already managed
+- `/clear` only clears the current pane for the current chat and stops that chat's active follow session
 - `/snapshot` defaults to `image`; use `/snapshot text` to receive Telegram text instead of an image
 - snapshot images default to the built-in `gomono` font, `14` pt, and the `dark` theme
 - use `--telegram-snapshot-theme`, `--telegram-snapshot-font-size`, or `--telegram-snapshot-font-file` to customize snapshot image rendering
-- `/detach` clears chat bindings and stops any follow sessions that point to that pane
-- if the current pane disappears, the daemon clears that chat's current-pane state and asks the user to bind again
+- `/unmanage` clears chat bindings and stops any follow sessions that point to that pane
+- if the current pane disappears, the daemon clears that chat's current-pane state and asks the user to select again
 - follow mode is one active subscription per chat

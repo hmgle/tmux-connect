@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image/color"
 	"image/png"
 	"path/filepath"
@@ -70,6 +71,8 @@ type fakePaneService struct {
 	snapshotRich  string
 	initialOutput string
 	listCalls     int
+	attachCalls   int
+	detachCalls   int
 }
 
 func newFakePaneService() *fakePaneService {
@@ -102,7 +105,7 @@ func (s *fakePaneService) List(context.Context) ([]tagb.PaneRecord, error) {
 	return out, nil
 }
 
-func TestRouterPanesRefreshesLiveStateAfterAttach(t *testing.T) {
+func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -111,16 +114,23 @@ func TestRouterPanesRefreshesLiveStateAfterAttach(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record.Metadata.Managed = false
+	record.Metadata.Agent = tmux.AgentUnknown
+	service.records["default:%5"] = record
 	messenger := &fakeMessenger{}
 	registry := NewPaneRegistry(service)
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, registry, store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/attach %5"}); err != nil {
-		t.Fatalf("HandleMessage(attach) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if service.listCalls != 0 {
-		t.Fatalf("expected attach to avoid immediate registry refresh, got %d list calls", service.listCalls)
+		t.Fatalf("expected select to avoid immediate registry refresh, got %d list calls", service.listCalls)
+	}
+	if service.attachCalls != 1 {
+		t.Fatalf("attachCalls = %d, want 1", service.attachCalls)
 	}
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/panes"}); err != nil {
@@ -128,6 +138,11 @@ func TestRouterPanesRefreshesLiveStateAfterAttach(t *testing.T) {
 	}
 	if service.listCalls != 1 {
 		t.Fatalf("expected first panes to refresh registry, got %d list calls", service.listCalls)
+	}
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "selected") {
+		t.Fatalf("last panes message = %q, want selected flag", last.Text)
 	}
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/panes"}); err != nil {
@@ -138,17 +153,38 @@ func TestRouterPanesRefreshesLiveStateAfterAttach(t *testing.T) {
 	}
 }
 
-func (s *fakePaneService) Attach(context.Context, string, string, string) (tagb.PaneRecord, error) {
-	return s.records["default:%5"], nil
+func (s *fakePaneService) Attach(_ context.Context, ref string, agent string, _ string) (tagb.PaneRecord, error) {
+	s.attachCalls++
+	key := normalizePaneRef(ref)
+	record, ok := s.records[key]
+	if !ok {
+		return tagb.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
+	}
+	record.Metadata.Managed = true
+	record.Metadata.Mode = tmux.ModeRelay
+	record.Metadata.Agent = tmux.NormalizeAgent(agent)
+	s.records[key] = record
+	return record, nil
 }
 
-func (s *fakePaneService) Detach(context.Context, string) error { return nil }
+func (s *fakePaneService) Detach(_ context.Context, ref string) error {
+	s.detachCalls++
+	key := normalizePaneRef(ref)
+	record, ok := s.records[key]
+	if !ok {
+		return fmt.Errorf("pane not found: %s", ref)
+	}
+	record.Metadata = tmux.DefaultMetadata()
+	s.records[key] = record
+	return nil
+}
 
 func (s *fakePaneService) Inspect(_ context.Context, ref string) (tagb.PaneRecord, error) {
-	if strings.HasPrefix(ref, "%") {
-		ref = "default:" + ref
+	key := normalizePaneRef(ref)
+	record, ok := s.records[key]
+	if !ok {
+		return tagb.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
 	}
-	record := s.records[ref]
 	return record, nil
 }
 
@@ -179,7 +215,14 @@ func (s *fakePaneService) OpenStream(context.Context, string, int) (tagb.PaneStr
 	}, nil
 }
 
-func TestRouterBindAndSnapshot(t *testing.T) {
+func normalizePaneRef(ref string) string {
+	if strings.HasPrefix(ref, "%") {
+		return "default:" + ref
+	}
+	return ref
+}
+
+func TestRouterSelectAndSnapshot(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -192,8 +235,8 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	current, err := store.CurrentPane(ctx, 7)
 	if err != nil {
@@ -221,6 +264,53 @@ func TestRouterBindAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record.Metadata.Managed = false
+	record.Metadata.Agent = tmux.AgentUnknown
+	service.records["default:%5"] = record
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if service.attachCalls != 1 {
+		t.Fatalf("attachCalls = %d, want 1", service.attachCalls)
+	}
+
+	current, err := store.CurrentPane(ctx, 7)
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%5" {
+		t.Fatalf("current = %q, want %q", current, "default:%5")
+	}
+
+	record, err = service.Inspect(ctx, "%5")
+	if err != nil {
+		t.Fatalf("Inspect() error = %v", err)
+	}
+	if !record.Metadata.Managed {
+		t.Fatalf("managed = false, want true")
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "selected default:%5") {
+		t.Fatalf("last message = %q, want select confirmation", last.Text)
+	}
+}
+
 func TestRouterSnapshotTextMode(t *testing.T) {
 	t.Parallel()
 
@@ -234,8 +324,8 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot text"}); err != nil {
 		t.Fatalf("HandleMessage(snapshot text) error = %v", err)
@@ -303,8 +393,8 @@ func TestRouterFollow(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
@@ -365,8 +455,8 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	follow.minInterval = 5 * time.Second
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
@@ -401,8 +491,8 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 2s"}); err != nil {
 		t.Fatalf("HandleMessage(follow on 2s) error = %v", err)
@@ -440,8 +530,8 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 10ms"}); err != nil {
 		t.Fatalf("HandleMessage(follow on 10ms) error = %v", err)
@@ -504,8 +594,8 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/bind %5"}); err != nil {
-		t.Fatalf("HandleMessage(bind) error = %v", err)
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
@@ -523,6 +613,128 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 		}
 		return false
 	}, messenger)
+}
+
+func TestRouterClearStopsFollowAndKeepsSelectionHistory(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	follow := NewFollowManager(service, replyBus, 20)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+		t.Fatalf("HandleMessage(follow on) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/clear"}); err != nil {
+		t.Fatalf("HandleMessage(clear) error = %v", err)
+	}
+
+	current, err := store.CurrentPane(ctx, 7)
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "" {
+		t.Fatalf("current = %q, want empty", current)
+	}
+
+	bindings, err := store.ListBindings(ctx, 7)
+	if err != nil {
+		t.Fatalf("ListBindings() error = %v", err)
+	}
+	if len(bindings) != 1 || bindings[0] != "default:%5" {
+		t.Fatalf("bindings = %#v, want [default:%%5]", bindings)
+	}
+	if follow.IsEnabled(7) {
+		t.Fatalf("follow is still enabled")
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "cleared current pane") {
+		t.Fatalf("last message = %q, want clear confirmation", last.Text)
+	}
+}
+
+func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	follow := NewFollowManager(service, replyBus, 20)
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+		t.Fatalf("HandleMessage(follow on) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/unmanage %5"}); err != nil {
+		t.Fatalf("HandleMessage(unmanage) error = %v", err)
+	}
+
+	if service.detachCalls != 1 {
+		t.Fatalf("detachCalls = %d, want 1", service.detachCalls)
+	}
+
+	current, err := store.CurrentPane(ctx, 7)
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "" {
+		t.Fatalf("current = %q, want empty", current)
+	}
+
+	bindings, err := store.ListBindings(ctx, 7)
+	if err != nil {
+		t.Fatalf("ListBindings() error = %v", err)
+	}
+	if len(bindings) != 0 {
+		t.Fatalf("bindings = %#v, want empty", bindings)
+	}
+	if follow.IsEnabled(7) {
+		t.Fatalf("follow is still enabled")
+	}
+
+	record, err := service.Inspect(ctx, "%5")
+	if err != nil {
+		t.Fatalf("Inspect() error = %v", err)
+	}
+	if record.Metadata.Managed {
+		t.Fatalf("managed = true, want false")
+	}
+}
+
+func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
+	t.Parallel()
+
+	text := helpText()
+	for _, want := range []string{"/select <pane>", "/clear", "/unmanage <pane>"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("helpText() missing %q in %q", want, text)
+		}
+	}
+	for _, old := range []string{"/bind <pane>", "/attach <pane>", "/detach <pane>"} {
+		if strings.Contains(text, old) {
+			t.Fatalf("helpText() unexpectedly contains %q in %q", old, text)
+		}
+	}
 }
 
 func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentMessage) bool, messenger *fakeMessenger) {

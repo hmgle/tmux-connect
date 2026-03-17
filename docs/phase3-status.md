@@ -9,7 +9,7 @@
 - durable `message_links` table for inbound/outbound Telegram linkage
 - idempotent session creation keyed by `telegram:<chat_id>:<pane_key>`
 - reply continuity using Telegram `reply_to_message_id`
-- session-aware reply handling for `/bind`, `/current`, `/snapshot`, `/send`, `/enter`, `/ctrlc`, and `/follow`
+- session-aware reply handling for `/select`, `/current`, `/snapshot`, `/send`, `/enter`, `/ctrlc`, and `/follow`
 - restart-safe recovery of reply targets from persisted session/message-link state
 - tests for migration, session persistence, Telegram reply targets, and follow/snapshot continuity
 
@@ -18,7 +18,7 @@
 - tmux is still the source of truth for pane identity and managed metadata
 - Telegram remains the only remote connector
 - plain relay still works for unsupported or unmanaged panes
-- non-pane-scoped commands such as `/help`, `/panes`, `/attach`, and `/detach` still use simple non-session replies
+- non-pane-scoped commands such as `/help`, `/panes`, `/clear`, and `/unmanage` still use simple non-session replies
 - `message_log` remains as a simple audit log alongside the new session/message-link tables
 
 ## Implemented But Intentionally Minimal

@@ -150,7 +150,7 @@ Telegram 消息 → getUpdates → Router 解析命令
 ### 场景 2：手机端监控多个 AI Agent 并行工作
 
 > 服务器上 3 个 tmux pane 分别跑着 Claude Code、Codex、Gemini CLI 处理不同模块。
-> Telegram 里 `/panes` 查看全部 → `/bind %5` 切到 Claude Code → `/follow on` 实时推送 →
+> Telegram 里 `/panes` 查看全部 → `/select %5` 切到 Claude Code → `/follow on` 实时推送 →
 > 发现问题 `/ctrlc` 中断 → `/send "换个方案..."` + `/enter`。
 
 **关键价值**：一个 Telegram 聊天窗口管理多个 Agent，随时切换。
@@ -300,10 +300,10 @@ tagb inspect --pane %5
 
 ```
 panes - 列出所有 pane
-attach - 管理一个 pane
-detach - 解除 pane 管理
-bind - 绑定当前聊天到 pane
-current - 查看当前绑定的 pane
+select - 选择当前聊天操作的 pane
+clear - 清空当前聊天选择的 pane
+unmanage - 解除 pane 管理
+current - 查看当前选择的 pane
 snapshot - 截取 pane 输出
 send - 向 pane 发送文本
 enter - 发送回车
@@ -388,12 +388,12 @@ tagb daemon status --db ~/.tagb/tagb.db
 ```
 第一步：查看可用 pane
 你: /panes
-Bot: Pane %5 [claude] "backend" (managed, bound)
+Bot: Pane %5 [claude] "backend" (managed, selected)
      Pane %7 [unknown] (unmanaged)
 
-第二步：绑定 pane
-你: /bind %5
-Bot: Bound to pane %5
+第二步：选择 pane
+你: /select %5
+Bot: Selected %5
 
 第三步：查看当前输出
 你: /snapshot
@@ -429,11 +429,11 @@ Bot: Follow stopped
 
 | 命令 | 语法 | 说明 |
 |------|------|------|
-| `/panes` | `/panes` | 列出所有 pane，显示管理状态、绑定信息、follow 状态 |
-| `/attach` | `/attach <pane>` | 将未管理的 pane 纳入 bridge 管理 |
-| `/detach` | `/detach <pane>` | 解除 pane 管理，清除相关聊天绑定，停止关联的 follow |
-| `/bind` | `/bind <pane>` | 将当前聊天绑定到指定的已管理 pane |
-| `/current` | `/current` | 显示当前聊天绑定的 pane |
+| `/panes` | `/panes` | 列出所有 pane，显示管理状态、选择信息、follow 状态 |
+| `/select` | `/select <pane>` | 选择当前聊天操作的 pane；若该 pane 尚未管理，会自动纳入 bridge 管理 |
+| `/clear` | `/clear` | 清空当前聊天选择的 pane，并停止该聊天的 follow |
+| `/unmanage` | `/unmanage <pane>` | 解除 pane 管理，清除相关聊天绑定，停止关联的 follow |
+| `/current` | `/current` | 显示当前聊天选择的 pane |
 
 ### 操作类命令
 
@@ -453,9 +453,9 @@ Bot: Follow stopped
 
 **注意事项：**
 
-- `/bind` 只能绑定已管理的 pane，未管理的需先 `/attach`
+- `/select` 会在需要时自动管理 pane，无需先手动 `/attach`
 - 每个聊天同一时间只能 follow 一个 pane
-- 如果当前 pane 的 tmux session 消失，daemon 会自动清除绑定并提示重新 bind
+- 如果当前 pane 的 tmux session 消失，daemon 会自动清除当前选择并提示重新 `/select`
 
 ---
 
@@ -557,10 +557,10 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
       │  "3 panes found"        │                          │
       │<────────────────────────│                          │
       │                         │                          │
-      │  /bind %5               │                          │
+      │  /select %5             │                          │
       ├────────────────────────>│                          │
-      │                         │── SQLite: save binding   │
-      │  "Bound to %5"          │                          │
+      │                         │── SQLite: save selection │
+      │  "Selected %5"          │                          │
       │<────────────────────────│                          │
       │                         │                          │
       │  /snapshot              │                          │
@@ -671,7 +671,7 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
 │                                                                    │
 │  2. 连接阶段（Telegram 端）                                        │
 │     /panes                        ← 发现可用 pane                  │
-│     /bind %5                      ← 绑定到目标 pane               │
+│     /select %5                    ← 选择目标 pane                 │
 │                                                                    │
 │  3. 工作阶段（反复循环）                                           │
 │     /snapshot                     ← 查看当前状态                   │
@@ -684,11 +684,11 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
 │                                                                    │
 │  4. 切换阶段（需要操作其他 Agent 时）                              │
 │     /panes                        ← 查看全部                       │
-│     /bind %7                      ← 切换到另一个 pane              │
+│     /select %7                    ← 切换到另一个 pane              │
 │     /snapshot                     ← 继续工作                       │
 │                                                                    │
 │  5. 结束（可选）                                                   │
-│     /detach %5                    ← 解除管理                       │
+│     /unmanage %5                  ← 解除管理                       │
 │                                                                    │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -768,10 +768,10 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
 
 1. 查看可用 pane
    你: /panes
-   Bot: %5 claude "backend" [managed] [bound]
+   Bot: %5 claude "backend" [managed] [selected]
         %7 gemini "frontend" [managed]
 
-2. 确认当前绑定
+2. 确认当前选择
    你: /current
    Bot: Current pane: %5 (claude, backend)
 
@@ -823,14 +823,14 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
 1. 查看全部
    你: /panes
    Bot: %3 codex "api-refactor" [managed]
-        %5 claude "backend-fix" [managed] [bound] [following]
+        %5 claude "backend-fix" [managed] [selected] [following]
         %7 gemini "docs-gen" [managed]
 
 2. Claude Code 任务完成，切换到 Codex
    你: /follow off
    Bot: Follow stopped
-   你: /bind %3
-   Bot: Bound to pane %3
+   你: /select %3
+   Bot: Selected %3
 
 3. 查看 Codex 进度
    你: /snapshot
@@ -844,8 +844,8 @@ curl "http://127.0.0.1:8080/v1/panes/snapshot?pane=%250&lines=50"
    Bot: Enter sent
 
 5. 切换到 Gemini 检查文档生成
-   你: /bind %7
-   Bot: Bound to pane %7
+   你: /select %7
+   Bot: Selected %7
    你: /snapshot
    Bot: ... Gemini 文档输出 ...
 ```
@@ -877,14 +877,11 @@ tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 | 网络问题 | 确认服务器能访问 Telegram API |
 | Bot token 错误 | 用 `daemon doctor` 验证 |
 
-#### `/bind` 提示 pane 未管理
+#### `/select` 首次选择未管理 pane
 
 ```bash
-# 先在服务器端 attach
-tagb attach --pane %5 --agent claude --label backend
-
-# 或者直接在 Telegram 中
-/attach %5
+# 直接在 Telegram 中选择即可，daemon 会自动 attach
+/select %5
 ```
 
 #### `/follow on` 后没有输出
@@ -907,7 +904,7 @@ tagb attach --pane %5 --agent claude --label backend
 当 tmux pane 被关闭或 tmux 会话结束：
 - Daemon 检测到 pane 不存在
 - 自动清除相关聊天的 current_pane 状态
-- 提示用户重新 bind
+- 提示用户重新 `/select`
 
 ### 退出码参考
 

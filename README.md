@@ -77,7 +77,7 @@ go run ./cmd/tagb serve --listen 127.0.0.1:8080
 
 ## Telegram Relay Daemon
 
-The daemon keeps a Telegram bot connected and routes command-style chat operations to the currently bound tmux pane.
+The daemon keeps a Telegram bot connected and routes command-style chat operations to the currently selected tmux pane.
 
 Requirements:
 
@@ -106,9 +106,9 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 Supported Telegram commands:
 
 - `/panes`
-- `/attach <pane>`
-- `/detach <pane>`
-- `/bind <pane>`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
 - `/current`
 - `/snapshot [lines] [image|text]`
 - `/send <text>`

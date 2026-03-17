@@ -64,12 +64,12 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.replyBus.Reply(ctx, message.ChatID, "", "help", helpText())
 	case "/panes":
 		return r.handlePanes(ctx, message)
-	case "/attach":
-		return r.handleAttach(ctx, message, args)
-	case "/detach":
-		return r.handleDetach(ctx, message, args)
-	case "/bind":
-		return r.handleBind(ctx, message, args)
+	case "/select":
+		return r.handleSelect(ctx, message, args)
+	case "/clear":
+		return r.handleClear(ctx, message)
+	case "/unmanage":
+		return r.handleUnmanage(ctx, message, args)
 	case "/current":
 		return r.handleCurrent(ctx, message)
 	case "/snapshot":
@@ -103,9 +103,9 @@ func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error
 		return err
 	}
 
-	boundSet := make(map[string]struct{}, len(bindings))
+	selectedSet := make(map[string]struct{}, len(bindings))
 	for _, binding := range bindings {
-		boundSet[binding] = struct{}{}
+		selectedSet[binding] = struct{}{}
 	}
 
 	var lines []string
@@ -118,8 +118,8 @@ func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error
 		} else {
 			flags = append(flags, "unmanaged")
 		}
-		if _, ok := boundSet[key]; ok {
-			flags = append(flags, "bound")
+		if _, ok := selectedSet[key]; ok {
+			flags = append(flags, "selected")
 		}
 		if key == current {
 			flags = append(flags, "current")
@@ -139,27 +139,12 @@ func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error
 	return r.replyBus.Reply(ctx, chatID, "", "panes", strings.Join(lines, "\n"))
 }
 
-func (r *Router) handleAttach(ctx context.Context, message IncomingMessage, args string) error {
+func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, args string) error {
 	chatID := message.ChatID
 	r.logInbound(ctx, message, "", "")
 	ref := strings.TrimSpace(args)
 	if ref == "" {
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /attach <pane>")
-	}
-	record, err := r.service.Attach(ctx, ref, "unknown", "")
-	if err != nil {
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("attach failed: %v", err))
-	}
-	r.registry.MarkDirty()
-	return r.replyBus.Reply(ctx, chatID, "", "attach", fmt.Sprintf("attached %s", record.Info.Target.PaneKey()))
-}
-
-func (r *Router) handleDetach(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
-	r.logInbound(ctx, message, "", "")
-	ref := strings.TrimSpace(args)
-	if ref == "" {
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /detach <pane>")
+		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /unmanage <pane>")
 	}
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
@@ -167,7 +152,7 @@ func (r *Router) handleDetach(ctx context.Context, message IncomingMessage, args
 	}
 	paneKey := record.Info.Target.PaneKey()
 	if err := r.service.Detach(ctx, ref); err != nil {
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("detach failed: %v", err))
+		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("unmanage failed: %v", err))
 	}
 	var cleanupErrs []string
 	if err := r.store.UnbindPaneEverywhere(ctx, paneKey); err != nil {
@@ -176,17 +161,17 @@ func (r *Router) handleDetach(ctx context.Context, message IncomingMessage, args
 	r.follow.StopPane(paneKey)
 	r.registry.MarkDirty()
 	if len(cleanupErrs) > 0 {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("detached %s but cleanup was incomplete: %s", paneKey, strings.Join(cleanupErrs, "; ")))
+		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("unmanaged %s but cleanup was incomplete: %s", paneKey, strings.Join(cleanupErrs, "; ")))
 	}
-	return r.replyBus.Reply(ctx, chatID, "", "detach", fmt.Sprintf("detached %s", paneKey))
+	return r.replyBus.Reply(ctx, chatID, "", "unmanage", fmt.Sprintf("unmanaged %s", paneKey))
 }
 
-func (r *Router) handleBind(ctx context.Context, message IncomingMessage, args string) error {
+func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args string) error {
 	chatID := message.ChatID
 	ref := strings.TrimSpace(args)
 	if ref == "" {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /bind <pane>")
+		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /select <pane>")
 	}
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
@@ -194,8 +179,12 @@ func (r *Router) handleBind(ctx context.Context, message IncomingMessage, args s
 		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("inspect failed: %v", err))
 	}
 	if !record.Metadata.Managed {
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "error", "pane is not managed; run /attach first")
+		record, err = r.service.Attach(ctx, ref, "unknown", "")
+		if err != nil {
+			r.logInbound(ctx, message, "", "")
+			return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("select failed: %v", err))
+		}
+		r.registry.MarkDirty()
 	}
 	paneKey := record.Info.Target.PaneKey()
 	if err := r.store.BindPane(ctx, chatID, paneKey); err != nil {
@@ -210,7 +199,25 @@ func (r *Router) handleBind(ctx context.Context, message IncomingMessage, args s
 			return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("follow switch failed: %v", err))
 		}
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "bind", fmt.Sprintf("bound current chat to %s", paneKey))
+	return r.replyBus.Reply(ctx, chatID, paneKey, "select", fmt.Sprintf("selected %s", paneKey))
+}
+
+func (r *Router) handleClear(ctx context.Context, message IncomingMessage) error {
+	chatID := message.ChatID
+	current, err := r.store.CurrentPane(ctx, chatID)
+	if err != nil {
+		return err
+	}
+	if current == "" {
+		r.logInbound(ctx, message, "", "")
+		return r.replyBus.Reply(ctx, chatID, "", "clear", "no pane is currently selected")
+	}
+	if err := r.store.SetCurrentPane(ctx, chatID, ""); err != nil {
+		return err
+	}
+	r.follow.Disable(chatID)
+	r.logInbound(ctx, message, current, "")
+	return r.replyBus.Reply(ctx, chatID, current, "clear", "cleared current pane")
 }
 
 func (r *Router) handleCurrent(ctx context.Context, message IncomingMessage) error {
@@ -221,7 +228,7 @@ func (r *Router) handleCurrent(ctx context.Context, message IncomingMessage) err
 	}
 	if current == "" {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "current", "no pane is currently bound")
+		return r.replyBus.Reply(ctx, chatID, "", "current", "no pane is currently selected")
 	}
 	r.logInbound(ctx, message, current, "")
 	record, err := r.service.Inspect(ctx, current)
@@ -343,7 +350,7 @@ func (r *Router) requireCurrentPane(ctx context.Context, chatID int64) (string, 
 		return "", err
 	}
 	if strings.TrimSpace(current) == "" {
-		return "", fmt.Errorf("no current pane; run /bind <pane> first")
+		return "", fmt.Errorf("no current pane; run /select <pane> first")
 	}
 	record, err := r.service.Inspect(ctx, current)
 	if err != nil {
@@ -507,9 +514,9 @@ func helpText() string {
 	return strings.Join([]string{
 		"Commands:",
 		"/panes",
-		"/attach <pane>",
-		"/detach <pane>",
-		"/bind <pane>",
+		"/select <pane>",
+		"/clear",
+		"/unmanage <pane>",
 		"/current",
 		"/snapshot [lines] [image|text]",
 		"/send <text>",

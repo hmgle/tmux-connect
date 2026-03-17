@@ -59,20 +59,20 @@ Print the supported command list.
 Lists visible panes and marks:
 
 - `managed` or `unmanaged`
-- `bound` for the current chat
+- `selected` for the current chat
 - `current` for the current pane
 
-### `/attach <pane>`
+### `/select <pane>`
 
-Marks an existing pane as managed using the current relay metadata model.
+Selects the current Telegram chat's pane. If the pane is not managed yet, the daemon first marks it as managed using the current relay metadata model.
 
-### `/detach <pane>`
+### `/clear`
 
-Detaches a pane, clears chat bindings that point to it, and stops follow sessions attached to it.
+Clears the current pane for the current Telegram chat and stops that chat's active follow session.
 
-### `/bind <pane>`
+### `/unmanage <pane>`
 
-Binds the current Telegram chat to a managed pane and sets it as the current pane.
+Unmanages a pane, clears chat bindings that point to it, and stops follow sessions attached to it.
 
 ### `/current`
 
