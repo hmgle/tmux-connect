@@ -26,6 +26,7 @@ type PaneInfo struct {
 	WindowName  string `json:"window_name"`
 	PaneTitle   string `json:"pane_title"`
 	CurrentCmd  string `json:"current_cmd"`
+	CurrentPath string `json:"current_path"`
 	Dead        bool   `json:"dead"`
 	Width       int    `json:"width"`
 	Height      int    `json:"height"`

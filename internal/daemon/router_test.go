@@ -82,6 +82,7 @@ func newFakePaneService() *fakePaneService {
 			SessionName: "dev",
 			WindowName:  "shell",
 			CurrentCmd:  "codex",
+			CurrentPath: "/home/gle/tmp/ext4/data/codedata/ai-hub/tmux-connect",
 		},
 		Metadata: tmux.BridgeMetadata{Managed: true, Agent: tmux.AgentCodex, Mode: tmux.ModeRelay},
 	}
@@ -141,8 +142,14 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	}
 	messages := messenger.snapshot()
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, "selected") {
-		t.Fatalf("last panes message = %q, want selected flag", last.Text)
+	if !strings.Contains(last.Text, "Now | Pane | Cmd | Dir | Where") {
+		t.Fatalf("last panes message = %q, want friendly header", last.Text)
+	}
+	if !strings.Contains(last.Text, "👉 | %5 | codex | tmux-connect | dev/shell") {
+		t.Fatalf("last panes message = %q, want current pane row", last.Text)
+	}
+	if strings.Contains(last.Text, "managed") || strings.Contains(last.Text, "selected") {
+		t.Fatalf("last panes message = %q, want internal flags removed", last.Text)
 	}
 
 	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/panes"}); err != nil {
@@ -308,6 +315,27 @@ func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
 	last := messages[len(messages)-1]
 	if !strings.Contains(last.Text, "selected default:%5") {
 		t.Fatalf("last message = %q, want select confirmation", last.Text)
+	}
+}
+
+func TestFormatPaneListShortensLongDirectoryNames(t *testing.T) {
+	t.Parallel()
+
+	text := formatPaneList([]tagb.PaneRecord{{
+		Info: tmux.PaneInfo{
+			Target:      tmux.Target{Socket: "default", PaneID: "%7"},
+			SessionName: "workspace",
+			WindowName:  "review",
+			CurrentCmd:  "claude",
+			CurrentPath: "/srv/very-long-directory-name-for-agents",
+		},
+	}}, "default:%7", false)
+
+	if !strings.Contains(text, "👉 | %7 | claude | very-...agents | workspace/review") {
+		t.Fatalf("formatPaneList() = %q, want shortened directory name", text)
+	}
+	if !strings.Contains(text, "Current: %7 | Follow: off") {
+		t.Fatalf("formatPaneList() = %q, want summary line", text)
 	}
 }
 

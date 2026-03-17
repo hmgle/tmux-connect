@@ -384,6 +384,7 @@ func paneListFormat() string {
 		"#{window_name}",
 		"#{pane_title}",
 		"#{pane_current_command}",
+		"#{pane_current_path}",
 		"#{pane_dead}",
 		"#{pane_width}",
 		"#{pane_height}",
@@ -398,6 +399,7 @@ func paneStateFormat() string {
 		"#{window_name}",
 		"#{pane_title}",
 		"#{pane_current_command}",
+		"#{pane_current_path}",
 		"#{pane_dead}",
 		"#{pane_width}",
 		"#{pane_height}",
@@ -411,28 +413,28 @@ func paneStateFormat() string {
 }
 
 func parsePaneStateLine(socket string, line string) (PaneInfo, BridgeMetadata, error) {
-	fields := splitPaneFields(line, 15)
-	if len(fields) != 15 {
+	fields := splitPaneFields(line, 16)
+	if len(fields) != 16 {
 		return PaneInfo{}, BridgeMetadata{}, fmt.Errorf("unexpected list-panes row: %q", line)
 	}
-	info, err := buildPaneInfo(socket, fields[:9])
+	info, err := buildPaneInfo(socket, fields[:10])
 	if err != nil {
 		return PaneInfo{}, BridgeMetadata{}, err
 	}
 	meta := MetadataFromOptions(map[string]string{
-		OptionManaged:      fields[9],
-		OptionMode:         fields[10],
-		OptionAgent:        fields[11],
-		OptionLabel:        fields[12],
-		OptionCreatedBy:    fields[13],
-		OptionLastActivity: fields[14],
+		OptionManaged:      fields[10],
+		OptionMode:         fields[11],
+		OptionAgent:        fields[12],
+		OptionLabel:        fields[13],
+		OptionCreatedBy:    fields[14],
+		OptionLastActivity: fields[15],
 	})
 	return info, meta, nil
 }
 
 func parsePaneInfoLine(socket string, line string) (PaneInfo, error) {
-	fields := splitPaneFields(line, 9)
-	if len(fields) != 9 {
+	fields := splitPaneFields(line, 10)
+	if len(fields) != 10 {
 		return PaneInfo{}, fmt.Errorf("unexpected list-panes row: %q", line)
 	}
 	return buildPaneInfo(socket, fields)
@@ -453,11 +455,11 @@ func splitPaneFields(line string, expected int) []string {
 }
 
 func buildPaneInfo(socket string, fields []string) (PaneInfo, error) {
-	width, err := strconv.Atoi(fields[7])
+	width, err := strconv.Atoi(fields[8])
 	if err != nil {
 		return PaneInfo{}, fmt.Errorf("parse width for %s: %w", fields[0], err)
 	}
-	height, err := strconv.Atoi(fields[8])
+	height, err := strconv.Atoi(fields[9])
 	if err != nil {
 		return PaneInfo{}, fmt.Errorf("parse height for %s: %w", fields[0], err)
 	}
@@ -468,7 +470,8 @@ func buildPaneInfo(socket string, fields []string) (PaneInfo, error) {
 		WindowName:  fields[3],
 		PaneTitle:   fields[4],
 		CurrentCmd:  fields[5],
-		Dead:        fields[6] == "1",
+		CurrentPath: fields[6],
+		Dead:        fields[7] == "1",
 		Width:       width,
 		Height:      height,
 	}, nil

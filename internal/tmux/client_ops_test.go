@@ -80,7 +80,7 @@ func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 			if len(args) < 4 || args[0] != "list-panes" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -112,7 +112,7 @@ func TestGetPaneUsesTargetedListCommand(t *testing.T) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n"), nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -138,8 +138,8 @@ func TestGetPaneFiltersTargetedListToRequestedPane(t *testing.T) {
 				t.Fatalf("unexpected command: %v", args)
 			}
 			return stdoutResult(strings.Join([]string{
-				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f0\x1f120\x1f40",
-				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f0\x1f120\x1f40",
+				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f/home/gle/left\x1f0\x1f120\x1f40",
+				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f/home/gle/right\x1f0\x1f120\x1f40",
 			}, "\n") + "\n"), nil
 		},
 	}
@@ -162,7 +162,7 @@ func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
-			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
+			return stdoutResult("%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"), nil
 		},
 	}
 	client := NewClient(runner, "")
@@ -188,8 +188,8 @@ func TestGetPaneStateFiltersTargetedListToRequestedPane(t *testing.T) {
 				t.Fatalf("unexpected command: %v", args)
 			}
 			return stdoutResult(strings.Join([]string{
-				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fold\x1fmanual-attach\x1f1700000000",
-				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fnew\x1fmanual-attach\x1f1700000001",
+				"%489\x1fdev\x1f@1\x1fshell\x1fleft\x1fzsh\x1f/home/gle/left\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fold\x1fmanual-attach\x1f1700000000",
+				"%507\x1fdev\x1f@1\x1fshell\x1fright\x1fcodex\x1f/home/gle/right\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fnew\x1fmanual-attach\x1f1700000001",
 			}, "\n") + "\n"), nil
 		},
 	}
@@ -207,7 +207,7 @@ func TestGetPaneStateFiltersTargetedListToRequestedPane(t *testing.T) {
 func TestParsePaneInfoLineAcceptsEscapedSeparator(t *testing.T) {
 	t.Parallel()
 
-	line := `%1\0372\037@1\037zsh\037gle@host:~/proj\037zsh\0370\03780\03722`
+	line := `%1\0372\037@1\037zsh\037gle@host:~/proj\037zsh\037/home/gle/proj\0370\03780\03722`
 
 	pane, err := parsePaneInfoLine("default", line)
 	if err != nil {
@@ -215,6 +215,9 @@ func TestParsePaneInfoLineAcceptsEscapedSeparator(t *testing.T) {
 	}
 	if pane.Target.PaneID != "%1" || pane.SessionName != "2" {
 		t.Fatalf("unexpected pane %#v", pane)
+	}
+	if pane.CurrentPath != "/home/gle/proj" {
+		t.Fatalf("current path = %q, want %q", pane.CurrentPath, "/home/gle/proj")
 	}
 	if pane.Width != 80 || pane.Height != 22 {
 		t.Fatalf("unexpected size %#v", pane)
@@ -224,7 +227,7 @@ func TestParsePaneInfoLineAcceptsEscapedSeparator(t *testing.T) {
 func TestParsePaneStateLineAcceptsEscapedSeparator(t *testing.T) {
 	t.Parallel()
 
-	line := `%5\037dev\037@1\037shell\037api\037zsh\0370\037120\03740\0371\037relay\037codex\037backend\037manual-attach\0371700000000`
+	line := `%5\037dev\037@1\037shell\037api\037zsh\037/home/gle/project\0370\037120\03740\0371\037relay\037codex\037backend\037manual-attach\0371700000000`
 
 	pane, meta, err := parsePaneStateLine("default", line)
 	if err != nil {
@@ -232,6 +235,9 @@ func TestParsePaneStateLineAcceptsEscapedSeparator(t *testing.T) {
 	}
 	if pane.Target.PaneID != "%5" || pane.WindowName != "shell" {
 		t.Fatalf("unexpected pane %#v", pane)
+	}
+	if pane.CurrentPath != "/home/gle/project" {
+		t.Fatalf("current path = %q, want %q", pane.CurrentPath, "/home/gle/project")
 	}
 	if !meta.Managed || meta.Agent != AgentCodex || meta.Label != "backend" {
 		t.Fatalf("unexpected metadata %#v", meta)
@@ -550,7 +556,7 @@ func TestStartControlSubscriptionUsesSessionScopedPaneListAndWaitsForExitOnClose
 				if len(args) < 4 || args[1] != "-t" || args[2] != "dev" {
 					t.Fatalf("expected session-scoped list-panes, got %v", args)
 				}
-				return stdoutResult("%9\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n%10\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f0\x1f120\x1f40\n"), nil
+				return stdoutResult("%9\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/nine\x1f0\x1f120\x1f40\n%10\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/ten\x1f0\x1f120\x1f40\n"), nil
 			case "refresh-client":
 				return RunResult{}, nil
 			case "detach-client":

@@ -3,11 +3,13 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/portgle/tmux-connect/internal/tagb"
+	"github.com/portgle/tmux-connect/internal/tmux"
 )
 
 type IncomingMessage struct {
@@ -94,49 +96,11 @@ func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error
 	if err := r.registry.Refresh(ctx); err != nil {
 		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("list panes failed: %v", err))
 	}
-	bindings, err := r.store.ListBindings(ctx, chatID)
-	if err != nil {
-		return err
-	}
 	current, err := r.store.CurrentPane(ctx, chatID)
 	if err != nil {
 		return err
 	}
-
-	selectedSet := make(map[string]struct{}, len(bindings))
-	for _, binding := range bindings {
-		selectedSet[binding] = struct{}{}
-	}
-
-	var lines []string
-	lines = append(lines, "Panes:")
-	for _, record := range r.registry.All() {
-		key := record.Info.Target.PaneKey()
-		flags := make([]string, 0, 3)
-		if record.Metadata.Managed {
-			flags = append(flags, "managed")
-		} else {
-			flags = append(flags, "unmanaged")
-		}
-		if _, ok := selectedSet[key]; ok {
-			flags = append(flags, "selected")
-		}
-		if key == current {
-			flags = append(flags, "current")
-		}
-		label := strings.TrimSpace(record.Metadata.Label)
-		if label == "" {
-			label = record.Info.CurrentCmd
-		}
-		lines = append(lines, fmt.Sprintf("- %s [%s] %s (%s/%s)", key, strings.Join(flags, ","), label, record.Info.SessionName, record.Info.WindowName))
-	}
-	if current == "" {
-		lines = append(lines, "", "Current: none")
-	} else {
-		lines = append(lines, "", "Current: "+current)
-	}
-	lines = append(lines, "Follow: "+onOff(r.follow.IsEnabled(chatID)))
-	return r.replyBus.Reply(ctx, chatID, "", "panes", strings.Join(lines, "\n"))
+	return r.replyBus.Reply(ctx, chatID, "", "panes", formatPaneList(r.registry.All(), current, r.follow.IsEnabled(chatID)))
 }
 
 func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, args string) error {
@@ -498,16 +462,106 @@ func parseSnapshotArgs(value string, fallbackLines int) (int, snapshotMode, erro
 
 func formatCurrent(record tagb.PaneRecord, following bool) string {
 	lines := []string{
-		"Current pane: " + record.Info.Target.PaneKey(),
-		"Session: " + record.Info.SessionName,
-		"Window: " + record.Info.WindowName,
-		"Command: " + record.Info.CurrentCmd,
-		"Managed: " + onOff(record.Metadata.Managed),
-		"Agent: " + string(record.Metadata.Agent),
-		"Label: " + strings.TrimSpace(record.Metadata.Label),
+		"Current pane: " + displayPaneKey(record.Info.Target.PaneKey()),
+		"Where: " + formatPaneWhere(record.Info),
+		"Command: " + displayValue(record.Info.CurrentCmd),
+		"Dir: " + formatPaneDir(record.Info.CurrentPath),
 		"Follow: " + onOff(following),
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatPaneList(records []tagb.PaneRecord, current string, following bool) string {
+	lines := []string{
+		"Panes:",
+		"Now | Pane | Cmd | Dir | Where",
+	}
+	if len(records) == 0 {
+		lines = append(lines, "- | none | - | - | -")
+	} else {
+		for _, record := range records {
+			marker := "·"
+			if record.Info.Target.PaneKey() == current {
+				marker = "👉"
+			}
+			lines = append(lines, strings.Join([]string{
+				marker,
+				displayPaneKey(record.Info.Target.PaneKey()),
+				shortenDisplay(displayValue(record.Info.CurrentCmd), 16),
+				formatPaneDir(record.Info.CurrentPath),
+				shortenDisplay(formatPaneWhere(record.Info), 20),
+			}, " | "))
+		}
+	}
+	lines = append(lines, "", fmt.Sprintf("Current: %s | Follow: %s", displayCurrent(current), onOff(following)))
+	return strings.Join(lines, "\n")
+}
+
+func displayCurrent(current string) string {
+	current = strings.TrimSpace(current)
+	if current == "" {
+		return "none"
+	}
+	return displayPaneKey(current)
+}
+
+func displayPaneKey(paneKey string) string {
+	paneKey = strings.TrimSpace(paneKey)
+	if paneKey == "" {
+		return "-"
+	}
+	if strings.HasPrefix(paneKey, "default:") {
+		return strings.TrimPrefix(paneKey, "default:")
+	}
+	return paneKey
+}
+
+func formatPaneDir(currentPath string) string {
+	currentPath = strings.TrimSpace(currentPath)
+	if currentPath == "" {
+		return "-"
+	}
+	dirName := filepath.Base(filepath.Clean(currentPath))
+	if strings.TrimSpace(dirName) == "" {
+		dirName = currentPath
+	}
+	return shortenDisplay(dirName, 14)
+}
+
+func formatPaneWhere(info tmux.PaneInfo) string {
+	return strings.TrimSpace(displayValue(info.SessionName) + "/" + displayValue(info.WindowName))
+}
+
+func displayValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "-"
+	}
+	return value
+}
+
+func shortenDisplay(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "-"
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes || maxRunes <= 0 {
+		return value
+	}
+	if maxRunes <= 3 {
+		return string(runes[:maxRunes])
+	}
+	remaining := maxRunes - 3
+	prefix := remaining / 2
+	suffix := remaining - prefix
+	if prefix == 0 {
+		return "..." + string(runes[len(runes)-suffix:])
+	}
+	if suffix == 0 {
+		return string(runes[:prefix]) + "..."
+	}
+	return string(runes[:prefix]) + "..." + string(runes[len(runes)-suffix:])
 }
 
 func helpText() string {
