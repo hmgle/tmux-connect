@@ -201,6 +201,65 @@ func TestSendMessageWithParseMode(t *testing.T) {
 	}
 }
 
+func TestSetMyCommands(t *testing.T) {
+	t.Parallel()
+
+	var gotPath string
+	var gotCommands []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		var ok bool
+		gotCommands, ok = payload["commands"].([]map[string]any)
+		if !ok {
+			raw, ok := payload["commands"].([]any)
+			if !ok {
+				t.Fatalf("commands = %#v, want array", payload["commands"])
+			}
+			gotCommands = make([]map[string]any, 0, len(raw))
+			for _, item := range raw {
+				command, ok := item.(map[string]any)
+				if !ok {
+					t.Fatalf("command item = %#v, want object", item)
+				}
+				gotCommands = append(gotCommands, command)
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": true,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("token", WithBaseURL(server.URL))
+	err := client.SetMyCommands(context.Background(), []BotCommand{
+		{Command: "start", Description: "Show quick start and commands"},
+		{Command: "panes", Description: "List managed panes"},
+	})
+	if err != nil {
+		t.Fatalf("SetMyCommands() error = %v", err)
+	}
+	if gotPath != "/bottoken/setMyCommands" {
+		t.Fatalf("path = %q, want %q", gotPath, "/bottoken/setMyCommands")
+	}
+	if len(gotCommands) != 2 {
+		t.Fatalf("commands len = %d, want 2", len(gotCommands))
+	}
+	if gotCommands[0]["command"] != "start" {
+		t.Fatalf("first command = %#v, want %q", gotCommands[0]["command"], "start")
+	}
+	if gotCommands[0]["description"] != "Show quick start and commands" {
+		t.Fatalf("first description = %#v, want %q", gotCommands[0]["description"], "Show quick start and commands")
+	}
+	if gotCommands[1]["command"] != "panes" {
+		t.Fatalf("second command = %#v, want %q", gotCommands[1]["command"], "panes")
+	}
+}
+
 func TestSendPhoto(t *testing.T) {
 	t.Parallel()
 

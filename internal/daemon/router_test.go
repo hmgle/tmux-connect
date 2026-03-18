@@ -753,7 +753,7 @@ func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
 	t.Parallel()
 
 	text := helpText()
-	for _, want := range []string{"/select <pane>", "/clear", "/unmanage <pane>"} {
+	for _, want := range []string{"/start", "/help", "/select <pane>", "/clear", "/unmanage <pane>"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("helpText() missing %q in %q", want, text)
 		}
@@ -762,6 +762,27 @@ func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
 		if strings.Contains(text, old) {
 			t.Fatalf("helpText() unexpectedly contains %q in %q", old, text)
 		}
+	}
+}
+
+func TestTelegramMenuCommandsMatchHelp(t *testing.T) {
+	t.Parallel()
+
+	commands := telegramMenuCommands()
+	if len(commands) != len(daemonCommandSpecs()) {
+		t.Fatalf("commands len = %d, want %d", len(commands), len(daemonCommandSpecs()))
+	}
+	if commands[0].Command != "start" || commands[0].Description == "" {
+		t.Fatalf("first command = %#v, want start with description", commands[0])
+	}
+	if commands[len(commands)-1].Command != "follow" {
+		t.Fatalf("last command = %#v, want follow", commands[len(commands)-1])
+	}
+	for _, command := range commands {
+		if strings.Contains(helpText(), "/"+command.Command) {
+			continue
+		}
+		t.Fatalf("helpText() missing command /%s", command.Command)
 	}
 }
 

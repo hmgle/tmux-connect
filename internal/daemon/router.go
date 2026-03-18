@@ -614,22 +614,6 @@ func shortenDisplay(value string, maxRunes int) string {
 	return string(runes[:prefix]) + "..." + string(runes[len(runes)-suffix:])
 }
 
-func helpText() string {
-	return strings.Join([]string{
-		"Commands:",
-		"/panes",
-		"/select <pane>",
-		"/clear",
-		"/unmanage <pane>",
-		"/current",
-		"/snapshot [lines] [image|text]",
-		"/send <text>",
-		"/enter",
-		"/ctrlc",
-		"/follow on [interval]|off",
-	}, "\n")
-}
-
 func onOff(value bool) string {
 	if value {
 		return "on"

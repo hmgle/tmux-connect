@@ -116,6 +116,15 @@ type SendOptions struct {
 	ParseMode        ParseMode
 }
 
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type setMyCommandsRequest struct {
+	Commands []BotCommand `json:"commands"`
+}
+
 type apiResponse[T any] struct {
 	OK          bool   `json:"ok"`
 	Description string `json:"description"`
@@ -173,6 +182,12 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, opt
 		return Message{}, err
 	}
 	return resp.Result, nil
+}
+
+func (c *Client) SetMyCommands(ctx context.Context, commands []BotCommand) error {
+	req := setMyCommandsRequest{Commands: append([]BotCommand(nil), commands...)}
+	var resp apiResponse[bool]
+	return c.call(ctx, "setMyCommands", req, &resp)
 }
 
 func (c *Client) SendPhoto(ctx context.Context, chatID int64, fileName string, photo []byte, caption string, opts SendOptions) (Message, error) {
@@ -301,6 +316,10 @@ func (c *Client) do(req *http.Request, method string, dest any) error {
 			return fmt.Errorf("telegram %s failed: %s", method, strings.TrimSpace(value.Description))
 		}
 	case *apiResponse[Message]:
+		if !value.OK {
+			return fmt.Errorf("telegram %s failed: %s", method, strings.TrimSpace(value.Description))
+		}
+	case *apiResponse[bool]:
 		if !value.OK {
 			return fmt.Errorf("telegram %s failed: %s", method, strings.TrimSpace(value.Description))
 		}

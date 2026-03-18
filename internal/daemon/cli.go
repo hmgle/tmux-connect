@@ -37,8 +37,16 @@ type Runtime struct {
 	store    *Store
 	router   *Router
 	follow   *FollowManager
-	client   *telegram.Client
+	client   telegramBot
 	stderr   io.Writer
+}
+
+type telegramBot interface {
+	messenger
+	PollTimeout() time.Duration
+	DrainPendingUpdates(context.Context) (int64, error)
+	GetUpdates(context.Context, int64, time.Duration) ([]telegram.Update, error)
+	SetMyCommands(context.Context, []telegram.BotCommand) error
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
@@ -173,6 +181,9 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
+	if err := r.client.SetMyCommands(ctx, telegramMenuCommands()); err != nil {
+		return tagb.TmuxError("configure telegram commands: %v", err)
+	}
 	offset, err := r.client.DrainPendingUpdates(ctx)
 	if err != nil {
 		return tagb.TmuxError("drain telegram updates: %v", err)
