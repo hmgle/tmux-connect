@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
 type fakeRunner struct {

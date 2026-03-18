@@ -210,7 +210,7 @@ Telegram 消息 → getUpdates → Router 解析命令
 
 ```bash
 # 克隆仓库
-git clone https://github.com/portgle/tmux-connect.git
+git clone https://github.com/hmgle/tmux-connect.git
 cd tmux-connect
 
 # 验证 Go 版本

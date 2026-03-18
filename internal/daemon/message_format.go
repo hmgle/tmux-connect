@@ -4,7 +4,7 @@ import (
 	"html"
 	"strings"
 
-	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/telegram"
 )
 
 func decorateTelegramMessage(kind string, text string, opts telegram.SendOptions) (string, telegram.SendOptions) {

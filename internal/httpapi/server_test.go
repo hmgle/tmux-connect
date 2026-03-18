@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portgle/tmux-connect/internal/tagb"
-	"github.com/portgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
 type stubService struct {

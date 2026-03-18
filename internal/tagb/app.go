@@ -10,7 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/portgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
 type App struct {

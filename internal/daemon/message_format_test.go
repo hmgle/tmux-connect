@@ -3,7 +3,7 @@ package daemon
 import (
 	"testing"
 
-	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/telegram"
 )
 
 func TestDecorateTelegramMessageForTerminalOutput(t *testing.T) {

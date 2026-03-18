@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/portgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tagb"
 )
 
 type BridgeService interface {

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/portgle/tmux-connect/internal/daemon"
-	"github.com/portgle/tmux-connect/internal/httpapi"
-	"github.com/portgle/tmux-connect/internal/tagb"
-	"github.com/portgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/daemon"
+	"github.com/hmgle/tmux-connect/internal/httpapi"
+	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
 func main() {

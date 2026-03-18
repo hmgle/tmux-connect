@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/telegram"
 	"golang.org/x/image/font/gofont/gomono"
 )
 

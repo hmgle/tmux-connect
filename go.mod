@@ -1,4 +1,4 @@
-module github.com/portgle/tmux-connect
+module github.com/hmgle/tmux-connect
 
 go 1.25.0
 

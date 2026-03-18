@@ -3,7 +3,7 @@ package daemon
 import (
 	"strings"
 
-	"github.com/portgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/telegram"
 )
 
 type botCommandSpec struct {

@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/portgle/tmux-connect/internal/telegram"
-	"github.com/portgle/tmux-connect/internal/termrender"
+	"github.com/hmgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/termrender"
 )
 
 type messenger interface {
