@@ -2,39 +2,34 @@
 
 ## Prerequisites
 
-- `tmux` is installed and your target pane already exists
+- `tmux` is installed and the target pane already exists
 - `sqlite3` is installed and available in `PATH`
-- you have created a Telegram bot through BotFather
-- you know the Telegram chat ID you want to allow, if using `--allow-chat`
+- you have a Telegram bot token from BotFather
+- you know the Telegram `chat_id` you want to allow if you plan to use `--allow-chat`
 
 ## Optional Local Preparation
 
-1. If you want to pre-label a pane before using Telegram, attach it locally:
+You can pre-manage a pane locally, or let Telegram manage it on first `/select`.
 
 ```bash
 go run ./cmd/tagb attach --pane %5 --agent codex --label backend
-```
-
-2. Verify that the pane is managed:
-
-```bash
 go run ./cmd/tagb inspect --pane %5
 ```
 
-You can skip this section entirely and let `/select <pane>` auto-manage the pane from Telegram.
-
 ## Start the Daemon
 
-Using an env var:
+Using environment variables:
 
 ```bash
 export TAGB_TELEGRAM_TOKEN=123456:example-token
+export TAGB_DB_PATH="$HOME/.tagb/tagb.db"
 export TAGB_TELEGRAM_SNAPSHOT_THEME=light
 export TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE=16
-go run ./cmd/tagb daemon run --db ~/.tagb/tagb.db --allow-chat 123456789
+
+go run ./cmd/tagb daemon run --allow-chat 123456789
 ```
 
-Using a flag:
+Using explicit flags:
 
 ```bash
 go run ./cmd/tagb daemon run \
@@ -43,18 +38,45 @@ go run ./cmd/tagb daemon run \
   --telegram-snapshot-theme light \
   --telegram-snapshot-font-size 16 \
   --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
+  --follow-lines 80 \
+  --follow-min-interval 700ms \
   --allow-chat 123456789
 ```
 
+Useful daemon flags:
+
+- `--telegram-token TOKEN`
+- `--db PATH`
+- `--allow-chat CHAT_ID`
+- `--poll-timeout 20s`
+- `--snapshot-lines 120`
+- `--telegram-snapshot-theme dark|light`
+- `--telegram-snapshot-font-size 14`
+- `--telegram-snapshot-font-file /path/to/font.ttf`
+- `--follow-lines 80`
+- `--follow-min-interval 700ms`
+- `--follow-debug`
+- `--telegram-api-base URL`
+
+Supported environment variables:
+
+- `TAGB_TELEGRAM_TOKEN`
+- `TAGB_DB_PATH`
+- `TAGB_TELEGRAM_SNAPSHOT_THEME`
+- `TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE`
+- `TAGB_TELEGRAM_SNAPSHOT_FONT_FILE`
+- `TAGB_TELEGRAM_API_BASE`
+- `TAGB_FOLLOW_DEBUG`
+
 ## Health Checks
 
-Validate the runtime prerequisites:
+Validate runtime prerequisites:
 
 ```bash
 go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 ```
 
-Inspect persisted state and current managed pane count:
+Inspect stored state and current managed pane count:
 
 ```bash
 go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
@@ -62,6 +84,8 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 
 ## Telegram Commands
 
+- `/start`
+- `/help`
 - `/panes`
 - `/select <pane>`
 - `/clear`
@@ -70,28 +94,29 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - `/snapshot [lines] [image|text]`
 - `/send <text>`
 - `/enter`
-- `/ctrlc`
-- `/follow on|off`
+- `/ctrlc` or `/ctrl-c`
+- `/follow on [interval]|off`
+
+If `/select`, `/unmanage`, `/send`, or `/follow` is sent without arguments, the bot prompts with Telegram `ForceReply` and waits for the missing value.
 
 ## Typical Flow
 
-1. Start the daemon
-2. Open the bot in Telegram
-3. Run `/panes`
-4. Select a pane with `/select %5`
-5. Inspect the current pane with `/current`
-6. Read output with `/snapshot`
-7. Continue the session with `/send continue`
-8. Use `/follow on` when you want pushed output updates
+1. Start the daemon.
+2. Open the bot in Telegram and send `/panes`.
+3. Select a pane with `/select %5`.
+4. Check the current selection with `/current`.
+5. Read output with `/snapshot` or `/snapshot text`.
+6. Send input with `/send continue`.
+7. Press Enter with `/enter`.
+8. Enable follow mode with `/follow on` or `/follow on 2s`.
 
 ## Operational Notes
 
-- If `--allow-chat` is used, chats not in the allowlist are rejected
-- `/select` automatically manages the pane if it is not already managed
-- `/clear` only clears the current pane for the current chat and stops that chat's active follow session
-- `/snapshot` defaults to `image`; use `/snapshot text` to receive Telegram text instead of an image
+- if `--allow-chat` is set, chats outside the allowlist are rejected
+- `/select` automatically attaches the pane if it is not already managed
+- `/clear` clears only the current pane for the current chat and disables that chat's follow session
+- `/snapshot` defaults to `image`; `text` skips image rendering and sends plain text
 - snapshot images default to the built-in `gomono` font, `14` pt, and the `dark` theme
-- use `--telegram-snapshot-theme`, `--telegram-snapshot-font-size`, or `--telegram-snapshot-font-file` to customize snapshot image rendering
-- `/unmanage` clears chat bindings and stops any follow sessions that point to that pane
-- if the current pane disappears, the daemon clears that chat's current-pane state and asks the user to select again
+- `/unmanage` clears chat bindings and stops follow sessions that point to that pane
+- if the current pane disappears or becomes unmanaged, the daemon clears that chat's current-pane state
 - follow mode is one active subscription per chat
