@@ -4,25 +4,25 @@
 [![tmux](https://img.shields.io/badge/tmux-required-1BB91F?style=flat-square&logo=tmux)](https://github.com/tmux/tmux)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
-[![README.zh-CN](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
+[![README](https://img.shields.io/badge/README-English-1F2937?style=flat-square)](./README.md)
 
-English | [简体中文](./README.zh-CN.md)
+[English](./README.md) | 简体中文
 
-`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram without taking ownership of the pane lifecycle.
+`tmux-connect` 是一个面向现有 tmux pane 的 tmux-first 中继工具。它允许你查看输出、发送输入、暴露本地 HTTP API，并通过 Telegram 控制选定的 pane，而不接管 pane 生命周期。
 
-Current scope:
+当前范围：
 
-- local CLI for attach, inspect, snapshot, stream, and input
-- local HTTP control plane over the same bridge service
-- Telegram long-polling daemon with SQLite-backed chat bindings and reply continuity
-- relay-first behavior only; there is no structured Codex/Claude/Gemini protocol yet
+- 面向 attach、inspect、snapshot、stream 和 input 的本地 CLI
+- 基于同一桥接服务的本地 HTTP 控制面
+- 带 SQLite 持久化聊天绑定和回复连续性的 Telegram 长轮询 daemon
+- 当前仍以 relay-first 为主；尚未提供结构化的 Codex/Claude/Gemini 协议
 
 ## Requirements
 
-- Go `1.25` or later
+- Go `1.25` 或更高版本
 - `tmux`
-- `sqlite3` in `PATH` if you want to run `tagb daemon`
-- a Telegram bot token from BotFather if you want remote control
+- 如果要运行 `tagb daemon`，需要 `PATH` 中可用的 `sqlite3`
+- 如果要远程控制，需要一个来自 BotFather 的 Telegram bot token
 
 ## Build
 
@@ -30,47 +30,47 @@ Current scope:
 go build ./cmd/tagb
 ```
 
-The repository name is `tmux-connect`; the binary name is `tagb`.
+仓库名是 `tmux-connect`，生成的二进制名是 `tagb`。
 
 ## CLI Quick Start
 
-List panes:
+列出 pane：
 
 ```bash
 go run ./cmd/tagb list
 ```
 
-Attach an existing pane:
+接入一个已存在的 pane：
 
 ```bash
 go run ./cmd/tagb attach --pane %5 --agent codex --label backend
 ```
 
-Inspect bridge metadata:
+查看 bridge metadata：
 
 ```bash
 go run ./cmd/tagb inspect --pane %5
 ```
 
-Send text and press Enter:
+发送文本并附带回车：
 
 ```bash
 go run ./cmd/tagb send --pane %5 --text "continue" --enter
 ```
 
-Capture recent output:
+抓取最近输出：
 
 ```bash
 go run ./cmd/tagb snapshot --pane %5 --lines 120
 ```
 
-Follow output:
+持续跟随输出：
 
 ```bash
 go run ./cmd/tagb stream --pane %5
 ```
 
-The local CLI surface is:
+本地 CLI 入口如下：
 
 ```bash
 tagb [--socket NAME] [--json] list
@@ -88,13 +88,13 @@ tagb [--socket NAME] daemon <run|doctor|status> [flags]
 
 ## HTTP API
 
-Start the server:
+启动服务：
 
 ```bash
 go run ./cmd/tagb serve --listen 127.0.0.1:8080
 ```
 
-Endpoints:
+端点：
 
 - `GET /healthz`
 - `GET /v1/panes`
@@ -105,9 +105,9 @@ Endpoints:
 - `POST /v1/panes/send`
 - `POST /v1/panes/enter`
 - `POST /v1/panes/ctrl-c`
-- `GET /v1/panes/stream?pane=%250&lines=120` as SSE
+- `GET /v1/panes/stream?pane=%250&lines=120`，通过 SSE 输出
 
-Example:
+示例：
 
 ```bash
 curl http://127.0.0.1:8080/v1/panes
@@ -118,7 +118,7 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 
 ## Telegram Daemon
 
-Start the daemon:
+启动 daemon：
 
 ```bash
 go run ./cmd/tagb daemon run \
@@ -127,7 +127,7 @@ go run ./cmd/tagb daemon run \
   --allow-chat 123456789
 ```
 
-Common flags:
+常用参数：
 
 - `--telegram-token TOKEN`
 - `--db PATH`
@@ -142,14 +142,14 @@ Common flags:
 - `--follow-debug`
 - `--telegram-api-base URL`
 
-Checks:
+检查命令：
 
 ```bash
 go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 ```
 
-Telegram commands:
+Telegram 命令：
 
 - `/panes`
 - `/select <pane>`
@@ -159,14 +159,14 @@ Telegram commands:
 - `/snapshot [lines] [image|text]`
 - `/send <text>`
 - `/enter`
-- `/ctrlc` or `/ctrl-c`
+- `/ctrlc` 或 `/ctrl-c`
 - `/follow on [interval]|off`
 
-`/snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+`/snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 
 ## Recovery Model
 
-tmux remains the source of truth for pane identity and management metadata. The bridge writes recovery state onto the pane with tmux user options:
+tmux 仍然是 pane 身份和管理元数据的事实来源。bridge 会通过 tmux user options 把恢复状态写回 pane：
 
 - `@tagb_managed=1`
 - `@tagb_mode=relay`
@@ -175,25 +175,25 @@ tmux remains the source of truth for pane identity and management metadata. The 
 - `@tagb_created_by=manual-attach`
 - `@tagb_last_activity_unix=<unix timestamp>`
 
-The Telegram daemon stores chat-oriented state in SQLite, including bindings, current pane selection, sessions, and message links.
+Telegram daemon 会把面向聊天的状态保存在 SQLite 中，包括绑定关系、当前 pane 选择、session 和消息关联。
 
 ## Docs
 
-- [docs/README.md](./docs/README.md) for the documentation index
-- [docs/guide-zh.md](./docs/guide-zh.md) for the Chinese quick start
-- [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) for Chinese troubleshooting
-- [docs/telegram.md](./docs/telegram.md) for Telegram setup and operations
-- [docs/architecture.md](./docs/architecture.md) for the current system architecture
-- [docs/roadmap.md](./docs/roadmap.md) for near-term roadmap items
+- [docs/README.md](./docs/README.md) 文档索引
+- [docs/guide-zh.md](./docs/guide-zh.md) 中文快速开始
+- [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) 中文故障排查
+- [docs/telegram.md](./docs/telegram.md) Telegram 配置与操作
+- [docs/architecture.md](./docs/architecture.md) 当前系统架构
+- [docs/roadmap.md](./docs/roadmap.md) 近期路线图
 
 ## Current Limits
 
-- the project is relay-first; there is still no structured agent event parsing
-- control keys are limited to `Enter` and `Ctrl-C`
-- follow restore does not survive daemon restart yet
-- Telegram is the only remote connector today
-- the SQLite layer still shells out to `sqlite3` rather than using an embedded driver
+- 项目目前仍以 relay-first 为主，还没有结构化 agent 事件解析
+- 控制键目前仅支持 `Enter` 和 `Ctrl-C`
+- follow 恢复状态尚不能跨 daemon 重启保留
+- 目前唯一的远程连接器是 Telegram
+- SQLite 层仍然通过调用 `sqlite3` 命令，而不是内嵌 driver
 
 ## Acknowledgements
 
-This project was inspired by `cc-connect`, but follows a different direction: a tmux-first relay centered on existing panes rather than a child-process-owned runtime.
+这个项目受到了 `cc-connect` 的启发，但方向不同：这里是围绕现有 pane 的 tmux-first relay，而不是围绕子进程生命周期的运行时。
