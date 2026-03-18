@@ -27,8 +27,15 @@ func NewReplyBus(m messenger, store *Store, snapshotRenderOptions termrender.Opt
 }
 
 func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind string, text string) error {
+	return b.ReplyWithOptions(ctx, chatID, paneKey, kind, text, telegram.SendOptions{})
+}
+
+func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chatID int64, paneKey string, kind string, text string, opts telegram.SendOptions) error {
 	state := b.prepareOutbound(ctx, chatID, paneKey)
-	sendText, sendOpts := decorateTelegramMessage(kind, text, telegram.SendOptions{ReplyToMessageID: state.replyToMessageID})
+	if opts.ReplyToMessageID <= 0 {
+		opts.ReplyToMessageID = state.replyToMessageID
+	}
+	sendText, sendOpts := decorateTelegramMessage(kind, text, opts)
 	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
 	if err != nil {
 		return err

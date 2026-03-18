@@ -30,6 +30,7 @@ type sentMessage struct {
 	Photo            []byte
 	ParseMode        telegram.ParseMode
 	ReplyToMessageID int64
+	ReplyMarkup      any
 }
 
 func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opts telegram.SendOptions) (telegram.Message, error) {
@@ -39,6 +40,7 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opt
 		Text:             text,
 		ParseMode:        opts.ParseMode,
 		ReplyToMessageID: opts.ReplyToMessageID,
+		ReplyMarkup:      opts.ReplyMarkup,
 	})
 	return telegram.Message{MessageID: int64(len(m.messages))}, nil
 }
@@ -70,9 +72,15 @@ type fakePaneService struct {
 	snapshotText  string
 	snapshotRich  string
 	initialOutput string
+	sendCalls     []sendCall
 	listCalls     int
 	attachCalls   int
 	detachCalls   int
+}
+
+type sendCall struct {
+	paneKey string
+	text    string
 }
 
 func newFakePaneService() *fakePaneService {
@@ -204,7 +212,8 @@ func (s *fakePaneService) SnapshotRich(context.Context, string, int) (string, er
 }
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
-func (s *fakePaneService) SendManaged(context.Context, string, string, bool) error {
+func (s *fakePaneService) SendManaged(_ context.Context, paneKey string, text string, _ bool) error {
+	s.sendCalls = append(s.sendCalls, sendCall{paneKey: paneKey, text: text})
 	return nil
 }
 
@@ -268,6 +277,130 @@ func TestRouterSelectAndSnapshot(t *testing.T) {
 	}
 	if got := messages[len(messages)-1].ReplyToMessageID; got != 2 {
 		t.Fatalf("snapshot reply_to = %d, want 2", got)
+	}
+}
+
+func TestRouterSelectPromptsForPaneAndExecutesReply(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 10, Text: "/select"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	prompt := messages[len(messages)-1]
+	if prompt.Text != "Reply with the pane to select, for example %5 or default:%5." {
+		t.Fatalf("prompt text = %q", prompt.Text)
+	}
+	if prompt.ReplyToMessageID != 10 {
+		t.Fatalf("prompt reply_to = %d, want 10", prompt.ReplyToMessageID)
+	}
+	forceReply, ok := prompt.ReplyMarkup.(telegram.ForceReply)
+	if !ok {
+		t.Fatalf("prompt reply markup = %#v, want ForceReply", prompt.ReplyMarkup)
+	}
+	if !forceReply.ForceReply || forceReply.InputFieldPlaceholder != "%5" {
+		t.Fatalf("force reply = %#v, want placeholder %%5", forceReply)
+	}
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 11, Text: "%5"}); err != nil {
+		t.Fatalf("HandleMessage(pending select reply) error = %v", err)
+	}
+
+	current, err := store.CurrentPane(ctx, 7)
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%5" {
+		t.Fatalf("current = %q, want %q", current, "default:%5")
+	}
+	latest := messenger.snapshot()
+	last := latest[len(latest)-1]
+	if !strings.Contains(last.Text, "selected default:%5") {
+		t.Fatalf("last message = %q, want select confirmation", last.Text)
+	}
+}
+
+func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/send"}); err != nil {
+		t.Fatalf("HandleMessage(send) error = %v", err)
+	}
+	latest := messenger.snapshot()
+	prompt := latest[len(latest)-1]
+	if prompt.Text != "Reply with the text to send to the current pane." {
+		t.Fatalf("prompt text = %q", prompt.Text)
+	}
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "status --short"}); err != nil {
+		t.Fatalf("HandleMessage(send reply) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one send", service.sendCalls)
+	}
+	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" {
+		t.Fatalf("send call = %#v, want pane default:%%5 and text", service.sendCalls[0])
+	}
+}
+
+func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select"}); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/help"}); err != nil {
+		t.Fatalf("HandleMessage(help) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "%5"}); err != nil {
+		t.Fatalf("HandleMessage(text after help) error = %v", err)
+	}
+
+	current, err := store.CurrentPane(ctx, 7)
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "" {
+		t.Fatalf("current = %q, want empty", current)
+	}
+	latest := messenger.snapshot()
+	last := latest[len(latest)-1]
+	if !strings.Contains(last.Text, "unknown command") {
+		t.Fatalf("last message = %q, want unknown command", last.Text)
 	}
 }
 

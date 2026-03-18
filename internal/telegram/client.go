@@ -99,6 +99,7 @@ type sendMessageRequest struct {
 	Text            string           `json:"text"`
 	ParseMode       string           `json:"parse_mode,omitempty"`
 	ReplyParameters *replyParameters `json:"reply_parameters,omitempty"`
+	ReplyMarkup     any              `json:"reply_markup,omitempty"`
 }
 
 type ParseMode string
@@ -114,6 +115,13 @@ type replyParameters struct {
 type SendOptions struct {
 	ReplyToMessageID int64
 	ParseMode        ParseMode
+	ReplyMarkup      any
+}
+
+type ForceReply struct {
+	ForceReply            bool   `json:"force_reply"`
+	InputFieldPlaceholder string `json:"input_field_placeholder,omitempty"`
+	Selective             bool   `json:"selective,omitempty"`
 }
 
 type BotCommand struct {
@@ -176,6 +184,9 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, opt
 	}
 	if opts.ReplyToMessageID > 0 {
 		req.ReplyParameters = &replyParameters{MessageID: opts.ReplyToMessageID}
+	}
+	if opts.ReplyMarkup != nil {
+		req.ReplyMarkup = opts.ReplyMarkup
 	}
 	var resp apiResponse[Message]
 	if err := c.call(ctx, "sendMessage", req, &resp); err != nil {

@@ -201,6 +201,53 @@ func TestSendMessageWithParseMode(t *testing.T) {
 	}
 }
 
+func TestSendMessageWithForceReplyMarkup(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		replyMarkup, ok := payload["reply_markup"].(map[string]any)
+		if !ok {
+			t.Fatalf("reply_markup = %#v, want object", payload["reply_markup"])
+		}
+		if replyMarkup["force_reply"] != true {
+			t.Fatalf("force_reply = %#v, want true", replyMarkup["force_reply"])
+		}
+		if replyMarkup["input_field_placeholder"] != "status" {
+			t.Fatalf("placeholder = %#v, want %q", replyMarkup["input_field_placeholder"], "status")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": 102,
+				"text":       "reply now",
+				"chat": map[string]any{
+					"id":   1,
+					"type": "private",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("token", WithBaseURL(server.URL))
+	message, err := client.SendMessage(context.Background(), 1, "reply now", SendOptions{
+		ReplyMarkup: ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: "status",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if message.MessageID != 102 {
+		t.Fatalf("message_id = %d, want 102", message.MessageID)
+	}
+}
+
 func TestSetMyCommands(t *testing.T) {
 	t.Parallel()
 

@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/portgle/tmux-connect/internal/tagb"
+	"github.com/portgle/tmux-connect/internal/telegram"
 	"github.com/portgle/tmux-connect/internal/tmux"
 )
 
@@ -29,6 +31,12 @@ type Router struct {
 	follow        *FollowManager
 	snapshotLines int
 	allowChats    map[int64]struct{}
+	pendingMu     sync.Mutex
+	pending       map[int64]pendingCommand
+}
+
+type pendingCommand struct {
+	Command string
 }
 
 func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []int64) *Router {
@@ -47,6 +55,7 @@ func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyB
 		follow:        follow,
 		snapshotLines: snapshotLines,
 		allowChats:    allowed,
+		pending:       make(map[int64]pendingCommand),
 	}
 }
 
@@ -62,6 +71,15 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 	}
 
 	command, args := parseCommand(text)
+	if command == "" {
+		if pending, ok := r.consumePending(message.ChatID); ok {
+			return r.handlePendingInput(ctx, message, pending, text)
+		}
+	}
+	if command != "" {
+		r.clearPending(message.ChatID)
+	}
+
 	switch command {
 	case "/start", "/help":
 		r.logInbound(ctx, message, "", "")
@@ -110,7 +128,7 @@ func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, ar
 	r.logInbound(ctx, message, "", "")
 	ref := strings.TrimSpace(args)
 	if ref == "" {
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /unmanage <pane>")
+		return r.promptForCommandInput(ctx, message, "unmanage")
 	}
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
@@ -137,7 +155,7 @@ func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args
 	ref := strings.TrimSpace(args)
 	if ref == "" {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /select <pane>")
+		return r.promptForCommandInput(ctx, message, "select")
 	}
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
@@ -241,7 +259,7 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 	r.logInbound(ctx, message, paneKey, "")
 	text := strings.TrimSpace(args)
 	if text == "" {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "usage", "usage: /send <text>")
+		return r.promptForCommandInput(ctx, message, "send")
 	}
 	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
 		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("send failed: %v", err))
@@ -281,6 +299,10 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 	chatID := message.ChatID
 	mode, opts, err := parseFollowArgs(args)
 	if err != nil {
+		if strings.TrimSpace(args) == "" {
+			r.logInbound(ctx, message, "", "")
+			return r.promptForCommandInput(ctx, message, "follow")
+		}
 		r.logInbound(ctx, message, "", "")
 		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
 	}
@@ -308,6 +330,61 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 		r.logInbound(ctx, message, "", "")
 		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
 	}
+}
+
+func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage, pending pendingCommand, args string) error {
+	switch pending.Command {
+	case "select":
+		return r.handleSelect(ctx, message, args)
+	case "unmanage":
+		return r.handleUnmanage(ctx, message, args)
+	case "send":
+		return r.handleSend(ctx, message, args)
+	case "follow":
+		return r.handleFollow(ctx, message, args)
+	default:
+		r.logInbound(ctx, message, "", "")
+		return r.replyBus.Reply(ctx, message.ChatID, "", "unknown-command", "unknown command\n\n"+helpText())
+	}
+}
+
+func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMessage, command string) error {
+	spec, ok := findCommandSpec(command)
+	if !ok || spec.Prompt == nil {
+		return r.replyBus.Reply(ctx, message.ChatID, "", "usage", "usage: /"+command)
+	}
+	r.setPending(message.ChatID, pendingCommand{
+		Command: spec.Command,
+	})
+	return r.replyBus.ReplyWithOptions(ctx, message.ChatID, "", "prompt", spec.Prompt.Message, telegram.SendOptions{
+		ReplyToMessageID: message.MessageID,
+		ReplyMarkup: telegram.ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: spec.Prompt.Placeholder,
+		},
+	})
+}
+
+func (r *Router) setPending(chatID int64, pending pendingCommand) {
+	r.pendingMu.Lock()
+	defer r.pendingMu.Unlock()
+	r.pending[chatID] = pending
+}
+
+func (r *Router) consumePending(chatID int64) (pendingCommand, bool) {
+	r.pendingMu.Lock()
+	defer r.pendingMu.Unlock()
+	pending, ok := r.pending[chatID]
+	if ok {
+		delete(r.pending, chatID)
+	}
+	return pending, ok
+}
+
+func (r *Router) clearPending(chatID int64) {
+	r.pendingMu.Lock()
+	defer r.pendingMu.Unlock()
+	delete(r.pending, chatID)
 }
 
 func (r *Router) requireCurrentPane(ctx context.Context, chatID int64) (string, error) {
