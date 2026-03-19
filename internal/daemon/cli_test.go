@@ -178,6 +178,88 @@ func TestRuntimeRunReturnsMenuRegistrationError(t *testing.T) {
 	}
 }
 
+func TestParseConfigSlackCommandPrefixFlag(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfig([]string{
+		"--platform", "slack",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-app-token", "xapp-test",
+		"--slack-command-prefix", "bot:",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.SlackCommandPrefix != "bot:" {
+		t.Fatalf("SlackCommandPrefix = %q, want %q", cfg.SlackCommandPrefix, "bot:")
+	}
+}
+
+func TestParseConfigSlackCommandPrefixEnv(t *testing.T) {
+	t.Setenv("TAGB_PLATFORM", "slack")
+	t.Setenv("TAGB_SLACK_BOT_TOKEN", "xoxb-test")
+	t.Setenv("TAGB_SLACK_APP_TOKEN", "xapp-test")
+	t.Setenv("TAGB_SLACK_COMMAND_PREFIX", "run:")
+
+	cfg, err := parseConfig([]string{
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.SlackCommandPrefix != "run:" {
+		t.Fatalf("SlackCommandPrefix = %q, want %q", cfg.SlackCommandPrefix, "run:")
+	}
+}
+
+func TestParseConfigSlackCommandPrefixDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfig([]string{
+		"--platform", "slack",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-app-token", "xapp-test",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.SlackCommandPrefix != defaultSlackCommandPrefix {
+		t.Fatalf("SlackCommandPrefix = %q, want %q", cfg.SlackCommandPrefix, defaultSlackCommandPrefix)
+	}
+}
+
+func TestParseConfigRejectsEmptySlackCommandPrefix(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfig([]string{
+		"--platform", "slack",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-app-token", "xapp-test",
+		"--slack-command-prefix", "",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error for empty prefix")
+	}
+}
+
+func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfig([]string{
+		"--platform", "slack",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-app-token", "xapp-test",
+		"--slack-command-prefix", "my prefix",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error for whitespace in prefix")
+	}
+}
+
 func writeTempFont(t *testing.T, name string) string {
 	t.Helper()
 

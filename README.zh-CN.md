@@ -179,18 +179,18 @@ Telegram 命令：
 
 Slack 命令：
 
-- `tagb panes`
-- `tagb select <pane>`
-- `tagb clear`
-- `tagb unmanage <pane>`
-- `tagb current`
-- `tagb snapshot [lines] [image|text]`
-- `tagb send <text>`
-- `tagb enter`
-- `tagb ctrlc` 或 `tagb ctrl-c`
-- `tagb follow on [interval]|off`
+- `tmux: panes`
+- `tmux: select <pane>`
+- `tmux: clear`
+- `tmux: unmanage <pane>`
+- `tmux: current`
+- `tmux: snapshot [lines] [image|text]`
+- `tmux: send <text>`
+- `tmux: enter`
+- `tmux: ctrlc` 或 `tmux: ctrl-c`
+- `tmux: follow on [interval]|off`
 
-Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tagb` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。`tagb snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 
 ## Recovery Model
 

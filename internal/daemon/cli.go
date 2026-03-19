@@ -15,21 +15,22 @@ import (
 )
 
 type Config struct {
-	Platform         string
-	TelegramToken    string
-	SlackBotToken    string
-	SlackAppToken    string
-	DBPath           string
-	AllowChats       []string
-	PollTimeout      time.Duration
-	SnapshotLines    int
-	SnapshotTheme    string
-	SnapshotFontSize float64
-	SnapshotFontFile string
-	FollowLines      int
-	FollowMinGap     time.Duration
-	FollowDebug      bool
-	APIBaseURL       string
+	Platform           string
+	TelegramToken      string
+	SlackBotToken      string
+	SlackAppToken      string
+	SlackCommandPrefix string
+	DBPath             string
+	AllowChats         []string
+	PollTimeout        time.Duration
+	SnapshotLines      int
+	SnapshotTheme      string
+	SnapshotFontSize   float64
+	SnapshotFontFile   string
+	FollowLines        int
+	FollowMinGap       time.Duration
+	FollowDebug        bool
+	APIBaseURL         string
 }
 
 type Runtime struct {
@@ -170,7 +171,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	if cfg.FollowDebug {
 		follow.SetDebugWriter(stderr)
 	}
-	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats)
+	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix)
 
 	return &Runtime{
 		cfg:      cfg,
@@ -238,6 +239,7 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_TOKEN")), "telegram bot token")
 	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_BOT_TOKEN")), "slack bot token")
 	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_APP_TOKEN")), "slack app token for socket mode")
+	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TAGB_SLACK_COMMAND_PREFIX", defaultSlackCommandPrefix), "command prefix for slack messages")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", defaultDBPath()), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", 20*time.Second, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
@@ -272,6 +274,9 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	}
 	if cfg.FollowMinGap <= 0 {
 		return Config{}, tagb.UsageError("--follow-min-interval must be > 0")
+	}
+	if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
+		return Config{}, tagb.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
 	}
 	if requireRun {
 		switch cfg.Platform {

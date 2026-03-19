@@ -1,8 +1,11 @@
 package daemon
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
-const slackCommandPrefix = "tagb"
+const defaultSlackCommandPrefix = "tmux:"
 
 type botCommandSpec struct {
 	Command     string
@@ -46,14 +49,14 @@ func daemonCommandSpecs() []botCommandSpec {
 	}
 }
 
-func helpText(platform string) string {
+func helpText(commandPrefix string) string {
 	lines := make([]string, 0, len(daemonCommandSpecs())+1)
 	lines = append(lines, "Commands:")
-	if strings.EqualFold(strings.TrimSpace(platform), "slack") {
-		lines = append(lines, `In channels, mention the bot with a command such as "@bot panes". In DMs and managed threads, prefix commands with "tagb", for example "tagb panes".`)
+	if commandPrefix != "" {
+		lines = append(lines, fmt.Sprintf(`In channels, mention the bot with a command such as "@bot panes". In DMs and managed threads, prefix commands with %q, for example %q.`, commandPrefix, commandPrefix+" panes"))
 	}
 	for _, spec := range daemonCommandSpecs() {
-		lines = append(lines, formatCommandUsage(platform, spec.Usage))
+		lines = append(lines, formatCommandUsage(commandPrefix, spec.Usage))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -81,13 +84,13 @@ func normalizeCommandName(command string) string {
 	return command
 }
 
-func formatCommandUsage(platform string, usage string) string {
+func formatCommandUsage(commandPrefix string, usage string) string {
 	usage = strings.TrimSpace(usage)
 	if usage == "" {
 		return ""
 	}
-	if strings.EqualFold(strings.TrimSpace(platform), "slack") {
-		return slackCommandPrefix + " " + usage
+	if commandPrefix != "" {
+		return commandPrefix + " " + usage
 	}
 	return "/" + usage
 }

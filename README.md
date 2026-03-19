@@ -179,18 +179,18 @@ Telegram commands:
 
 Slack commands:
 
-- `tagb panes`
-- `tagb select <pane>`
-- `tagb clear`
-- `tagb unmanage <pane>`
-- `tagb current`
-- `tagb snapshot [lines] [image|text]`
-- `tagb send <text>`
-- `tagb enter`
-- `tagb ctrlc` or `tagb ctrl-c`
-- `tagb follow on [interval]|off`
+- `tmux: panes`
+- `tmux: select <pane>`
+- `tmux: clear`
+- `tmux: unmanage <pane>`
+- `tmux: current`
+- `tmux: snapshot [lines] [image|text]`
+- `tmux: send <text>`
+- `tmux: enter`
+- `tmux: ctrlc` or `tmux: ctrl-c`
+- `tmux: follow on [interval]|off`
 
-In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tagb` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. `tagb snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 
 ## Recovery Model
 
