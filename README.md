@@ -139,6 +139,8 @@ go run ./cmd/tagb daemon run \
   --db ~/.tagb/tagb.db
 ```
 
+For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
+
 Common flags:
 
 - `--platform telegram|slack`

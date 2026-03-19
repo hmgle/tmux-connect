@@ -14,6 +14,7 @@
 - add bot scopes:
   - `app_mentions:read`
   - `chat:write`
+  - `files:write`
   - `im:history`
   - `im:read`
 - subscribe to bot events:
@@ -21,6 +22,7 @@
   - `message.im`
 
 Socket Mode means you do not need a public webhook URL.
+Slack snapshot images use Slack's current Web API file upload flow, so `files:write` is required. If you add scopes later, reinstall the app before retrying `tmux: snapshot`.
 
 ## Start the Daemon
 
@@ -63,6 +65,8 @@ go run ./cmd/tagb daemon doctor \
 
 go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 ```
+
+`daemon doctor` echoes the Slack scopes the bot needs for snapshot image uploads. If `tmux: snapshot` falls back to text, check the daemon log for `reply bus send snapshot image`.
 
 ## Using the Bot
 

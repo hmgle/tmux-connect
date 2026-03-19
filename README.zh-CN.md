@@ -139,6 +139,8 @@ go run ./cmd/tagb daemon run \
   --db ~/.tagb/tagb.db
 ```
 
+如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
+
 常用参数：
 
 - `--platform telegram|slack`

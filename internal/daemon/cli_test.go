@@ -278,6 +278,32 @@ func TestParseConfigTelegramClearsSlackPrefixEnv(t *testing.T) {
 	}
 }
 
+func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	err := runDoctor(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), []string{
+		"--platform", "slack",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-app-token", "xapp-test",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"slack tokens: ok",
+		"files:write",
+		"reinstall the app",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("runDoctor() output = %q, want %q", output, want)
+		}
+	}
+}
+
 func writeTempFont(t *testing.T, name string) string {
 	t.Helper()
 

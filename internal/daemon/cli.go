@@ -104,6 +104,8 @@ func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 			return tagb.UsageError("slack app token is required; pass --slack-app-token or TAGB_SLACK_APP_TOKEN")
 		}
 		fmt.Fprintln(stdout, "slack tokens: ok")
+		fmt.Fprintln(stdout, "slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read")
+		fmt.Fprintln(stdout, "slack snapshot uploads: uses the current Web API upload flow; reinstall the app after scope changes")
 	default:
 		return tagb.UsageError("unsupported platform %q", cfg.Platform)
 	}
