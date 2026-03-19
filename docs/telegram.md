@@ -43,6 +43,13 @@ go run ./cmd/tagb daemon run \
   --allow-chat 123456789
 ```
 
+## Daemon Note
+
+Run one active `tagb daemon run` per bot token.
+
+If you want to control multiple machines, the simple setup is one Telegram bot
+per machine.
+
 Useful daemon flags:
 
 - `--telegram-token TOKEN`

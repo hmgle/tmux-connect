@@ -39,6 +39,12 @@ tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 - daemon 进程是否还活着
 - 服务器是否能访问 Telegram Bot API
 - token 是否正确
+- 是否有另一台机器也在用同一个 bot token 运行 `tagb daemon run`
+
+补充说明：
+
+- 当前版本要求同一个 bot token 只有一个活跃轮询实例
+- 如果要管理多台机器，建议每台机器使用不同的 bot
 
 ### `/select` 失败
 

@@ -72,6 +72,11 @@ tagb daemon run \
   --allow-chat 123456789
 ```
 
+注意：
+
+- 同一个 Telegram bot token 只支持一个活跃的 `tagb daemon run` 实例
+- 如果要管理多台机器，最简单的方式是每台机器使用不同的 bot
+
 如果你还不知道 `chat_id`，见下文“获取 Telegram chat ID”。
 
 ### 5. 在 Telegram 里开始使用
@@ -218,6 +223,11 @@ tagb daemon run \
 | `--follow-min-interval` | `/follow` 推送最小间隔，默认 `700ms` |
 | `--follow-debug` | 输出 follow 调试日志 |
 | `--telegram-api-base` | 自定义 Telegram Bot API 地址 |
+
+运行约束：
+
+- 同一个 bot token 上只应有一个活跃的 `tagb daemon run`
+- 如果要管理多台机器，建议每台机器使用不同的 bot
 
 ## 运行方式建议
 
