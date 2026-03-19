@@ -42,11 +42,36 @@ func TestSlackHandleAppMentionBuildsThreadScopedMessage(t *testing.T) {
 	if got.Text != "/panes" {
 		t.Fatalf("text = %q, want /panes", got.Text)
 	}
+	if !got.IsAppMention {
+		t.Fatal("IsAppMention = false, want true")
+	}
 	if got.ThreadID != "1893456000.000100" {
 		t.Fatalf("threadID = %q, want root timestamp", got.ThreadID)
 	}
 	if got.PendingScope != "1893456000.000100" {
 		t.Fatalf("pending scope = %q, want root timestamp", got.PendingScope)
+	}
+}
+
+func TestSlackHandleAppMentionWithoutTextDefaultsToHelp(t *testing.T) {
+	t.Parallel()
+
+	adapter := newTestSlackAdapter(nil)
+	var got IncomingMessage
+	err := adapter.handleAppMention(context.Background(), &slackevents.AppMentionEvent{
+		User:      "U123",
+		Channel:   "C123",
+		TimeStamp: "1893456000.000100",
+		Text:      "<@U0BOT123>",
+	}, func(_ context.Context, message IncomingMessage) error {
+		got = message
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("handleAppMention() error = %v", err)
+	}
+	if got.Text != "help" {
+		t.Fatalf("text = %q, want help", got.Text)
 	}
 }
 

@@ -177,7 +177,20 @@ Telegram 命令：
 - `/ctrlc` 或 `/ctrl-c`
 - `/follow on [interval]|off`
 
-Slack 在私聊和 bot thread 中使用同一套文本命令。`/snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Slack 命令：
+
+- `tagb panes`
+- `tagb select <pane>`
+- `tagb clear`
+- `tagb unmanage <pane>`
+- `tagb current`
+- `tagb snapshot [lines] [image|text]`
+- `tagb send <text>`
+- `tagb enter`
+- `tagb ctrlc` 或 `tagb ctrl-c`
+- `tagb follow on [interval]|off`
+
+Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tagb` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。`tagb snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 
 ## Recovery Model
 

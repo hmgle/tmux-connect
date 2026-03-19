@@ -23,6 +23,7 @@ type IncomingMessage struct {
 	ChatType     string
 	ThreadID     string
 	PendingScope string
+	IsAppMention bool
 }
 
 func (m IncomingMessage) pendingKey() string {
@@ -80,7 +81,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.replyBus.Reply(ctx, message.Chat, "", "unauthorized", "chat is not allowed to use this bot")
 	}
 
-	command, args := parseCommand(text)
+	command, args := parseCommand(message, text)
 	if command == "" {
 		if pending, ok := r.consumePending(message.pendingKey()); ok {
 			return r.handlePendingInput(ctx, message, pending, text)
@@ -91,32 +92,32 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 	}
 
 	switch command {
-	case "/start", "/help":
+	case "start", "help":
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "help", helpText())
-	case "/panes":
+		return r.replyBus.Reply(ctx, message.Chat, "", "help", helpText(message.Chat.Platform))
+	case "panes":
 		return r.handlePanes(ctx, message)
-	case "/select":
+	case "select":
 		return r.handleSelect(ctx, message, args)
-	case "/clear":
+	case "clear":
 		return r.handleClear(ctx, message)
-	case "/unmanage":
+	case "unmanage":
 		return r.handleUnmanage(ctx, message, args)
-	case "/current":
+	case "current":
 		return r.handleCurrent(ctx, message)
-	case "/snapshot":
+	case "snapshot":
 		return r.handleSnapshot(ctx, message, args)
-	case "/send":
+	case "send":
 		return r.handleSend(ctx, message, args)
-	case "/enter":
+	case "enter":
 		return r.handleEnter(ctx, message)
-	case "/ctrlc", "/ctrl-c":
+	case "ctrlc":
 		return r.handleCtrlC(ctx, message)
-	case "/follow":
+	case "follow":
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText())
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText(message.Chat.Platform))
 	}
 }
 
@@ -243,7 +244,7 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 	r.logInbound(ctx, message, paneKey, "")
 	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: /snapshot [lines] [image|text]")
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(chat.Platform, "snapshot [lines] [image|text]"))
 	}
 	body, err := r.service.Snapshot(ctx, paneKey, lines)
 	if err != nil {
@@ -314,7 +315,7 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 			return r.promptForCommandInput(ctx, message, "follow")
 		}
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: /follow on [interval]|off")
+		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: "+formatCommandUsage(chat.Platform, "follow on [interval]|off"))
 	}
 	switch mode {
 	case "on":
@@ -338,7 +339,7 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 		return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow disabled")
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: /follow on [interval]|off")
+		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: "+formatCommandUsage(chat.Platform, "follow on [interval]|off"))
 	}
 }
 
@@ -354,14 +355,14 @@ func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText())
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText(message.Chat.Platform))
 	}
 }
 
 func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMessage, command string) error {
 	spec, ok := findCommandSpec(command)
 	if !ok || spec.Prompt == nil {
-		return r.replyBus.Reply(ctx, message.Chat, "", "usage", "usage: /"+command)
+		return r.replyBus.Reply(ctx, message.Chat, "", "usage", "usage: "+formatCommandUsage(message.Chat.Platform, command))
 	}
 	r.setPending(message.pendingKey(), pendingCommand{
 		Command: spec.Command,
@@ -397,7 +398,7 @@ func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, 
 		return "", err
 	}
 	if strings.TrimSpace(current) == "" {
-		return "", fmt.Errorf("no current pane; run /select <pane> first")
+		return "", fmt.Errorf("no current pane; run %s first", formatCommandUsage(chat.Platform, "select <pane>"))
 	}
 	record, err := r.service.Inspect(ctx, current)
 	if err != nil {
@@ -423,13 +424,30 @@ func (r *Router) allowed(chat ChatRef) bool {
 	return ok
 }
 
-func parseCommand(text string) (string, string) {
+func parseCommand(message IncomingMessage, text string) (string, string) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return "", ""
 	}
-	if !strings.HasPrefix(text, "/") {
+	if strings.HasPrefix(text, "/") {
+		return parseExplicitCommand(text)
+	}
+	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "slack") {
+		if message.IsAppMention {
+			return parseExplicitCommand(text)
+		}
+		if prefixed, ok := trimSlackCommandPrefix(text); ok {
+			return parseExplicitCommand(prefixed)
+		}
 		return "", text
+	}
+	return "", text
+}
+
+func parseExplicitCommand(text string) (string, string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "help", ""
 	}
 	command := text
 	args := ""
@@ -437,10 +455,29 @@ func parseCommand(text string) (string, string) {
 		command = text[:idx]
 		args = strings.TrimSpace(text[idx+1:])
 	}
-	if mention := strings.Index(command, "@"); mention >= 0 {
-		command = command[:mention]
+	command = normalizeCommandName(command)
+	if spec, ok := findCommandSpec(command); ok {
+		return spec.Command, args
 	}
-	return strings.ToLower(command), args
+	return command, args
+}
+
+func trimSlackCommandPrefix(text string) (string, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", false
+	}
+	head := text
+	rest := ""
+	if idx := strings.IndexAny(text, " \n\t"); idx >= 0 {
+		head = text[:idx]
+		rest = strings.TrimSpace(text[idx+1:])
+	}
+	head = strings.TrimSpace(strings.TrimSuffix(head, ":"))
+	if !strings.EqualFold(head, slackCommandPrefix) {
+		return "", false
+	}
+	return rest, true
 }
 
 func optionalInt(value string, fallback int) (int, error) {

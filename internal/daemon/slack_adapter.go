@@ -150,7 +150,7 @@ func (a *slackAdapter) handleAppMention(ctx context.Context, ev *slackevents.App
 	}
 	text := stripSlackAppMentionText(ev.Text)
 	if text == "" {
-		return nil
+		text = "help"
 	}
 	threadID := strings.TrimSpace(ev.ThreadTimeStamp)
 	if threadID == "" {
@@ -167,6 +167,7 @@ func (a *slackAdapter) handleAppMention(ctx context.Context, ev *slackevents.App
 		Text:         text,
 		ThreadID:     threadID,
 		PendingScope: threadID,
+		IsAppMention: true,
 	})
 }
 
@@ -300,8 +301,10 @@ func (m IncomingMessage) replyThreadID() string {
 
 func stripSlackAppMentionText(text string) string {
 	text = strings.TrimSpace(text)
-	if idx := strings.Index(text, "> "); idx != -1 && strings.HasPrefix(text, "<@") {
-		return strings.TrimSpace(text[idx+2:])
+	if strings.HasPrefix(text, "<@") {
+		if idx := strings.Index(text, ">"); idx != -1 {
+			return strings.TrimSpace(text[idx+1:])
+		}
 	}
 	return text
 }

@@ -177,7 +177,20 @@ Telegram commands:
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
-Slack uses the same text commands in DMs and bot-managed threads. `/snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+Slack commands:
+
+- `tagb panes`
+- `tagb select <pane>`
+- `tagb clear`
+- `tagb unmanage <pane>`
+- `tagb current`
+- `tagb snapshot [lines] [image|text]`
+- `tagb send <text>`
+- `tagb enter`
+- `tagb ctrlc` or `tagb ctrl-c`
+- `tagb follow on [interval]|off`
+
+In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tagb` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. `tagb snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 
 ## Recovery Model
 

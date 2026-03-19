@@ -22,6 +22,7 @@ import (
 type fakeMessenger struct {
 	mu       sync.Mutex
 	messages []sentMessage
+	platform string
 }
 
 type sentMessage struct {
@@ -32,9 +33,15 @@ type sentMessage struct {
 	ParseMode        telegram.ParseMode
 	ReplyToMessageID int64
 	ReplyMarkup      any
+	ThreadID         string
 }
 
-func (m *fakeMessenger) Platform() string { return "telegram" }
+func (m *fakeMessenger) Platform() string {
+	if strings.TrimSpace(m.platform) == "" {
+		return "telegram"
+	}
+	return m.platform
+}
 
 func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
@@ -53,6 +60,7 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, o
 		ParseMode:        parseMode,
 		ReplyToMessageID: replyTo,
 		ReplyMarkup:      opts.ReplyMarkup,
+		ThreadID:         opts.ThreadID,
 	})
 	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
 }
@@ -75,15 +83,22 @@ func (m *fakeMessenger) SendImage(_ context.Context, _ ChatRef, fileName string,
 		Photo:            append([]byte(nil), photo...),
 		ParseMode:        parseMode,
 		ReplyToMessageID: replyTo,
+		ThreadID:         opts.ThreadID,
 	})
 	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
 }
 
 func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	if m.Platform() == "slack" {
+		return decorateSlackMessage(kind, text, opts)
+	}
 	return decorateTelegramMessage(kind, text, opts)
 }
 
 func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
+	if m.Platform() == "slack" {
+		return SendOptions{ThreadID: message.replyThreadID()}
+	}
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
 		ReplyMarkup: telegram.ForceReply{
@@ -293,6 +308,10 @@ func telegramChat(id int64) ChatRef {
 	return ChatRef{Platform: "telegram", ChatID: strconv.FormatInt(id, 10)}
 }
 
+func slackChat(id string) ChatRef {
+	return ChatRef{Platform: "slack", ChatID: id}
+}
+
 func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage {
 	return IncomingMessage{
 		Chat:      telegramChat(chatID),
@@ -300,6 +319,22 @@ func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage
 		Text:      text,
 		ChatType:  "private",
 	}
+}
+
+func slackMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      slackChat(chatID),
+		MessageID: messageID,
+		Text:      text,
+		ChatType:  "im",
+		ThreadID:  messageID,
+	}
+}
+
+func slackAppMentionMessage(chatID string, messageID string, text string) IncomingMessage {
+	message := slackMessage(chatID, messageID, text)
+	message.IsAppMention = true
+	return message
 }
 
 func TestRouterSelectAndSnapshot(t *testing.T) {
@@ -949,7 +984,7 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
 	t.Parallel()
 
-	text := helpText()
+	text := helpText("telegram")
 	for _, want := range []string{"/start", "/help", "/select <pane>", "/clear", "/unmanage <pane>"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("helpText() missing %q in %q", want, text)
@@ -958,6 +993,22 @@ func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
 	for _, old := range []string{"/bind <pane>", "/attach <pane>", "/detach <pane>"} {
 		if strings.Contains(text, old) {
 			t.Fatalf("helpText() unexpectedly contains %q in %q", old, text)
+		}
+	}
+}
+
+func TestHelpTextUsesSlackPrefixedCommands(t *testing.T) {
+	t.Parallel()
+
+	text := helpText("slack")
+	for _, want := range []string{"\ntagb start", "\ntagb help", "\ntagb select <pane>", "\ntagb snapshot [lines] [image|text]"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("helpText(slack) missing %q in %q", want, text)
+		}
+	}
+	for _, unwanted := range []string{"/start", "\nstart", "\nselect <pane>", "\nsnapshot [lines] [image|text]"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("helpText(slack) unexpectedly contains %q in %q", unwanted, text)
 		}
 	}
 }
@@ -975,11 +1026,104 @@ func TestCommandSpecsMatchHelp(t *testing.T) {
 	if commands[len(commands)-1].Command != "follow" {
 		t.Fatalf("last command = %#v, want follow", commands[len(commands)-1])
 	}
+	telegramHelp := helpText("telegram")
+	slackHelp := helpText("slack")
 	for _, command := range commands {
-		if strings.Contains(helpText(), "/"+command.Command) {
-			continue
+		if !strings.Contains(telegramHelp, formatCommandUsage("telegram", command.Usage)) {
+			t.Fatalf("helpText(telegram) missing %q", formatCommandUsage("telegram", command.Usage))
 		}
-		t.Fatalf("helpText() missing command /%s", command.Command)
+		if !strings.Contains(slackHelp, formatCommandUsage("slack", command.Usage)) {
+			t.Fatalf("helpText(slack) missing %q", formatCommandUsage("slack", command.Usage))
+		}
+	}
+}
+
+func TestRouterSlackAcceptsPrefixedCommands(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tagb select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, slackMessage("D123", "2", "tagb current")); err != nil {
+		t.Fatalf("HandleMessage(current) error = %v", err)
+	}
+
+	current, err := store.CurrentPane(ctx, slackChat("D123"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%5" {
+		t.Fatalf("current = %q, want default:%%5", current)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "Current pane:") {
+		t.Fatalf("last message = %q, want current pane details", last.Text)
+	}
+}
+
+func TestRouterSlackAppMentionAcceptsCommandWithoutTagbPrefix(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "panes")); err != nil {
+		t.Fatalf("HandleMessage(app mention panes) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "Pane") {
+		t.Fatalf("last message = %q, want pane list", last.Text)
+	}
+}
+
+func TestRouterSlackHelpUsesTagbPrefix(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
+
+	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tagb help")); err != nil {
+		t.Fatalf("HandleMessage(help) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, `prefix commands with "tagb"`) {
+		t.Fatalf("last message = %q, want slack hint", last.Text)
+	}
+	if strings.Contains(last.Text, "/select <pane>") {
+		t.Fatalf("last message = %q, want tagb-prefixed slack commands", last.Text)
+	}
+	if !strings.Contains(last.Text, "tagb select <pane>") {
+		t.Fatalf("last message = %q, want prefixed select usage", last.Text)
 	}
 }
 
