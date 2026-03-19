@@ -275,8 +275,12 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	if cfg.FollowMinGap <= 0 {
 		return Config{}, tagb.UsageError("--follow-min-interval must be > 0")
 	}
-	if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
-		return Config{}, tagb.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
+	if cfg.Platform == "slack" {
+		if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
+			return Config{}, tagb.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
+		}
+	} else {
+		cfg.SlackCommandPrefix = ""
 	}
 	if requireRun {
 		switch cfg.Platform {

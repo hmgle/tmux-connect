@@ -260,6 +260,24 @@ func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
 	}
 }
 
+func TestParseConfigTelegramClearsSlackPrefixEnv(t *testing.T) {
+	t.Setenv("TAGB_TELEGRAM_TOKEN", "token")
+	t.Setenv("TAGB_SLACK_COMMAND_PREFIX", "bad prefix")
+
+	cfg, err := parseConfig([]string{
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.Platform != "telegram" {
+		t.Fatalf("platform = %q, want telegram", cfg.Platform)
+	}
+	if cfg.SlackCommandPrefix != "" {
+		t.Fatalf("SlackCommandPrefix = %q, want empty for telegram platform", cfg.SlackCommandPrefix)
+	}
+}
+
 func writeTempFont(t *testing.T, name string) string {
 	t.Helper()
 
