@@ -6,6 +6,7 @@
 - [guide-zh.md](./guide-zh.md) — Chinese quick start
 - [troubleshooting-zh.md](./troubleshooting-zh.md) — Chinese troubleshooting
 - [telegram.md](./telegram.md) — Telegram setup, flags, commands, and operations
+- [slack.md](./slack.md) — Slack setup, flags, commands, and operations
 - [architecture.md](./architecture.md) — current architecture, persistence model, and design principles
 - [roadmap.md](./roadmap.md) — public roadmap for upcoming work
 

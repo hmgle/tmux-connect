@@ -5,9 +5,9 @@
 The current repository ships:
 
 - local tmux bridge via CLI and HTTP API
-- Telegram relay daemon
+- remote relay daemon for Telegram and Slack
 - SQLite-backed chat bindings, sessions, and message links
-- reply continuity for pane-scoped Telegram interactions
+- reply continuity for pane-scoped remote interactions
 
 ## Near-Term Priorities
 
@@ -32,5 +32,5 @@ The current repository ships:
 
 ## Longer-Term Ideas
 
-- support additional remote connectors beyond Telegram
+- support additional remote connectors beyond Telegram and Slack
 - optionally add bridge-managed pane creation for users who want managed startup flows

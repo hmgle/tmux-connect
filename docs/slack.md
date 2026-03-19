@@ -1,0 +1,94 @@
+# Slack Setup and Operations
+
+## Prerequisites
+
+- `tmux` is installed and the target pane already exists
+- `sqlite3` is installed and available in `PATH`
+- you have a Slack app with:
+  - a bot token (`xoxb-...`)
+  - an app-level token (`xapp-...`) with Socket Mode enabled
+
+## Required Slack App Settings
+
+- enable Socket Mode
+- add bot scopes:
+  - `app_mentions:read`
+  - `chat:write`
+  - `im:history`
+  - `im:read`
+- subscribe to bot events:
+  - `app_mention`
+  - `message.im`
+
+Socket Mode means you do not need a public webhook URL.
+
+## Start the Daemon
+
+```bash
+go run ./cmd/tagb daemon run \
+  --platform slack \
+  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TAGB_SLACK_APP_TOKEN" \
+  --db ~/.tagb/tagb.db
+```
+
+Useful flags:
+
+- `--platform slack`
+- `--slack-bot-token TOKEN`
+- `--slack-app-token TOKEN`
+- `--db PATH`
+- `--snapshot-lines 120`
+- `--follow-lines 80`
+- `--follow-min-interval 700ms`
+- `--follow-debug`
+
+Supported environment variables:
+
+- `TAGB_PLATFORM=slack`
+- `TAGB_SLACK_BOT_TOKEN`
+- `TAGB_SLACK_APP_TOKEN`
+- `TAGB_DB_PATH`
+- `TAGB_FOLLOW_DEBUG`
+
+## Health Checks
+
+```bash
+go run ./cmd/tagb daemon doctor \
+  --platform slack \
+  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TAGB_SLACK_APP_TOKEN"
+
+go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+```
+
+## Using the Bot
+
+- in a DM with the bot, send commands directly
+- in a channel, mention the bot once to start a managed thread
+- follow-up commands can continue inside that thread without re-mentioning the bot
+
+Supported commands:
+
+- `/start`
+- `/help`
+- `/panes`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/enter`
+- `/ctrlc` or `/ctrl-c`
+- `/follow on [interval]|off`
+
+If `/select`, `/unmanage`, `/send`, or `/follow` is sent without arguments, the bot prompts in-thread and waits for the next reply in that same Slack thread.
+
+## Operational Notes
+
+- Slack replies are posted in a thread rooted at the triggering message
+- `/snapshot` defaults to `image`; `/snapshot text` forces plain text output
+- follow mode is one active subscription per Slack conversation tracked by the daemon
+- current pane bindings and reply continuity survive daemon restart through SQLite
+- follow subscriptions do not survive daemon restart

@@ -3,18 +3,19 @@
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![tmux](https://img.shields.io/badge/tmux-required-1BB91F?style=flat-square&logo=tmux)](https://github.com/tmux/tmux)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
+[![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README.zh-CN](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
 
 English | [简体中文](./README.zh-CN.md)
 
-`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram without taking ownership of the pane lifecycle.
+`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram or Slack without taking ownership of the pane lifecycle.
 
 Current scope:
 
 - local CLI for attach, inspect, snapshot, stream, and input
 - local HTTP control plane over the same bridge service
-- Telegram long-polling daemon with SQLite-backed chat bindings and reply continuity
+- multi-connector daemon with Telegram long polling and Slack Socket Mode
 - relay-first behavior only; there is no structured Codex/Claude/Gemini protocol yet
 
 ## Requirements
@@ -22,7 +23,7 @@ Current scope:
 - Go `1.25` or later
 - `tmux`
 - `sqlite3` in `PATH` if you want to run `tagb daemon`
-- a Telegram bot token from BotFather if you want remote control
+- a Telegram bot token or Slack bot/app tokens if you want remote control
 
 ## Build
 
@@ -116,20 +117,34 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
   -d '{"pane":"%5","text":"continue","enter":true}'
 ```
 
-## Telegram Daemon
+## Remote Daemon
 
-Start the daemon:
+Start the Telegram daemon:
 
 ```bash
 go run ./cmd/tagb daemon run \
+  --platform telegram \
   --telegram-token "$TAGB_TELEGRAM_TOKEN" \
   --db ~/.tagb/tagb.db \
   --allow-chat 123456789
 ```
 
+Start the Slack daemon:
+
+```bash
+go run ./cmd/tagb daemon run \
+  --platform slack \
+  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TAGB_SLACK_APP_TOKEN" \
+  --db ~/.tagb/tagb.db
+```
+
 Common flags:
 
+- `--platform telegram|slack`
 - `--telegram-token TOKEN`
+- `--slack-bot-token TOKEN`
+- `--slack-app-token TOKEN`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
@@ -145,7 +160,7 @@ Common flags:
 Checks:
 
 ```bash
-go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
+go run ./cmd/tagb daemon doctor --platform telegram --telegram-token "$TAGB_TELEGRAM_TOKEN"
 go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 ```
 
@@ -162,7 +177,7 @@ Telegram commands:
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
-`/snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+Slack uses the same text commands in DMs and bot-managed threads. `/snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 
 ## Recovery Model
 
@@ -175,7 +190,7 @@ tmux remains the source of truth for pane identity and management metadata. The 
 - `@tagb_created_by=manual-attach`
 - `@tagb_last_activity_unix=<unix timestamp>`
 
-The Telegram daemon stores chat-oriented state in SQLite, including bindings, current pane selection, sessions, and message links.
+The remote daemon stores platform chat state in SQLite, including bindings, current pane selection, sessions, and message links.
 
 ## Docs
 
@@ -183,6 +198,7 @@ The Telegram daemon stores chat-oriented state in SQLite, including bindings, cu
 - [docs/guide-zh.md](./docs/guide-zh.md) for the Chinese quick start
 - [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) for Chinese troubleshooting
 - [docs/telegram.md](./docs/telegram.md) for Telegram setup and operations
+- [docs/slack.md](./docs/slack.md) for Slack setup and operations
 - [docs/architecture.md](./docs/architecture.md) for the current system architecture
 - [docs/roadmap.md](./docs/roadmap.md) for near-term roadmap items
 
@@ -191,7 +207,6 @@ The Telegram daemon stores chat-oriented state in SQLite, including bindings, cu
 - the project is relay-first; there is still no structured agent event parsing
 - control keys are limited to `Enter` and `Ctrl-C`
 - follow restore does not survive daemon restart yet
-- Telegram is the only remote connector today
 - the SQLite layer still shells out to `sqlite3` rather than using an embedded driver
 
 ## Acknowledgements

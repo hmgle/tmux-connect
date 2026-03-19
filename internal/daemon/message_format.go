@@ -3,20 +3,27 @@ package daemon
 import (
 	"html"
 	"strings"
-
-	"github.com/hmgle/tmux-connect/internal/telegram"
 )
 
-func decorateTelegramMessage(kind string, text string, opts telegram.SendOptions) (string, telegram.SendOptions) {
+func decorateTelegramMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
 	if isPreformattedHTML(kind) {
-		opts.ParseMode = telegram.ParseModeHTML
+		opts.Format = MessageFormatTelegramHTML
 		return text, opts
 	}
 	if !usesTerminalHTML(kind) {
 		return text, opts
 	}
-	opts.ParseMode = telegram.ParseModeHTML
+	opts.Format = MessageFormatTelegramHTML
 	return renderTelegramTerminalHTML(text), opts
+}
+
+func decorateSlackMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	switch strings.TrimSpace(kind) {
+	case "panes", "snapshot", "follow-initial", "follow-output":
+		return renderSlackCodeBlock(text), opts
+	default:
+		return text, opts
+	}
 }
 
 func isPreformattedHTML(kind string) bool {
@@ -49,6 +56,14 @@ func renderTelegramTerminalHTML(text string) string {
 		return "<b>" + html.EscapeString(header) + "</b>"
 	}
 	return "<b>" + html.EscapeString(header) + "</b>\n<pre>" + html.EscapeString(body) + "</pre>"
+}
+
+func renderSlackCodeBlock(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "```(empty output)```"
+	}
+	return "```" + strings.ReplaceAll(text, "```", "`\u200b``") + "```"
 }
 
 func formatSnapshotCaption(paneKey string) string {

@@ -7,9 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/hmgle/tmux-connect/internal/telegram"
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -101,65 +99,56 @@ func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 	}
 }
 
-type fakeTelegramBot struct {
-	setCommandsErr error
-	getUpdatesErr  error
-	updates        []telegram.Update
-	getUpdatesFn   func(context.Context, int64, time.Duration) ([]telegram.Update, error)
-	order          []string
-	commands       []telegram.BotCommand
+type fakeRuntimeAdapter struct {
+	registerErr error
+	runErr      error
+	runFn       func(context.Context, func(context.Context, IncomingMessage) error) error
+	order       []string
+	commands    []botCommandSpec
 }
 
-func (f *fakeTelegramBot) SendMessage(context.Context, int64, string, telegram.SendOptions) (telegram.Message, error) {
-	return telegram.Message{}, nil
+func (f *fakeRuntimeAdapter) Platform() string { return "telegram" }
+func (f *fakeRuntimeAdapter) SendMessage(context.Context, ChatRef, string, SendOptions) (OutboundMessage, error) {
+	return OutboundMessage{}, nil
 }
-
-func (f *fakeTelegramBot) SendPhoto(context.Context, int64, string, []byte, string, telegram.SendOptions) (telegram.Message, error) {
-	return telegram.Message{}, nil
+func (f *fakeRuntimeAdapter) SendImage(context.Context, ChatRef, string, []byte, string, SendOptions) (OutboundMessage, error) {
+	return OutboundMessage{}, nil
 }
-
-func (f *fakeTelegramBot) PollTimeout() time.Duration {
-	return time.Second
+func (f *fakeRuntimeAdapter) DecorateMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	return text, opts
 }
-
-func (f *fakeTelegramBot) DrainPendingUpdates(context.Context) (int64, error) {
-	f.order = append(f.order, "drain")
-	return 0, nil
+func (f *fakeRuntimeAdapter) PromptOptions(IncomingMessage, commandPromptSpec) SendOptions {
+	return SendOptions{}
 }
-
-func (f *fakeTelegramBot) GetUpdates(ctx context.Context, offset int64, timeout time.Duration) ([]telegram.Update, error) {
-	f.order = append(f.order, "get")
-	if f.getUpdatesFn != nil {
-		return f.getUpdatesFn(ctx, offset, timeout)
+func (f *fakeRuntimeAdapter) SnapshotCaption(string) string { return "" }
+func (f *fakeRuntimeAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {
+	f.order = append(f.order, "run")
+	if f.runFn != nil {
+		return f.runFn(ctx, handler)
 	}
-	return f.updates, f.getUpdatesErr
+	return f.runErr
 }
-
-func (f *fakeTelegramBot) SetMyCommands(_ context.Context, commands []telegram.BotCommand) error {
+func (f *fakeRuntimeAdapter) RegisterCommands(_ context.Context, commands []botCommandSpec) error {
 	f.order = append(f.order, "set")
-	f.commands = append([]telegram.BotCommand(nil), commands...)
-	return f.setCommandsErr
+	f.commands = append([]botCommandSpec(nil), commands...)
+	return f.registerErr
 }
+func (f *fakeRuntimeAdapter) Close() error { return nil }
 
 func TestRuntimeRunRegistersTelegramCommandsBeforePolling(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	bot := &fakeTelegramBot{}
+	bot := &fakeRuntimeAdapter{}
 	runtime := &Runtime{
-		client: bot,
-		stderr: &bytes.Buffer{},
-	}
-	bot.getUpdatesFn = func(_ context.Context, _ int64, _ time.Duration) ([]telegram.Update, error) {
-		cancel()
-		return nil, context.Canceled
+		adapter: bot,
+		stderr:  &bytes.Buffer{},
 	}
 
-	if err := runtime.Run(ctx); err != nil {
+	if err := runtime.Run(context.Background()); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if strings.Join(bot.order, ",") != "set,drain,get" {
-		t.Fatalf("call order = %q, want %q", strings.Join(bot.order, ","), "set,drain,get")
+	if strings.Join(bot.order, ",") != "set,run" {
+		t.Fatalf("call order = %q, want %q", strings.Join(bot.order, ","), "set,run")
 	}
 	if len(bot.commands) != len(daemonCommandSpecs()) {
 		t.Fatalf("commands len = %d, want %d", len(bot.commands), len(daemonCommandSpecs()))
@@ -172,17 +161,17 @@ func TestRuntimeRunRegistersTelegramCommandsBeforePolling(t *testing.T) {
 func TestRuntimeRunReturnsMenuRegistrationError(t *testing.T) {
 	t.Parallel()
 
-	bot := &fakeTelegramBot{setCommandsErr: context.DeadlineExceeded}
+	bot := &fakeRuntimeAdapter{registerErr: context.DeadlineExceeded}
 	runtime := &Runtime{
-		client: bot,
-		stderr: &bytes.Buffer{},
+		adapter: bot,
+		stderr:  &bytes.Buffer{},
 	}
 	err := runtime.Run(context.Background())
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "configure telegram commands") {
-		t.Fatalf("Run() error = %q, want configure telegram commands", err)
+	if !strings.Contains(err.Error(), "deadline exceeded") {
+		t.Fatalf("Run() error = %q, want deadline exceeded", err)
 	}
 	if strings.Join(bot.order, ",") != "set" {
 		t.Fatalf("call order = %q, want %q", strings.Join(bot.order, ","), "set")

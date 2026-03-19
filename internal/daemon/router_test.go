@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/png"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -33,29 +34,79 @@ type sentMessage struct {
 	ReplyMarkup      any
 }
 
-func (m *fakeMessenger) SendMessage(_ context.Context, _ int64, text string, opts telegram.SendOptions) (telegram.Message, error) {
+func (m *fakeMessenger) Platform() string { return "telegram" }
+
+func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	parseMode := telegram.ParseMode("")
+	if opts.Format == MessageFormatTelegramHTML {
+		parseMode = telegram.ParseModeHTML
+	}
+	replyTo := int64(0)
+	if opts.ReplyToMessageID != "" {
+		parsed, _ := strconv.ParseInt(opts.ReplyToMessageID, 10, 64)
+		replyTo = parsed
+	}
 	m.messages = append(m.messages, sentMessage{
 		Text:             text,
-		ParseMode:        opts.ParseMode,
-		ReplyToMessageID: opts.ReplyToMessageID,
+		ParseMode:        parseMode,
+		ReplyToMessageID: replyTo,
 		ReplyMarkup:      opts.ReplyMarkup,
 	})
-	return telegram.Message{MessageID: int64(len(m.messages))}, nil
+	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
 }
 
-func (m *fakeMessenger) SendPhoto(_ context.Context, _ int64, fileName string, photo []byte, caption string, opts telegram.SendOptions) (telegram.Message, error) {
+func (m *fakeMessenger) SendImage(_ context.Context, _ ChatRef, fileName string, photo []byte, caption string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	parseMode := telegram.ParseMode("")
+	if opts.Format == MessageFormatTelegramHTML {
+		parseMode = telegram.ParseModeHTML
+	}
+	replyTo := int64(0)
+	if opts.ReplyToMessageID != "" {
+		parsed, _ := strconv.ParseInt(opts.ReplyToMessageID, 10, 64)
+		replyTo = parsed
+	}
 	m.messages = append(m.messages, sentMessage{
 		Caption:          caption,
 		FileName:         fileName,
 		Photo:            append([]byte(nil), photo...),
-		ParseMode:        opts.ParseMode,
-		ReplyToMessageID: opts.ReplyToMessageID,
+		ParseMode:        parseMode,
+		ReplyToMessageID: replyTo,
 	})
-	return telegram.Message{MessageID: int64(len(m.messages))}, nil
+	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
+}
+
+func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	return decorateTelegramMessage(kind, text, opts)
+}
+
+func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
+	return SendOptions{
+		ReplyToMessageID: message.MessageID,
+		ReplyMarkup: telegram.ForceReply{
+			ForceReply:            true,
+			InputFieldPlaceholder: spec.Placeholder,
+		},
+	}
+}
+
+func (m *fakeMessenger) SnapshotCaption(paneKey string) string {
+	return formatSnapshotCaption(paneKey)
+}
+
+func (m *fakeMessenger) Run(context.Context, func(context.Context, IncomingMessage) error) error {
+	return nil
+}
+
+func (m *fakeMessenger) RegisterCommands(context.Context, []botCommandSpec) error {
+	return nil
+}
+
+func (m *fakeMessenger) Close() error {
+	return nil
 }
 
 func (m *fakeMessenger) snapshot() []sentMessage {
@@ -132,7 +183,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, registry, store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if service.listCalls != 0 {
@@ -142,7 +193,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 		t.Fatalf("attachCalls = %d, want 1", service.attachCalls)
 	}
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/panes"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/panes")); err != nil {
 		t.Fatalf("HandleMessage(panes) error = %v", err)
 	}
 	if service.listCalls != 1 {
@@ -160,7 +211,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 		t.Fatalf("panes parse mode = %q, want HTML", last.ParseMode)
 	}
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/panes"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "/panes")); err != nil {
 		t.Fatalf("HandleMessage(second panes) error = %v", err)
 	}
 	if service.listCalls != 2 {
@@ -238,6 +289,19 @@ func normalizePaneRef(ref string) string {
 	return ref
 }
 
+func telegramChat(id int64) ChatRef {
+	return ChatRef{Platform: "telegram", ChatID: strconv.FormatInt(id, 10)}
+}
+
+func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      telegramChat(chatID),
+		MessageID: strconv.FormatInt(messageID, 10),
+		Text:      text,
+		ChatType:  "private",
+	}
+}
+
 func TestRouterSelectAndSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -251,10 +315,10 @@ func TestRouterSelectAndSnapshot(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -262,7 +326,7 @@ func TestRouterSelectAndSnapshot(t *testing.T) {
 		t.Fatalf("current = %q, want %q", current, "default:%5")
 	}
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/snapshot")); err != nil {
 		t.Fatalf("HandleMessage(snapshot) error = %v", err)
 	}
 	messages := messenger.snapshot()
@@ -293,7 +357,7 @@ func TestRouterSelectPromptsForPaneAndExecutesReply(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 10, Text: "/select"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 10, "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 
@@ -313,11 +377,11 @@ func TestRouterSelectPromptsForPaneAndExecutesReply(t *testing.T) {
 		t.Fatalf("force reply = %#v, want placeholder %%5", forceReply)
 	}
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 11, Text: "%5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 11, "%5")); err != nil {
 		t.Fatalf("HandleMessage(pending select reply) error = %v", err)
 	}
 
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -344,10 +408,10 @@ func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/send"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/send")); err != nil {
 		t.Fatalf("HandleMessage(send) error = %v", err)
 	}
 	latest := messenger.snapshot()
@@ -356,7 +420,7 @@ func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
 		t.Fatalf("prompt text = %q", prompt.Text)
 	}
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "status --short"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "status --short")); err != nil {
 		t.Fatalf("HandleMessage(send reply) error = %v", err)
 	}
 	if len(service.sendCalls) != 1 {
@@ -380,17 +444,17 @@ func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/help"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/help")); err != nil {
 		t.Fatalf("HandleMessage(help) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "%5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "%5")); err != nil {
 		t.Fatalf("HandleMessage(text after help) error = %v", err)
 	}
 
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -421,14 +485,14 @@ func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
 	if service.attachCalls != 1 {
 		t.Fatalf("attachCalls = %d, want 1", service.attachCalls)
 	}
 
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -485,10 +549,10 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/snapshot text"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/snapshot text")); err != nil {
 		t.Fatalf("HandleMessage(snapshot text) error = %v", err)
 	}
 
@@ -519,7 +583,7 @@ func TestReplyBusReplySnapshotUsesConfiguredRenderOptions(t *testing.T) {
 		FontSize:  20,
 	})
 
-	if err := replyBus.ReplySnapshot(ctx, 7, "default:%5", "plain text", "\x1b[31merror\x1b[0m"); err != nil {
+	if err := replyBus.ReplySnapshot(ctx, telegramChat(7), "default:%5", "plain text", "\x1b[31merror\x1b[0m"); err != nil {
 		t.Fatalf("ReplySnapshot() error = %v", err)
 	}
 
@@ -554,10 +618,10 @@ func TestRouterFollow(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on")); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
 	}
 
@@ -570,7 +634,7 @@ func TestRouterFollow(t *testing.T) {
 		}
 		return false
 	}, messenger)
-	follow.Disable(7)
+	follow.Disable(telegramChat(7).Key())
 
 	messages := messenger.snapshot()
 	texts := make([]string, 0, len(messages))
@@ -616,15 +680,15 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	follow.minInterval = 5 * time.Second
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on")); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
 	}
 
 	service.sub.PushChunk(tmux.OutputChunk{Text: "buffered before disable", ReceivedAt: time.Now()})
-	if !follow.Disable(7) {
+	if !follow.Disable(telegramChat(7).Key()) {
 		t.Fatalf("Disable() = false, want true")
 	}
 
@@ -652,14 +716,14 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 2s"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on 2s")); err != nil {
 		t.Fatalf("HandleMessage(follow on 2s) error = %v", err)
 	}
 
-	if got := follow.Options(7).MinInterval; got != 2*time.Second {
+	if got := follow.Options(telegramChat(7).Key()).MinInterval; got != 2*time.Second {
 		t.Fatalf("follow interval = %s, want %s", got, 2*time.Second)
 	}
 
@@ -691,10 +755,10 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on 10ms"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on 10ms")); err != nil {
 		t.Fatalf("HandleMessage(follow on 10ms) error = %v", err)
 	}
 
@@ -755,10 +819,10 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on")); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
 	}
 
@@ -790,17 +854,17 @@ func TestRouterClearStopsFollowAndKeepsSelectionHistory(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on")); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/clear"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "/clear")); err != nil {
 		t.Fatalf("HandleMessage(clear) error = %v", err)
 	}
 
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -808,14 +872,14 @@ func TestRouterClearStopsFollowAndKeepsSelectionHistory(t *testing.T) {
 		t.Fatalf("current = %q, want empty", current)
 	}
 
-	bindings, err := store.ListBindings(ctx, 7)
+	bindings, err := store.ListBindings(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("ListBindings() error = %v", err)
 	}
 	if len(bindings) != 1 || bindings[0] != "default:%5" {
 		t.Fatalf("bindings = %#v, want [default:%%5]", bindings)
 	}
-	if follow.IsEnabled(7) {
+	if follow.IsEnabled(telegramChat(7).Key()) {
 		t.Fatalf("follow is still enabled")
 	}
 
@@ -840,13 +904,13 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 	follow := NewFollowManager(service, replyBus, 20)
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil)
 
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 1, Text: "/select %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 2, Text: "/follow on"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/follow on")); err != nil {
 		t.Fatalf("HandleMessage(follow on) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, IncomingMessage{ChatID: 7, MessageID: 3, Text: "/unmanage %5"}); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "/unmanage %5")); err != nil {
 		t.Fatalf("HandleMessage(unmanage) error = %v", err)
 	}
 
@@ -854,7 +918,7 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 		t.Fatalf("detachCalls = %d, want 1", service.detachCalls)
 	}
 
-	current, err := store.CurrentPane(ctx, 7)
+	current, err := store.CurrentPane(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("CurrentPane() error = %v", err)
 	}
@@ -862,14 +926,14 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 		t.Fatalf("current = %q, want empty", current)
 	}
 
-	bindings, err := store.ListBindings(ctx, 7)
+	bindings, err := store.ListBindings(ctx, telegramChat(7))
 	if err != nil {
 		t.Fatalf("ListBindings() error = %v", err)
 	}
 	if len(bindings) != 0 {
 		t.Fatalf("bindings = %#v, want empty", bindings)
 	}
-	if follow.IsEnabled(7) {
+	if follow.IsEnabled(telegramChat(7).Key()) {
 		t.Fatalf("follow is still enabled")
 	}
 
@@ -898,12 +962,12 @@ func TestHelpTextUsesNewTelegramCommands(t *testing.T) {
 	}
 }
 
-func TestTelegramMenuCommandsMatchHelp(t *testing.T) {
+func TestCommandSpecsMatchHelp(t *testing.T) {
 	t.Parallel()
 
-	commands := telegramMenuCommands()
-	if len(commands) != len(daemonCommandSpecs()) {
-		t.Fatalf("commands len = %d, want %d", len(commands), len(daemonCommandSpecs()))
+	commands := daemonCommandSpecs()
+	if len(commands) == 0 {
+		t.Fatal("daemonCommandSpecs() returned no commands")
 	}
 	if commands[0].Command != "start" || commands[0].Description == "" {
 		t.Fatalf("first command = %#v, want start with description", commands[0])

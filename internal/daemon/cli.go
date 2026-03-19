@@ -8,17 +8,19 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/hmgle/tmux-connect/internal/tagb"
-	"github.com/hmgle/tmux-connect/internal/telegram"
 	"github.com/hmgle/tmux-connect/internal/termrender"
+	"time"
 )
 
 type Config struct {
+	Platform         string
 	TelegramToken    string
+	SlackBotToken    string
+	SlackAppToken    string
 	DBPath           string
-	AllowChats       []int64
+	AllowChats       []string
 	PollTimeout      time.Duration
 	SnapshotLines    int
 	SnapshotTheme    string
@@ -37,16 +39,8 @@ type Runtime struct {
 	store    *Store
 	router   *Router
 	follow   *FollowManager
-	client   telegramBot
+	adapter  platformAdapter
 	stderr   io.Writer
-}
-
-type telegramBot interface {
-	messenger
-	PollTimeout() time.Duration
-	DrainPendingUpdates(context.Context) (int64, error)
-	GetUpdates(context.Context, int64, time.Duration) ([]telegram.Update, error)
-	SetMyCommands(context.Context, []telegram.BotCommand) error
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
@@ -95,10 +89,23 @@ func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 
 	fmt.Fprintln(stdout, "tagb daemon doctor")
 
-	if strings.TrimSpace(cfg.TelegramToken) == "" {
-		return tagb.UsageError("telegram token is required; pass --telegram-token or TAGB_TELEGRAM_TOKEN")
+	switch cfg.Platform {
+	case "telegram":
+		if strings.TrimSpace(cfg.TelegramToken) == "" {
+			return tagb.UsageError("telegram token is required; pass --telegram-token or TAGB_TELEGRAM_TOKEN")
+		}
+		fmt.Fprintln(stdout, "telegram token: ok")
+	case "slack":
+		if strings.TrimSpace(cfg.SlackBotToken) == "" {
+			return tagb.UsageError("slack bot token is required; pass --slack-bot-token or TAGB_SLACK_BOT_TOKEN")
+		}
+		if strings.TrimSpace(cfg.SlackAppToken) == "" {
+			return tagb.UsageError("slack app token is required; pass --slack-app-token or TAGB_SLACK_APP_TOKEN")
+		}
+		fmt.Fprintln(stdout, "slack tokens: ok")
+	default:
+		return tagb.UsageError("unsupported platform %q", cfg.Platform)
 	}
-	fmt.Fprintln(stdout, "telegram token: ok")
 
 	store, err := OpenStore(ctx, cfg.DBPath)
 	if err != nil {
@@ -144,9 +151,6 @@ func runStatus(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 }
 
 func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.Writer) (*Runtime, error) {
-	if strings.TrimSpace(cfg.TelegramToken) == "" {
-		return nil, tagb.UsageError("telegram token is required; pass --telegram-token or TAGB_TELEGRAM_TOKEN")
-	}
 	store, err := OpenStore(ctx, cfg.DBPath)
 	if err != nil {
 		return nil, tagb.UsageError("open sqlite store: %v", err)
@@ -156,11 +160,11 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		return nil, tagb.TmuxError("initial pane refresh: %v", err)
 	}
 
-	client := telegram.NewClient(cfg.TelegramToken,
-		telegram.WithBaseURL(cfg.APIBaseURL),
-		telegram.WithPollTimeout(cfg.PollTimeout),
-	)
-	replyBus := NewReplyBus(client, store, snapshotRenderOptions(cfg))
+	adapter, err := newPlatformAdapter(cfg, stderr)
+	if err != nil {
+		return nil, err
+	}
+	replyBus := NewReplyBus(adapter, store, snapshotRenderOptions(cfg))
 	follow := NewFollowManager(service, replyBus, cfg.FollowLines)
 	follow.minInterval = cfg.FollowMinGap
 	if cfg.FollowDebug {
@@ -175,87 +179,42 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		store:    store,
 		router:   router,
 		follow:   follow,
-		client:   client,
+		adapter:  adapter,
 		stderr:   stderr,
 	}, nil
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
-	if err := r.client.SetMyCommands(ctx, telegramMenuCommands()); err != nil {
-		return tagb.TmuxError("configure telegram commands: %v", err)
+	if err := r.adapter.RegisterCommands(ctx, daemonCommandSpecs()); err != nil {
+		return err
 	}
-	offset, err := r.client.DrainPendingUpdates(ctx)
-	if err != nil {
-		return tagb.TmuxError("drain telegram updates: %v", err)
-	}
-	for {
-		if ctx.Err() != nil {
-			return nil
-		}
-		updates, err := r.client.GetUpdates(ctx, offset, r.client.PollTimeout())
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			fmt.Fprintf(r.stderr, "telegram polling error: %v\n", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(2 * time.Second):
-			}
-			continue
-		}
-		for _, update := range updates {
-			if update.UpdateID >= offset {
-				offset = update.UpdateID + 1
-			}
-			if update.Message == nil {
-				continue
-			}
-			if strings.TrimSpace(update.Message.Text) == "" {
-				continue
-			}
-			if err := r.router.HandleMessage(ctx, IncomingMessage{
-				ChatID:    update.Message.Chat.ID,
-				MessageID: update.Message.MessageID,
-				Text:      update.Message.Text,
-				ChatType:  update.Message.Chat.Type,
-			}); err != nil {
-				fmt.Fprintf(r.stderr, "router error: %v\n", err)
-			}
-		}
-	}
+	return r.adapter.Run(ctx, r.router.HandleMessage)
 }
 
 func (r *Runtime) Close() {
 	if r.follow != nil {
 		r.follow.Close()
 	}
-}
-
-type int64ListFlag struct {
-	values []int64
-}
-
-func (f *int64ListFlag) String() string {
-	out := make([]string, 0, len(f.values))
-	for _, value := range f.values {
-		out = append(out, strconv.FormatInt(value, 10))
+	if r.adapter != nil {
+		_ = r.adapter.Close()
 	}
-	return strings.Join(out, ",")
 }
 
-func (f *int64ListFlag) Set(value string) error {
+type stringListFlag struct {
+	values []string
+}
+
+func (f *stringListFlag) String() string {
+	return strings.Join(f.values, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
 	for _, part := range strings.Split(value, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		parsed, err := strconv.ParseInt(part, 10, 64)
-		if err != nil {
-			return err
-		}
-		f.values = append(f.values, parsed)
+		f.values = append(f.values, part)
 	}
 	return nil
 }
@@ -269,9 +228,16 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 		return Config{}, tagb.UsageError("%v", err)
 	}
 
-	allowChats := &int64ListFlag{}
+	allowChats := &stringListFlag{}
 	cfg := Config{}
+	defaultPlatform := strings.TrimSpace(os.Getenv("TAGB_PLATFORM"))
+	if defaultPlatform == "" {
+		defaultPlatform = "telegram"
+	}
+	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack)")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_TOKEN")), "telegram bot token")
+	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_BOT_TOKEN")), "slack bot token")
+	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_APP_TOKEN")), "slack app token for socket mode")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", defaultDBPath()), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", 20*time.Second, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
@@ -286,6 +252,10 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, tagb.UsageError("%v", err)
+	}
+	cfg.Platform = strings.TrimSpace(strings.ToLower(cfg.Platform))
+	if cfg.Platform == "" {
+		cfg.Platform = "telegram"
 	}
 	cfg.AllowChats = append(cfg.AllowChats, allowChats.values...)
 	if cfg.PollTimeout <= 0 {
@@ -303,8 +273,19 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	if cfg.FollowMinGap <= 0 {
 		return Config{}, tagb.UsageError("--follow-min-interval must be > 0")
 	}
-	if requireRun && strings.TrimSpace(cfg.TelegramToken) == "" {
-		return Config{}, tagb.UsageError("daemon run requires --telegram-token or TAGB_TELEGRAM_TOKEN")
+	if requireRun {
+		switch cfg.Platform {
+		case "telegram":
+			if strings.TrimSpace(cfg.TelegramToken) == "" {
+				return Config{}, tagb.UsageError("daemon run requires --telegram-token or TAGB_TELEGRAM_TOKEN")
+			}
+		case "slack":
+			if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
+				return Config{}, tagb.UsageError("daemon run requires --slack-bot-token/--slack-app-token or TAGB_SLACK_BOT_TOKEN/TAGB_SLACK_APP_TOKEN")
+			}
+		default:
+			return Config{}, tagb.UsageError("unsupported --platform %q", cfg.Platform)
+		}
 	}
 	if strings.TrimSpace(cfg.DBPath) == "" {
 		return Config{}, tagb.UsageError("--db is required")
@@ -351,7 +332,7 @@ func envBool(key string) bool {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprint(w, `tagb daemon manages Telegram relay access for tmux panes.
+	fmt.Fprint(w, `tagb daemon manages remote relay access for tmux panes.
 
 Usage:
   tagb daemon <command> [flags]
@@ -362,7 +343,10 @@ Commands:
   status   Show sqlite counts and current managed pane count
 
 Common flags:
+  --platform telegram|slack
   --telegram-token TOKEN
+  --slack-bot-token TOKEN
+  --slack-app-token TOKEN
   --db PATH
   --allow-chat 123456
   --poll-timeout 20s
@@ -374,4 +358,15 @@ Common flags:
   --follow-min-interval 700ms
   --follow-debug
 `)
+}
+
+func newPlatformAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
+	switch cfg.Platform {
+	case "telegram":
+		return newTelegramAdapter(cfg, stderr), nil
+	case "slack":
+		return newSlackAdapter(cfg, stderr)
+	default:
+		return nil, tagb.UsageError("unsupported --platform %q", cfg.Platform)
+	}
 }

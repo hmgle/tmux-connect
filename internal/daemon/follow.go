@@ -22,7 +22,7 @@ type FollowManager struct {
 
 	mu       sync.Mutex
 	debugMu  sync.Mutex
-	sessions map[int64]*followSession
+	sessions map[string]*followSession
 }
 
 type FollowOptions struct {
@@ -30,7 +30,7 @@ type FollowOptions struct {
 }
 
 type followSession struct {
-	chatID      int64
+	chat        ChatRef
 	paneKey     string
 	minInterval time.Duration
 	cancel      context.CancelFunc
@@ -43,12 +43,12 @@ func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int)
 		initialLines:  initialLines,
 		minInterval:   700 * time.Millisecond,
 		maxMessageLen: 3500,
-		sessions:      make(map[int64]*followSession),
+		sessions:      make(map[string]*followSession),
 	}
 }
 
-func (m *FollowManager) Enable(ctx context.Context, chatID int64, paneKey string) error {
-	return m.EnableWithOptions(ctx, chatID, paneKey, FollowOptions{})
+func (m *FollowManager) Enable(ctx context.Context, chat ChatRef, paneKey string) error {
+	return m.EnableWithOptions(ctx, chat, paneKey, FollowOptions{})
 }
 
 func (m *FollowManager) SetDebugWriter(w io.Writer) {
@@ -57,7 +57,8 @@ func (m *FollowManager) SetDebugWriter(w io.Writer) {
 	m.debugWriter = w
 }
 
-func (m *FollowManager) EnableWithOptions(ctx context.Context, chatID int64, paneKey string, opts FollowOptions) error {
+func (m *FollowManager) EnableWithOptions(ctx context.Context, chat ChatRef, paneKey string, opts FollowOptions) error {
+	chat = chat.Normalized()
 	paneKey = strings.TrimSpace(paneKey)
 	if paneKey == "" {
 		return fmt.Errorf("pane key is required")
@@ -71,42 +72,43 @@ func (m *FollowManager) EnableWithOptions(ctx context.Context, chatID int64, pan
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &followSession{
-		chatID:      chatID,
+		chat:        chat,
 		paneKey:     stream.Pane.Target.PaneKey(),
 		minInterval: opts.MinInterval,
 		cancel:      cancel,
 	}
+	chatKey := chat.Key()
 
 	m.mu.Lock()
-	if existing := m.sessions[chatID]; existing != nil {
+	if existing := m.sessions[chatKey]; existing != nil {
 		existing.cancel()
 	}
-	m.sessions[chatID] = session
+	m.sessions[chatKey] = session
 	m.mu.Unlock()
 
 	go m.run(runCtx, session, stream)
 	return nil
 }
 
-func (m *FollowManager) Options(chatID int64) FollowOptions {
+func (m *FollowManager) Options(chatKey string) FollowOptions {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	session := m.sessions[chatID]
+	session := m.sessions[chatKey]
 	if session == nil {
 		return FollowOptions{MinInterval: m.minInterval}
 	}
 	return FollowOptions{MinInterval: session.minInterval}
 }
 
-func (m *FollowManager) Disable(chatID int64) bool {
+func (m *FollowManager) Disable(chatKey string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	session := m.sessions[chatID]
+	session := m.sessions[chatKey]
 	if session == nil {
 		return false
 	}
-	delete(m.sessions, chatID)
+	delete(m.sessions, chatKey)
 	session.cancel()
 	return true
 }
@@ -115,25 +117,25 @@ func (m *FollowManager) StopPane(paneKey string) {
 	paneKey = strings.TrimSpace(paneKey)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for chatID, session := range m.sessions {
+	for chatKey, session := range m.sessions {
 		if session.paneKey != paneKey {
 			continue
 		}
-		delete(m.sessions, chatID)
+		delete(m.sessions, chatKey)
 		session.cancel()
 	}
 }
 
-func (m *FollowManager) IsEnabled(chatID int64) bool {
+func (m *FollowManager) IsEnabled(chatKey string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.sessions[chatID] != nil
+	return m.sessions[chatKey] != nil
 }
 
-func (m *FollowManager) CurrentPane(chatID int64) string {
+func (m *FollowManager) CurrentPane(chatKey string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if session := m.sessions[chatID]; session != nil {
+	if session := m.sessions[chatKey]; session != nil {
 		return session.paneKey
 	}
 	return ""
@@ -142,22 +144,22 @@ func (m *FollowManager) CurrentPane(chatID int64) string {
 func (m *FollowManager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for chatID, session := range m.sessions {
-		delete(m.sessions, chatID)
+	for chatKey, session := range m.sessions {
+		delete(m.sessions, chatKey)
 		session.cancel()
 	}
 }
 
 func (m *FollowManager) run(ctx context.Context, session *followSession, stream tagb.PaneStream) {
 	defer stream.Subscription.Close()
-	defer m.removeSession(session.chatID, session.paneKey)
+	defer m.removeSession(session.chat.Key(), session.paneKey)
 
 	transcript := stream.Initial
 	lastSentTranscript := ""
 	var lastSentAt time.Time
 
 	if initial := strings.TrimSpace(stream.Initial); initial != "" {
-		if err := m.replyBus.Reply(ctx, session.chatID, session.paneKey, "follow-initial", formatFollowMessage(session.paneKey, initial, m.maxMessageLen)); err != nil {
+		if err := m.replyBus.Reply(ctx, session.chat, session.paneKey, "follow-initial", formatFollowMessage(session.paneKey, initial, m.maxMessageLen)); err != nil {
 			return
 		}
 		m.debugf(session, "initial sent initial_len=%d initial_preview=%s", len([]rune(stream.Initial)), debugPreview(stream.Initial, 180))
@@ -219,7 +221,7 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		if !changed {
 			return true
 		}
-		if err := m.replyBus.Reply(flushCtx, session.chatID, session.paneKey, "follow-output", formatFollowMessage(session.paneKey, text, m.maxMessageLen)); err != nil {
+		if err := m.replyBus.Reply(flushCtx, session.chat, session.paneKey, "follow-output", formatFollowMessage(session.paneKey, text, m.maxMessageLen)); err != nil {
 			return false
 		}
 		lastSentTranscript = transcript
@@ -272,7 +274,7 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 			if !flush(ctx) {
 				return
 			}
-			_ = m.replyBus.Reply(ctx, session.chatID, session.paneKey, "follow-error", fmt.Sprintf("follow stopped for %s: %v", session.paneKey, err))
+			_ = m.replyBus.Reply(ctx, session.chat, session.paneKey, "follow-error", fmt.Sprintf("follow stopped for %s: %v", session.paneKey, err))
 			return
 		case chunk, ok := <-chunks:
 			if !ok {
@@ -319,7 +321,7 @@ func (m *FollowManager) debugf(session *followSession, format string, args ...an
 
 	label := "follow-debug"
 	if session != nil {
-		label = fmt.Sprintf("follow-debug chat=%d pane=%s", session.chatID, session.paneKey)
+		label = fmt.Sprintf("follow-debug chat=%s pane=%s", session.chat.Key(), session.paneKey)
 	}
 	message := fmt.Sprintf(format, args...)
 
@@ -556,17 +558,17 @@ func commonPrefixLines(left []string, right []string) int {
 	return limit
 }
 
-func (m *FollowManager) removeSession(chatID int64, paneKey string) {
+func (m *FollowManager) removeSession(chatKey string, paneKey string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	session := m.sessions[chatID]
+	session := m.sessions[chatKey]
 	if session == nil {
 		return
 	}
 	if session.paneKey != paneKey {
 		return
 	}
-	delete(m.sessions, chatID)
+	delete(m.sessions, chatKey)
 }
 
 func formatFollowMessage(paneKey string, text string, maxLen int) string {

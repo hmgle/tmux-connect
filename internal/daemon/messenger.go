@@ -5,111 +5,114 @@ import (
 	"log"
 	"strings"
 
-	"github.com/hmgle/tmux-connect/internal/telegram"
 	"github.com/hmgle/tmux-connect/internal/termrender"
 )
 
-type messenger interface {
-	SendMessage(context.Context, int64, string, telegram.SendOptions) (telegram.Message, error)
-	SendPhoto(context.Context, int64, string, []byte, string, telegram.SendOptions) (telegram.Message, error)
-}
-
 type ReplyBus struct {
-	messenger             messenger
+	adapter               platformAdapter
 	store                 *Store
 	snapshotRenderOptions termrender.Options
 }
 
-const telegramPlatform = "telegram"
-
-func NewReplyBus(m messenger, store *Store, snapshotRenderOptions termrender.Options) *ReplyBus {
-	return &ReplyBus{messenger: m, store: store, snapshotRenderOptions: snapshotRenderOptions}
+func NewReplyBus(adapter platformAdapter, store *Store, snapshotRenderOptions termrender.Options) *ReplyBus {
+	return &ReplyBus{adapter: adapter, store: store, snapshotRenderOptions: snapshotRenderOptions}
 }
 
-func (b *ReplyBus) Reply(ctx context.Context, chatID int64, paneKey string, kind string, text string) error {
-	return b.ReplyWithOptions(ctx, chatID, paneKey, kind, text, telegram.SendOptions{})
+func (b *ReplyBus) Reply(ctx context.Context, chat ChatRef, paneKey string, kind string, text string) error {
+	return b.ReplyWithOptions(ctx, chat, paneKey, kind, text, SendOptions{})
 }
 
-func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chatID int64, paneKey string, kind string, text string, opts telegram.SendOptions) error {
-	state := b.prepareOutbound(ctx, chatID, paneKey)
-	if opts.ReplyToMessageID <= 0 {
+func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chat ChatRef, paneKey string, kind string, text string, opts SendOptions) error {
+	state := b.prepareOutbound(ctx, chat, paneKey)
+	if opts.ReplyToMessageID == "" {
 		opts.ReplyToMessageID = state.replyToMessageID
 	}
-	sendText, sendOpts := decorateTelegramMessage(kind, text, opts)
-	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
+	if opts.ThreadID == "" {
+		opts.ThreadID = state.threadID
+	}
+	sendText, sendOpts := b.adapter.DecorateMessage(kind, text, opts)
+	message, err := b.adapter.SendMessage(ctx, chat, sendText, sendOpts)
 	if err != nil {
 		return err
 	}
-	b.recordOutbound(ctx, chatID, state, kind, text, message.MessageID)
+	b.recordOutbound(ctx, chat, state, kind, text, message.MessageID, sendOpts)
 	return nil
 }
 
-func (b *ReplyBus) ReplySnapshot(ctx context.Context, chatID int64, paneKey string, text string, richText string) error {
-	state := b.prepareOutbound(ctx, chatID, paneKey)
+func (b *ReplyBus) ReplySnapshot(ctx context.Context, chat ChatRef, paneKey string, text string, richText string) error {
+	state := b.prepareOutbound(ctx, chat, paneKey)
+	sendOpts := SendOptions{
+		ReplyToMessageID: state.replyToMessageID,
+		ThreadID:         state.threadID,
+	}
 	if data, err := termrender.RenderPNG(richText, b.snapshotRenderOptions); err == nil {
-		message, sendErr := b.messenger.SendPhoto(ctx, chatID, "pane-snapshot.png", data, formatSnapshotCaption(paneKey), telegram.SendOptions{
-			ReplyToMessageID: state.replyToMessageID,
-		})
+		message, sendErr := b.adapter.SendImage(ctx, chat, "pane-snapshot.png", data, b.adapter.SnapshotCaption(paneKey), sendOpts)
 		if sendErr == nil {
-			b.recordOutbound(ctx, chatID, state, "snapshot", text, message.MessageID)
+			b.recordOutbound(ctx, chat, state, "snapshot", text, message.MessageID, sendOpts)
 			return nil
 		}
-		log.Printf("warn: reply bus send snapshot photo: %v", sendErr)
+		log.Printf("warn: reply bus send snapshot image: %v", sendErr)
 	} else if strings.TrimSpace(richText) != "" {
-		log.Printf("warn: reply bus render snapshot photo: %v", err)
+		log.Printf("warn: reply bus render snapshot image: %v", err)
 	}
 
-	sendText, sendOpts := decorateTelegramMessage("snapshot", formatFollowMessage(paneKey, text, 3500), telegram.SendOptions{
-		ReplyToMessageID: state.replyToMessageID,
-	})
-	message, err := b.messenger.SendMessage(ctx, chatID, sendText, sendOpts)
+	sendText, decoratedOpts := b.adapter.DecorateMessage("snapshot", formatFollowMessage(paneKey, text, 3500), sendOpts)
+	message, err := b.adapter.SendMessage(ctx, chat, sendText, decoratedOpts)
 	if err != nil {
 		return err
 	}
-	b.recordOutbound(ctx, chatID, state, "snapshot", text, message.MessageID)
+	b.recordOutbound(ctx, chat, state, "snapshot", text, message.MessageID, decoratedOpts)
 	return nil
 }
 
 type outboundState struct {
 	paneKey          string
 	sessionKey       string
-	replyToMessageID int64
+	replyToMessageID string
+	threadID         string
 }
 
-func (b *ReplyBus) prepareOutbound(ctx context.Context, chatID int64, paneKey string) outboundState {
+func (b *ReplyBus) prepareOutbound(ctx context.Context, chat ChatRef, paneKey string) outboundState {
 	paneKey = strings.TrimSpace(paneKey)
 	state := outboundState{paneKey: paneKey}
-	if paneKey != "" {
-		session, err := b.store.EnsureSession(ctx, telegramPlatform, chatID, paneKey, "")
-		if err != nil {
-			b.warnStoreError("ensure outbound session", err)
-		} else {
-			state.sessionKey = session.SessionKey
-			state.replyToMessageID = session.LastInboundMessageID
-		}
+	if paneKey == "" {
+		return state
 	}
+	session, err := b.store.EnsureSession(ctx, chat, paneKey, "")
+	if err != nil {
+		b.warnStoreError("ensure outbound session", err)
+		return state
+	}
+	state.sessionKey = session.SessionKey
+	state.replyToMessageID = session.LastInboundMessageID
+	state.threadID = session.AgentThreadID
 	return state
 }
 
-func (b *ReplyBus) recordOutbound(ctx context.Context, chatID int64, state outboundState, kind string, text string, messageID int64) {
+func (b *ReplyBus) recordOutbound(ctx context.Context, chat ChatRef, state outboundState, kind string, text string, messageID string, opts SendOptions) {
 	record := MessageRecord{
-		ChatID:            chatID,
+		Chat:              chat,
 		PaneKey:           state.paneKey,
 		Direction:         "out",
 		Kind:              strings.TrimSpace(kind),
-		TelegramMessageID: messageID,
+		PlatformMessageID: messageID,
+		ThreadID:          opts.ThreadID,
 		BodyPreview:       text,
 	}
 	var link *MessageLinkRecord
 	if state.sessionKey != "" {
+		replyTarget := opts.ReplyToMessageID
+		if replyTarget == "" {
+			replyTarget = opts.ThreadID
+		}
 		link = &MessageLinkRecord{
-			Platform:          telegramPlatform,
-			ChatID:            chatID,
+			Platform:          chat.Platform,
+			ChatID:            chat.ChatID,
 			PaneKey:           state.paneKey,
 			SessionKey:        state.sessionKey,
 			Kind:              strings.TrimSpace(kind),
 			OutboundMessageID: messageID,
-			ReplyToMessageID:  state.replyToMessageID,
+			ReplyToMessageID:  replyTarget,
 		}
 	}
 	if err := b.store.RecordOutbound(ctx, record, link); err != nil {
@@ -117,16 +120,17 @@ func (b *ReplyBus) recordOutbound(ctx context.Context, chatID int64, state outbo
 	}
 }
 
-func (b *ReplyBus) LogInbound(ctx context.Context, chatID int64, paneKey string, agent string, messageID int64, kind string, text string) {
+func (b *ReplyBus) LogInbound(ctx context.Context, message IncomingMessage, paneKey string, agent string, kind string) {
 	paneKey = strings.TrimSpace(paneKey)
 	if err := b.store.RecordInbound(ctx, MessageRecord{
-		ChatID:            chatID,
+		Chat:              message.Chat,
 		PaneKey:           paneKey,
 		Direction:         "in",
 		Kind:              strings.TrimSpace(kind),
-		TelegramMessageID: messageID,
-		BodyPreview:       text,
-	}, telegramPlatform, agent); err != nil {
+		PlatformMessageID: message.MessageID,
+		ThreadID:          message.ThreadID,
+		BodyPreview:       message.Text,
+	}, message.Chat.Platform, agent); err != nil {
 		b.warnStoreError("log inbound message", err)
 	}
 }

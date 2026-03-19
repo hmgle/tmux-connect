@@ -8,7 +8,7 @@ It exposes three control surfaces over the same bridge behavior:
 
 - local CLI
 - local HTTP API
-- Telegram relay daemon
+- remote relay daemon
 
 The core design choice is that tmux remains the source of truth for pane identity and pane-level management metadata. The bridge does not own the target process lifecycle.
 
@@ -42,15 +42,20 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 - daemon CLI and config parsing
 - pane registry cache
-- Telegram command router
+- platform-neutral command router
 - follow manager for streaming updates back to chats
-- SQLite-backed store for chat state and reply continuity
+- SQLite-backed store for platform chat state and reply continuity
 
 ### `internal/telegram`
 
 - Telegram Bot API client
 - long polling via `getUpdates`
 - outbound message send operations
+
+### `internal/slack`
+
+- Slack Socket Mode client wrapper
+- outbound Slack message and image upload operations
 
 ### `internal/termrender`
 
@@ -65,15 +70,14 @@ The core design choice is that tmux remains the source of truth for pane identit
 3. Operations run directly against that pane.
 4. If a pane is attached, management metadata is stored on the pane via tmux user options.
 
-### Telegram Daemon
+### Remote Daemon
 
-1. `tagb daemon run` starts with a Telegram token and SQLite path.
+1. `tagb daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
-3. Pending Telegram updates are drained on startup.
-4. The daemon enters `getUpdates` long polling.
-5. Incoming Telegram messages are parsed into commands.
+3. Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection.
+4. Incoming platform messages are parsed into commands.
 6. Commands are routed to the current pane or an explicit pane target.
-7. Replies are sent back through Telegram.
+7. Replies are sent back through the originating platform.
 8. Follow mode keeps a tmux subscription open and pushes aggregated output back to the chat.
 
 ## Persistence And Recovery
@@ -103,7 +107,7 @@ SQLite stores chat-oriented relay state:
 - `sessions`
 - `message_links`
 
-This lets the daemon restore current-pane bindings and Telegram reply continuity across restart.
+This lets the daemon restore current-pane bindings and platform reply continuity across restart.
 
 ## Design Principles
 
@@ -111,12 +115,12 @@ This lets the daemon restore current-pane bindings and Telegram reply continuity
 - existing-pane-first: the bridge attaches to panes that already exist
 - relay-first: plain terminal relay is the baseline behavior
 - graceful degradation: stream handling prefers control mode and falls back to polling
-- narrow connector scope: Telegram is the only remote connector today
+- connector-specific transport, shared daemon behavior
 
 ## Current Limits
 
 - there is no structured Codex/Claude/Gemini event parsing yet
-- Telegram interaction is still command-driven
+- remote interaction is still command-driven
 - follow subscriptions are not restored automatically after daemon restart
 - control input is limited to text, `Enter`, and `Ctrl-C`
 - SQLite access still shells out to `sqlite3`

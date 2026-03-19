@@ -12,15 +12,25 @@ import (
 	"unicode/utf8"
 
 	"github.com/hmgle/tmux-connect/internal/tagb"
-	"github.com/hmgle/tmux-connect/internal/telegram"
 	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
 type IncomingMessage struct {
-	ChatID    int64
-	MessageID int64
-	Text      string
-	ChatType  string
+	Chat         ChatRef
+	MessageID    string
+	UserID       string
+	Text         string
+	ChatType     string
+	ThreadID     string
+	PendingScope string
+}
+
+func (m IncomingMessage) pendingKey() string {
+	scope := strings.TrimSpace(m.PendingScope)
+	if scope == "" {
+		scope = m.Chat.Key()
+	}
+	return m.Chat.Key() + "|" + scope
 }
 
 type Router struct {
@@ -30,19 +40,19 @@ type Router struct {
 	replyBus      *ReplyBus
 	follow        *FollowManager
 	snapshotLines int
-	allowChats    map[int64]struct{}
+	allowChats    map[string]struct{}
 	pendingMu     sync.Mutex
-	pending       map[int64]pendingCommand
+	pending       map[string]pendingCommand
 }
 
 type pendingCommand struct {
 	Command string
 }
 
-func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []int64) *Router {
-	allowed := make(map[int64]struct{}, len(allowChats))
+func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string) *Router {
+	allowed := make(map[string]struct{}, len(allowChats))
 	for _, chatID := range allowChats {
-		allowed[chatID] = struct{}{}
+		allowed[strings.TrimSpace(chatID)] = struct{}{}
 	}
 	if snapshotLines <= 0 {
 		snapshotLines = 120
@@ -55,7 +65,7 @@ func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyB
 		follow:        follow,
 		snapshotLines: snapshotLines,
 		allowChats:    allowed,
-		pending:       make(map[int64]pendingCommand),
+		pending:       make(map[string]pendingCommand),
 	}
 }
 
@@ -65,25 +75,25 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return nil
 	}
 
-	if !r.allowed(message.ChatID) {
+	if !r.allowed(message.Chat) {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.ChatID, "", "unauthorized", "chat is not allowed to use this bot")
+		return r.replyBus.Reply(ctx, message.Chat, "", "unauthorized", "chat is not allowed to use this bot")
 	}
 
 	command, args := parseCommand(text)
 	if command == "" {
-		if pending, ok := r.consumePending(message.ChatID); ok {
+		if pending, ok := r.consumePending(message.pendingKey()); ok {
 			return r.handlePendingInput(ctx, message, pending, text)
 		}
 	}
 	if command != "" {
-		r.clearPending(message.ChatID)
+		r.clearPending(message.pendingKey())
 	}
 
 	switch command {
 	case "/start", "/help":
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.ChatID, "", "help", helpText())
+		return r.replyBus.Reply(ctx, message.Chat, "", "help", helpText())
 	case "/panes":
 		return r.handlePanes(ctx, message)
 	case "/select":
@@ -106,25 +116,25 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.ChatID, "", "unknown-command", "unknown command\n\n"+helpText())
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText())
 	}
 }
 
 func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error {
-	chatID := message.ChatID
+	chat := message.Chat
 	r.logInbound(ctx, message, "", "")
 	if err := r.registry.Refresh(ctx); err != nil {
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("list panes failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("list panes failed: %v", err))
 	}
-	current, err := r.store.CurrentPane(ctx, chatID)
+	current, err := r.store.CurrentPane(ctx, chat)
 	if err != nil {
 		return err
 	}
-	return r.replyBus.Reply(ctx, chatID, "", "panes", formatPaneList(r.registry.All(), current, r.follow.IsEnabled(chatID)))
+	return r.replyBus.Reply(ctx, chat, "", "panes", formatPaneList(r.registry.All(), current, r.follow.IsEnabled(chat.Key())))
 }
 
 func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
+	chat := message.Chat
 	r.logInbound(ctx, message, "", "")
 	ref := strings.TrimSpace(args)
 	if ref == "" {
@@ -132,11 +142,11 @@ func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, ar
 	}
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("inspect failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("inspect failed: %v", err))
 	}
 	paneKey := record.Info.Target.PaneKey()
 	if err := r.service.Detach(ctx, ref); err != nil {
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("unmanage failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("unmanage failed: %v", err))
 	}
 	var cleanupErrs []string
 	if err := r.store.UnbindPaneEverywhere(ctx, paneKey); err != nil {
@@ -145,13 +155,13 @@ func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, ar
 	r.follow.StopPane(paneKey)
 	r.registry.MarkDirty()
 	if len(cleanupErrs) > 0 {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("unmanaged %s but cleanup was incomplete: %s", paneKey, strings.Join(cleanupErrs, "; ")))
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("unmanaged %s but cleanup was incomplete: %s", paneKey, strings.Join(cleanupErrs, "; ")))
 	}
-	return r.replyBus.Reply(ctx, chatID, "", "unmanage", fmt.Sprintf("unmanaged %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, "", "unmanage", fmt.Sprintf("unmanaged %s", paneKey))
 }
 
 func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
+	chat := message.Chat
 	ref := strings.TrimSpace(args)
 	if ref == "" {
 		r.logInbound(ctx, message, "", "")
@@ -160,101 +170,101 @@ func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args
 	record, err := r.service.Inspect(ctx, ref)
 	if err != nil {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("inspect failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("inspect failed: %v", err))
 	}
 	if !record.Metadata.Managed {
 		record, err = r.service.Attach(ctx, ref, "unknown", "")
 		if err != nil {
 			r.logInbound(ctx, message, "", "")
-			return r.replyBus.Reply(ctx, chatID, "", "error", fmt.Sprintf("select failed: %v", err))
+			return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("select failed: %v", err))
 		}
 		r.registry.MarkDirty()
 	}
 	paneKey := record.Info.Target.PaneKey()
-	if err := r.store.BindPane(ctx, chatID, paneKey); err != nil {
+	if err := r.store.BindPane(ctx, chat, paneKey); err != nil {
 		return err
 	}
-	if err := r.store.SetCurrentPane(ctx, chatID, paneKey); err != nil {
+	if err := r.store.SetCurrentPane(ctx, chat, paneKey); err != nil {
 		return err
 	}
 	r.logInbound(ctx, message, paneKey, string(record.Metadata.Agent))
-	if r.follow.IsEnabled(chatID) {
-		if err := r.follow.EnableWithOptions(ctx, chatID, paneKey, r.follow.Options(chatID)); err != nil {
-			return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("follow switch failed: %v", err))
+	if r.follow.IsEnabled(chat.Key()) {
+		if err := r.follow.EnableWithOptions(ctx, chat, paneKey, r.follow.Options(chat.Key())); err != nil {
+			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow switch failed: %v", err))
 		}
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "select", fmt.Sprintf("selected %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, paneKey, "select", fmt.Sprintf("selected %s", paneKey))
 }
 
 func (r *Router) handleClear(ctx context.Context, message IncomingMessage) error {
-	chatID := message.ChatID
-	current, err := r.store.CurrentPane(ctx, chatID)
+	chat := message.Chat
+	current, err := r.store.CurrentPane(ctx, chat)
 	if err != nil {
 		return err
 	}
 	if current == "" {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "clear", "no pane is currently selected")
+		return r.replyBus.Reply(ctx, chat, "", "clear", "no pane is currently selected")
 	}
-	if err := r.store.SetCurrentPane(ctx, chatID, ""); err != nil {
+	if err := r.store.SetCurrentPane(ctx, chat, ""); err != nil {
 		return err
 	}
-	r.follow.Disable(chatID)
+	r.follow.Disable(chat.Key())
 	r.logInbound(ctx, message, current, "")
-	return r.replyBus.Reply(ctx, chatID, current, "clear", "cleared current pane")
+	return r.replyBus.Reply(ctx, chat, current, "clear", "cleared current pane")
 }
 
 func (r *Router) handleCurrent(ctx context.Context, message IncomingMessage) error {
-	chatID := message.ChatID
-	current, err := r.store.CurrentPane(ctx, chatID)
+	chat := message.Chat
+	current, err := r.store.CurrentPane(ctx, chat)
 	if err != nil {
 		return err
 	}
 	if current == "" {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "current", "no pane is currently selected")
+		return r.replyBus.Reply(ctx, chat, "", "current", "no pane is currently selected")
 	}
 	r.logInbound(ctx, message, current, "")
 	record, err := r.service.Inspect(ctx, current)
 	if err != nil {
-		_ = r.store.SetCurrentPane(ctx, chatID, "")
-		return r.replyBus.Reply(ctx, chatID, current, "error", fmt.Sprintf("current pane is unavailable: %v", err))
+		_ = r.store.SetCurrentPane(ctx, chat, "")
+		return r.replyBus.Reply(ctx, chat, current, "error", fmt.Sprintf("current pane is unavailable: %v", err))
 	}
-	return r.replyBus.Reply(ctx, chatID, current, "current", formatCurrent(record, r.follow.IsEnabled(chatID)))
+	return r.replyBus.Reply(ctx, chat, current, "current", formatCurrent(record, r.follow.IsEnabled(chat.Key())))
 }
 
 func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
-	paneKey, err := r.requireCurrentPane(ctx, chatID)
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
 		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
 	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "usage", "usage: /snapshot [lines] [image|text]")
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: /snapshot [lines] [image|text]")
 	}
 	body, err := r.service.Snapshot(ctx, paneKey, lines)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
 	}
 	if mode == snapshotModeText {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
+		return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
 	}
 	richBody, richErr := r.service.SnapshotRich(ctx, paneKey, lines)
 	if richErr == nil && strings.TrimSpace(richBody) != "" {
-		return r.replyBus.ReplySnapshot(ctx, chatID, paneKey, body, richBody)
+		return r.replyBus.ReplySnapshot(ctx, chat, paneKey, body, richBody)
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
+	return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
 }
 
 func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
-	paneKey, err := r.requireCurrentPane(ctx, chatID)
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
 		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
 	text := strings.TrimSpace(args)
@@ -262,41 +272,41 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 		return r.promptForCommandInput(ctx, message, "send")
 	}
 	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("send failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
 }
 
 func (r *Router) handleEnter(ctx context.Context, message IncomingMessage) error {
-	chatID := message.ChatID
-	paneKey, err := r.requireCurrentPane(ctx, chatID)
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
 		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
 	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "enter", fmt.Sprintf("sent Enter to %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, paneKey, "enter", fmt.Sprintf("sent Enter to %s", paneKey))
 }
 
 func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error {
-	chatID := message.ChatID
-	paneKey, err := r.requireCurrentPane(ctx, chatID)
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
 		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
 	if err := r.service.CtrlCManaged(ctx, paneKey); err != nil {
-		return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("ctrl-c failed: %v", err))
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("ctrl-c failed: %v", err))
 	}
-	return r.replyBus.Reply(ctx, chatID, paneKey, "ctrl-c", fmt.Sprintf("sent Ctrl-C to %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, paneKey, "ctrl-c", fmt.Sprintf("sent Ctrl-C to %s", paneKey))
 }
 
 func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args string) error {
-	chatID := message.ChatID
+	chat := message.Chat
 	mode, opts, err := parseFollowArgs(args)
 	if err != nil {
 		if strings.TrimSpace(args) == "" {
@@ -304,31 +314,31 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 			return r.promptForCommandInput(ctx, message, "follow")
 		}
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
+		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: /follow on [interval]|off")
 	}
 	switch mode {
 	case "on":
-		paneKey, err := r.requireCurrentPane(ctx, chatID)
+		paneKey, err := r.requireCurrentPane(ctx, chat)
 		if err != nil {
 			r.logInbound(ctx, message, paneKey, "")
-			return r.replyBus.Reply(ctx, chatID, paneKey, "error", err.Error())
+			return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 		}
 		r.logInbound(ctx, message, paneKey, "")
-		if err := r.follow.EnableWithOptions(ctx, chatID, paneKey, opts); err != nil {
-			return r.replyBus.Reply(ctx, chatID, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
+		if err := r.follow.EnableWithOptions(ctx, chat, paneKey, opts); err != nil {
+			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
 		}
-		resolved := r.follow.Options(chatID)
-		return r.replyBus.Reply(ctx, chatID, paneKey, "follow", fmt.Sprintf("follow enabled for %s (min interval %s)", paneKey, resolved.MinInterval))
+		resolved := r.follow.Options(chat.Key())
+		return r.replyBus.Reply(ctx, chat, paneKey, "follow", fmt.Sprintf("follow enabled for %s (min interval %s)", paneKey, resolved.MinInterval))
 	case "off":
-		paneKey := r.follow.CurrentPane(chatID)
+		paneKey := r.follow.CurrentPane(chat.Key())
 		r.logInbound(ctx, message, paneKey, "")
-		if !r.follow.Disable(chatID) {
-			return r.replyBus.Reply(ctx, chatID, paneKey, "follow", "follow is already off")
+		if !r.follow.Disable(chat.Key()) {
+			return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow is already off")
 		}
-		return r.replyBus.Reply(ctx, chatID, paneKey, "follow", "follow disabled")
+		return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow disabled")
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chatID, "", "usage", "usage: /follow on [interval]|off")
+		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: /follow on [interval]|off")
 	}
 }
 
@@ -344,51 +354,45 @@ func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.ChatID, "", "unknown-command", "unknown command\n\n"+helpText())
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText())
 	}
 }
 
 func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMessage, command string) error {
 	spec, ok := findCommandSpec(command)
 	if !ok || spec.Prompt == nil {
-		return r.replyBus.Reply(ctx, message.ChatID, "", "usage", "usage: /"+command)
+		return r.replyBus.Reply(ctx, message.Chat, "", "usage", "usage: /"+command)
 	}
-	r.setPending(message.ChatID, pendingCommand{
+	r.setPending(message.pendingKey(), pendingCommand{
 		Command: spec.Command,
 	})
-	return r.replyBus.ReplyWithOptions(ctx, message.ChatID, "", "prompt", spec.Prompt.Message, telegram.SendOptions{
-		ReplyToMessageID: message.MessageID,
-		ReplyMarkup: telegram.ForceReply{
-			ForceReply:            true,
-			InputFieldPlaceholder: spec.Prompt.Placeholder,
-		},
-	})
+	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", spec.Prompt.Message, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
 }
 
-func (r *Router) setPending(chatID int64, pending pendingCommand) {
+func (r *Router) setPending(key string, pending pendingCommand) {
 	r.pendingMu.Lock()
 	defer r.pendingMu.Unlock()
-	r.pending[chatID] = pending
+	r.pending[key] = pending
 }
 
-func (r *Router) consumePending(chatID int64) (pendingCommand, bool) {
+func (r *Router) consumePending(key string) (pendingCommand, bool) {
 	r.pendingMu.Lock()
 	defer r.pendingMu.Unlock()
-	pending, ok := r.pending[chatID]
+	pending, ok := r.pending[key]
 	if ok {
-		delete(r.pending, chatID)
+		delete(r.pending, key)
 	}
 	return pending, ok
 }
 
-func (r *Router) clearPending(chatID int64) {
+func (r *Router) clearPending(key string) {
 	r.pendingMu.Lock()
 	defer r.pendingMu.Unlock()
-	delete(r.pending, chatID)
+	delete(r.pending, key)
 }
 
-func (r *Router) requireCurrentPane(ctx context.Context, chatID int64) (string, error) {
-	current, err := r.store.CurrentPane(ctx, chatID)
+func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, error) {
+	current, err := r.store.CurrentPane(ctx, chat)
 	if err != nil {
 		return "", err
 	}
@@ -397,25 +401,25 @@ func (r *Router) requireCurrentPane(ctx context.Context, chatID int64) (string, 
 	}
 	record, err := r.service.Inspect(ctx, current)
 	if err != nil {
-		_ = r.store.SetCurrentPane(ctx, chatID, "")
+		_ = r.store.SetCurrentPane(ctx, chat, "")
 		return current, fmt.Errorf("current pane is unavailable: %w", err)
 	}
 	if !record.Metadata.Managed {
-		_ = r.store.SetCurrentPane(ctx, chatID, "")
+		_ = r.store.SetCurrentPane(ctx, chat, "")
 		return current, fmt.Errorf("current pane is no longer managed")
 	}
 	return record.Info.Target.PaneKey(), nil
 }
 
 func (r *Router) logInbound(ctx context.Context, message IncomingMessage, paneKey string, agent string) {
-	r.replyBus.LogInbound(ctx, message.ChatID, paneKey, agent, message.MessageID, "command", message.Text)
+	r.replyBus.LogInbound(ctx, message, paneKey, agent, "command")
 }
 
-func (r *Router) allowed(chatID int64) bool {
+func (r *Router) allowed(chat ChatRef) bool {
 	if len(r.allowChats) == 0 {
 		return true
 	}
-	_, ok := r.allowChats[chatID]
+	_, ok := r.allowChats[chat.ChatID]
 	return ok
 }
 

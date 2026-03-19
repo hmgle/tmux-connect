@@ -1,10 +1,6 @@
 package daemon
 
-import (
-	"strings"
-
-	"github.com/hmgle/tmux-connect/internal/telegram"
-)
+import "strings"
 
 type botCommandSpec struct {
 	Command     string
@@ -45,18 +41,6 @@ func daemonCommandSpecs() []botCommandSpec {
 			Placeholder: "on 2s",
 		}},
 	}
-}
-
-func telegramMenuCommands() []telegram.BotCommand {
-	specs := daemonCommandSpecs()
-	commands := make([]telegram.BotCommand, 0, len(specs))
-	for _, spec := range specs {
-		commands = append(commands, telegram.BotCommand{
-			Command:     spec.Command,
-			Description: spec.Description,
-		})
-	}
-	return commands
 }
 
 func helpText() string {
