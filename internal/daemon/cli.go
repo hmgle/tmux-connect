@@ -160,7 +160,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		return nil, tagb.TmuxError("initial pane refresh: %v", err)
 	}
 
-	adapter, err := newPlatformAdapter(cfg, stderr)
+	adapter, err := newPlatformAdapter(cfg, stderr, store)
 	if err != nil {
 		return nil, err
 	}
@@ -360,12 +360,12 @@ Common flags:
 `)
 }
 
-func newPlatformAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
+func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapter, error) {
 	switch cfg.Platform {
 	case "telegram":
 		return newTelegramAdapter(cfg, stderr), nil
 	case "slack":
-		return newSlackAdapter(cfg, stderr)
+		return newSlackAdapter(cfg, stderr, store)
 	default:
 		return nil, tagb.UsageError("unsupported --platform %q", cfg.Platform)
 	}

@@ -17,12 +17,21 @@ import (
 type slackAdapter struct {
 	client *slackclient.Client
 	stderr io.Writer
+	store  *Store
 
-	mu           sync.Mutex
-	activeThread map[string]struct{}
+	mu            sync.Mutex
+	activeThreads map[string]time.Time
+	threadTTL     time.Duration
+	maxThreads    int
+	now           func() time.Time
 }
 
-func newSlackAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
+const (
+	defaultSlackThreadTTL  = 24 * time.Hour
+	defaultSlackMaxThreads = 2048
+)
+
+func newSlackAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapter, error) {
 	if strings.TrimSpace(cfg.SlackBotToken) == "" {
 		return nil, fmt.Errorf("slack bot token is required")
 	}
@@ -30,9 +39,13 @@ func newSlackAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
 		return nil, fmt.Errorf("slack app token is required")
 	}
 	return &slackAdapter{
-		client:       slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
-		stderr:       stderr,
-		activeThread: make(map[string]struct{}),
+		client:        slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
+		stderr:        stderr,
+		store:         store,
+		activeThreads: make(map[string]time.Time),
+		threadTTL:     defaultSlackThreadTTL,
+		maxThreads:    defaultSlackMaxThreads,
+		now:           time.Now,
 	}, nil
 }
 
@@ -164,7 +177,7 @@ func (a *slackAdapter) handleMessage(ctx context.Context, ev *slackevents.Messag
 	threadID := strings.TrimSpace(ev.ThreadTimeStamp)
 	isDM := strings.TrimSpace(ev.ChannelType) == "im"
 	if !isDM {
-		if threadID == "" || !a.isActiveThread(ev.Channel, threadID) {
+		if threadID == "" || !a.isKnownThread(ctx, ev.Channel, threadID) {
 			return nil
 		}
 	}
@@ -196,14 +209,86 @@ func (a *slackAdapter) rememberThread(channel string, threadID string) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.activeThread[channel+"|"+threadID] = struct{}{}
+	now := a.timeNow()
+	a.pruneExpiredLocked(now)
+	a.activeThreads[channel+"|"+threadID] = now
+	a.evictOverflowLocked()
 }
 
 func (a *slackAdapter) isActiveThread(channel string, threadID string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, ok := a.activeThread[strings.TrimSpace(channel)+"|"+strings.TrimSpace(threadID)]
+	now := a.timeNow()
+	a.pruneExpiredLocked(now)
+	_, ok := a.activeThreads[strings.TrimSpace(channel)+"|"+strings.TrimSpace(threadID)]
 	return ok
+}
+
+func (a *slackAdapter) isKnownThread(ctx context.Context, channel string, threadID string) bool {
+	if a.isActiveThread(channel, threadID) {
+		return true
+	}
+	if !a.hasPersistedThread(ctx, channel, threadID) {
+		return false
+	}
+	a.rememberThread(channel, threadID)
+	return true
+}
+
+func (a *slackAdapter) hasPersistedThread(ctx context.Context, channel string, threadID string) bool {
+	if a.store == nil {
+		return false
+	}
+	ok, err := a.store.HasThread(ctx, ChatRef{
+		Platform: a.Platform(),
+		ChatID:   strings.TrimSpace(channel),
+	}, threadID)
+	if err != nil {
+		if a.stderr != nil {
+			fmt.Fprintf(a.stderr, "slack thread lookup error: %v\n", err)
+		}
+		return false
+	}
+	return ok
+}
+
+func (a *slackAdapter) timeNow() time.Time {
+	if a.now != nil {
+		return a.now()
+	}
+	return time.Now()
+}
+
+func (a *slackAdapter) pruneExpiredLocked(now time.Time) {
+	if a.threadTTL <= 0 {
+		return
+	}
+	cutoff := now.Add(-a.threadTTL)
+	for key, lastSeen := range a.activeThreads {
+		if lastSeen.Before(cutoff) {
+			delete(a.activeThreads, key)
+		}
+	}
+}
+
+func (a *slackAdapter) evictOverflowLocked() {
+	if a.maxThreads <= 0 {
+		return
+	}
+	for len(a.activeThreads) > a.maxThreads {
+		oldestKey := ""
+		var oldestSeen time.Time
+		for key, lastSeen := range a.activeThreads {
+			if oldestKey == "" || lastSeen.Before(oldestSeen) {
+				oldestKey = key
+				oldestSeen = lastSeen
+			}
+		}
+		if oldestKey == "" {
+			return
+		}
+		delete(a.activeThreads, oldestKey)
+	}
 }
 
 func (m IncomingMessage) replyThreadID() string {

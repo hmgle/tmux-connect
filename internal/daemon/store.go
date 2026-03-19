@@ -61,6 +61,7 @@ const (
 	schemaVersionPhase2 = 1
 	schemaVersionPhase3 = 2
 	schemaVersionPhase4 = 3
+	schemaVersionPhase5 = 4
 )
 
 func OpenStore(ctx context.Context, path string) (*Store, error) {
@@ -407,6 +408,40 @@ LIMIT 1;
 		return SessionRecord{}, nil
 	}
 	return rows[0].toRecord()
+}
+
+func (s *Store) HasThread(ctx context.Context, chat ChatRef, threadID string) (bool, error) {
+	chat = chat.Normalized()
+	threadID = strings.TrimSpace(threadID)
+	if !chat.Valid() {
+		return false, fmt.Errorf("chat ref is required")
+	}
+	if threadID == "" {
+		return false, nil
+	}
+
+	type row struct {
+		Present json.Number `json:"present"`
+	}
+	var rows []row
+	query := fmt.Sprintf(`
+SELECT EXISTS(
+  SELECT 1
+  FROM message_log
+  WHERE platform = %s AND chat_id = %s AND thread_id = %s
+) AS present;
+`, sqlString(chat.Platform), sqlString(chat.ChatID), sqlString(threadID))
+	if err := s.queryJSON(ctx, query, &rows); err != nil {
+		return false, err
+	}
+	if len(rows) == 0 {
+		return false, nil
+	}
+	present, err := numberToInt(rows[0].Present)
+	if err != nil {
+		return false, err
+	}
+	return present != 0, nil
 }
 
 func (s *Store) TouchSessionInbound(ctx context.Context, sessionKey string, messageID string) error {
@@ -772,6 +807,19 @@ CREATE INDEX IF NOT EXISTS idx_message_links_platform_chat_pane_created_at
 PRAGMA user_version = %d;
 COMMIT;
 `, bindingsPlatformExpr, statePlatformExpr, messageLogPlatformExpr, messageIDExpr, threadIDExpr, schemaVersionPhase4)
+		if err := s.exec(ctx, query); err != nil {
+			return err
+		}
+		version = schemaVersionPhase4
+	}
+	if version < schemaVersionPhase5 {
+		query := fmt.Sprintf(`
+BEGIN;
+CREATE INDEX IF NOT EXISTS idx_message_log_platform_chat_thread_created_at
+  ON message_log (platform, chat_id, thread_id, created_at DESC);
+PRAGMA user_version = %d;
+COMMIT;
+`, schemaVersionPhase5)
 		if err := s.exec(ctx, query); err != nil {
 			return err
 		}

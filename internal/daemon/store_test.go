@@ -119,6 +119,44 @@ func TestStoreStatsAndMessages(t *testing.T) {
 	}
 }
 
+func TestStoreHasThread(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	chat := ChatRef{Platform: "slack", ChatID: "C123"}
+
+	if err := store.LogMessage(ctx, MessageRecord{
+		Chat:              chat,
+		Direction:         "out",
+		Kind:              "reply",
+		PlatformMessageID: "m1",
+		ThreadID:          "thread-1",
+		BodyPreview:       "hello",
+	}); err != nil {
+		t.Fatalf("LogMessage() error = %v", err)
+	}
+
+	ok, err := store.HasThread(ctx, chat, "thread-1")
+	if err != nil {
+		t.Fatalf("HasThread() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("HasThread() = false, want true")
+	}
+
+	ok, err = store.HasThread(ctx, chat, "missing-thread")
+	if err != nil {
+		t.Fatalf("HasThread(missing) error = %v", err)
+	}
+	if ok {
+		t.Fatal("HasThread(missing) = true, want false")
+	}
+}
+
 func TestStoreMigratePhase2ToPhase3(t *testing.T) {
 	t.Parallel()
 
@@ -144,8 +182,8 @@ PRAGMA user_version = 1;
 	if err != nil {
 		t.Fatalf("schemaVersion() error = %v", err)
 	}
-	if version != schemaVersionPhase4 {
-		t.Fatalf("schema version = %d, want %d", version, schemaVersionPhase4)
+	if version != schemaVersionPhase5 {
+		t.Fatalf("schema version = %d, want %d", version, schemaVersionPhase5)
 	}
 
 	if _, err := store.EnsureSession(ctx, telegramChat(7), "default:%5", "codex"); err != nil {
