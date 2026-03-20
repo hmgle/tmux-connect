@@ -564,7 +564,7 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys ctrl-c enter esc pgup f2 m-x")); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys ctrl-c enter esc ppage f2 m-enter s-left c-space kp0")); err != nil {
 		t.Fatalf("HandleMessage(keys) error = %v", err)
 	}
 	if len(service.keyCalls) != 1 {
@@ -574,7 +574,7 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	if got.paneKey != "default:%5" {
 		t.Fatalf("key call pane = %q, want %q", got.paneKey, "default:%5")
 	}
-	if strings.Join(got.keys, " ") != "C-c Enter Escape PageUp F2 M-x" {
+	if strings.Join(got.keys, " ") != "C-c Enter Escape PageUp F2 M-Enter S-Left C-Space KP0" {
 		t.Fatalf("key call keys = %#v, want normalized keys", got.keys)
 	}
 }
@@ -604,10 +604,10 @@ func TestRouterKeysRejectsUnknownKey(t *testing.T) {
 
 	messages := messenger.snapshot()
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, `invalid key: "foobar" is not a recognized tmux key name`) {
+	if !strings.Contains(last.Text, `"foobar" is not a recognized tmux key name`) {
 		t.Fatalf("last message = %q, want invalid key error", last.Text)
 	}
-	if !strings.Contains(last.Text, "PageUp") || !strings.Contains(last.Text, "M-x") {
+	if !strings.Contains(last.Text, "PageUp") || !strings.Contains(last.Text, "M-Enter") || !strings.Contains(last.Text, "KP0-KP9") {
 		t.Fatalf("last message = %q, want key usage examples", last.Text)
 	}
 }
@@ -1480,11 +1480,11 @@ func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentM
 func TestParseKeysArgs(t *testing.T) {
 	t.Parallel()
 
-	keys, err := parseKeysArgs("ctrl-c enter esc left tab pgup f12 ctrl+x m-z")
+	keys, err := parseKeysArgs("ctrl-c enter esc left tab npage f12 ctrl+x m-z s-right c-space m-enter kp9")
 	if err != nil {
 		t.Fatalf("parseKeysArgs() error = %v", err)
 	}
-	if strings.Join(keys, " ") != "C-c Enter Escape Left Tab PageUp F12 C-x M-z" {
+	if strings.Join(keys, " ") != "C-c Enter Escape Left Tab PageDown F12 C-x M-z S-Right C-Space M-Enter KP9" {
 		t.Fatalf("keys = %#v, want normalized key sequence", keys)
 	}
 

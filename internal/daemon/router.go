@@ -321,7 +321,7 @@ func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args s
 		if strings.TrimSpace(args) == "" {
 			return r.promptForCommandInput(ctx, message, "keys")
 		}
-		return r.replyBus.Reply(ctx, chat, paneKey, "usage", fmt.Sprintf("invalid key: %v\n\n%s", err, keysUsage(r.commandPrefix(chat))))
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", fmt.Sprintf("%v\n\n%s", err, keysUsage(r.commandPrefix(chat))))
 	}
 	if err := r.service.SendKeysManaged(ctx, paneKey, keys...); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send keys failed: %v", err))
@@ -592,13 +592,16 @@ var namedTmuxKeys = map[string]string{
 	"end":       "End",
 	"pageup":    "PageUp",
 	"pgup":      "PageUp",
+	"ppage":     "PageUp",
 	"pagedown":  "PageDown",
 	"pgdn":      "PageDown",
+	"npage":     "PageDown",
 	"insert":    "Insert",
 	"ic":        "IC",
 	"delete":    "Delete",
 	"del":       "Delete",
 	"dc":        "DC",
+	"ctrlc":     "C-c",
 	"f1":        "F1",
 	"f2":        "F2",
 	"f3":        "F3",
@@ -611,49 +614,57 @@ var namedTmuxKeys = map[string]string{
 	"f10":       "F10",
 	"f11":       "F11",
 	"f12":       "F12",
+	"kp0":       "KP0",
+	"kp1":       "KP1",
+	"kp2":       "KP2",
+	"kp3":       "KP3",
+	"kp4":       "KP4",
+	"kp5":       "KP5",
+	"kp6":       "KP6",
+	"kp7":       "KP7",
+	"kp8":       "KP8",
+	"kp9":       "KP9",
 }
 
 func normalizeTmuxKeyName(value string) (string, bool) {
 	trimmed := strings.TrimSpace(value)
 	lower := strings.ToLower(trimmed)
-	switch lower {
-	case "enter", "return":
-		return "Enter", true
-	case "ctrlc", "ctrl-c", "c-c":
-		return "C-c", true
-	}
 	if mapped, ok := namedTmuxKeys[lower]; ok {
 		return mapped, true
 	}
-	for _, prefix := range []string{"ctrl-", "ctrl+"} {
-		if strings.HasPrefix(lower, prefix) {
-			ch := lower[len(prefix):]
-			if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
-				return "C-" + ch, true
+	for _, candidate := range []struct {
+		prefixes []string
+		modifier string
+	}{
+		{prefixes: []string{"ctrl-", "ctrl+", "c-"}, modifier: "C"},
+		{prefixes: []string{"m-"}, modifier: "M"},
+		{prefixes: []string{"s-"}, modifier: "S"},
+	} {
+		for _, prefix := range candidate.prefixes {
+			if strings.HasPrefix(lower, prefix) {
+				remainder := trimmed[len(prefix):]
+				return normalizeModifiedTmuxKeyName(candidate.modifier, remainder)
 			}
-			return "", false
 		}
 	}
-	if strings.HasPrefix(lower, "c-") {
-		ch := lower[2:]
-		if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
-			return "C-" + ch, true
-		}
-		return "", false
+	return "", false
+}
+
+func normalizeModifiedTmuxKeyName(modifier string, remainder string) (string, bool) {
+	trimmed := strings.TrimSpace(remainder)
+	lower := strings.ToLower(trimmed)
+	if len(lower) == 1 && lower[0] >= 'a' && lower[0] <= 'z' {
+		return modifier + "-" + lower, true
 	}
-	if strings.HasPrefix(lower, "m-") {
-		ch := lower[2:]
-		if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
-			return "M-" + ch, true
-		}
-		return "", false
+	if mapped, ok := namedTmuxKeys[lower]; ok {
+		return modifier + "-" + mapped, true
 	}
 	return "", false
 }
 
 func keysUsage(commandPrefix string) string {
 	return fmt.Sprintf(
-		"usage: %s\n\nExamples: C-c, Enter, Tab, Escape, Up, PageUp, F1-F12\nModifiers: C-a..C-z, ctrl-c, ctrl+x, M-x",
+		"usage: %s\n\nExamples: C-c, Enter, Tab, Escape, Up, PageUp, F1-F12, KP0-KP9\nModifiers: C-a..C-z, ctrl-c, ctrl+x, C-Space, M-x, M-Enter, S-Left",
 		formatCommandUsage(commandPrefix, "keys <key...>"),
 	)
 }
