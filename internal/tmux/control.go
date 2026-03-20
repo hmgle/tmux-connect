@@ -216,6 +216,7 @@ func (c *Client) startControlSubscription(ctx context.Context, pane PaneInfo) (*
 	ptySession, err := c.runner.StartPTY(subCtx, c.withSocket("attach-session", "-t", pane.SessionName, "-f", "ignore-size,active-pane")...)
 	if err != nil {
 		if classified := classifyControlError(err); errors.Is(classified, ErrControlUnsupported) {
+			cancel()
 			c.markControlModeUnsupported()
 			return nil, classified
 		}
