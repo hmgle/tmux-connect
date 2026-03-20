@@ -26,6 +26,30 @@ Slack snapshot images use Slack's current Web API file upload flow, so `files:wr
 
 ## Start the Daemon
 
+`tagb` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
+(falling back to `$HOME/.config/tmux-connect/config.toml`). Flags override
+environment variables, and environment variables override the TOML file.
+
+Using TOML config:
+
+```toml
+[daemon]
+platform = "slack"
+db = "/home/user/.tagb/tagb.db"
+snapshot_lines = 120
+follow_lines = 80
+follow_min_interval = "700ms"
+
+[daemon.slack]
+bot_token = "xoxb-..."
+app_token = "xapp-..."
+command_prefix = "tmux:"
+```
+
+```bash
+go run ./cmd/tagb daemon run
+```
+
 ```bash
 go run ./cmd/tagb daemon run \
   --platform slack \

@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
@@ -344,24 +345,30 @@ func (a *App) runStream(ctx context.Context, args []string) error {
 }
 
 func (a *App) printUsage() {
-	fmt.Fprint(a.stderr, `tagb manages tmux panes for local relay workflows.
+	defaultConfigPath := "$XDG_CONFIG_HOME/" + tagbconfig.DefaultDirName + `/config.toml`
+	fmt.Fprintf(a.stderr, `tagb manages tmux panes for local relay workflows.
 
 Usage:
-  tagb <command> [flags]
+  tagb [--config PATH] [--socket NAME] [--json] <command> [flags]
+
+Global flags:
+  --config PATH  load TOML config (default: %s)
+  --socket NAME  tmux socket name
+  --json         pass --json to the selected command
 
 Commands:
   list [--json]
-  attach   --pane %5 [--agent unknown] [--label api] [--json]
-  detach   --pane %5
-  inspect  --pane %5 [--json]
-  snapshot --pane %5 [--lines 120] [--json]
-  send     --pane %5 --text "hello" [--enter] [--json]
-  enter    --pane %5 [--json]
-  ctrl-c   --pane %5 [--json]
-  stream   --pane %5 [--lines 120] [--json]
+  attach   --pane %%5 [--agent unknown] [--label api] [--json]
+  detach   --pane %%5
+  inspect  --pane %%5 [--json]
+  snapshot --pane %%5 [--lines 120] [--json]
+  send     --pane %%5 --text "hello" [--enter] [--json]
+  enter    --pane %%5 [--json]
+  ctrl-c   --pane %%5 [--json]
+  stream   --pane %%5 [--lines 120] [--json]
   serve    [--listen 127.0.0.1:8080]
   daemon   <run|doctor|status> [flags]
-`)
+`, defaultConfigPath)
 }
 
 func writeJSON(w io.Writer, v any) error {

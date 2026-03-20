@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -96,6 +97,126 @@ func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 	}, &bytes.Buffer{}, true)
 	if err == nil {
 		t.Fatal("parseConfig() error = nil, want error")
+	}
+}
+
+func TestParseConfigReadsFileDefaults(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfigWithFile(nil, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		DB:            stringPtr(filepath.Join(t.TempDir(), "tagb.db")),
+		Platform:      stringPtr("telegram"),
+		AllowChats:    &[]string{"123", "456"},
+		PollTimeout:   stringPtr("30s"),
+		SnapshotLines: intPtr(150),
+		FollowLines:   intPtr(90),
+		Telegram: tagbconfig.Telegram{
+			Token:            stringPtr("file-token"),
+			SnapshotTheme:    stringPtr("light"),
+			SnapshotFontSize: float64Ptr(18),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.TelegramToken != "file-token" {
+		t.Fatalf("TelegramToken = %q, want file-token", cfg.TelegramToken)
+	}
+	if cfg.PollTimeout.String() != "30s" {
+		t.Fatalf("PollTimeout = %s, want 30s", cfg.PollTimeout)
+	}
+	if cfg.SnapshotLines != 150 {
+		t.Fatalf("SnapshotLines = %d, want 150", cfg.SnapshotLines)
+	}
+	if cfg.FollowLines != 90 {
+		t.Fatalf("FollowLines = %d, want 90", cfg.FollowLines)
+	}
+	if cfg.SnapshotTheme != "light" {
+		t.Fatalf("SnapshotTheme = %q, want light", cfg.SnapshotTheme)
+	}
+	if cfg.SnapshotFontSize != 18 {
+		t.Fatalf("SnapshotFontSize = %v, want 18", cfg.SnapshotFontSize)
+	}
+	if strings.Join(cfg.AllowChats, ",") != "123,456" {
+		t.Fatalf("AllowChats = %#v, want [123 456]", cfg.AllowChats)
+	}
+}
+
+func TestParseConfigEnvOverridesFile(t *testing.T) {
+	t.Setenv("TAGB_TELEGRAM_TOKEN", "env-token")
+	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
+
+	cfg, err := parseConfigWithFile([]string{"--db", filepath.Join(t.TempDir(), "tagb.db")}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		Telegram: tagbconfig.Telegram{
+			Token:            stringPtr("file-token"),
+			SnapshotFontSize: float64Ptr(18),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.TelegramToken != "env-token" {
+		t.Fatalf("TelegramToken = %q, want env-token", cfg.TelegramToken)
+	}
+	if cfg.SnapshotFontSize != 16.5 {
+		t.Fatalf("SnapshotFontSize = %v, want 16.5", cfg.SnapshotFontSize)
+	}
+}
+
+func TestParseConfigFlagsOverrideFile(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfigWithFile([]string{
+		"--telegram-token", "flag-token",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--telegram-snapshot-theme", "light",
+	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		Telegram: tagbconfig.Telegram{
+			Token:         stringPtr("file-token"),
+			SnapshotTheme: stringPtr("dark"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.TelegramToken != "flag-token" {
+		t.Fatalf("TelegramToken = %q, want flag-token", cfg.TelegramToken)
+	}
+	if cfg.SnapshotTheme != "light" {
+		t.Fatalf("SnapshotTheme = %q, want light", cfg.SnapshotTheme)
+	}
+}
+
+func TestParseConfigAllowChatFlagOverridesFile(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfigWithFile([]string{
+		"--telegram-token", "token",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--allow-chat", "999",
+		"--allow-chat", "888",
+	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		AllowChats: &[]string{"123", "456"},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if strings.Join(cfg.AllowChats, ",") != "999,888" {
+		t.Fatalf("AllowChats = %#v, want [999 888]", cfg.AllowChats)
+	}
+}
+
+func TestParseConfigRejectsInvalidFileDuration(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfigWithFile([]string{
+		"--telegram-token", "token",
+		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		PollTimeout: stringPtr("later"),
+	})
+	if err == nil {
+		t.Fatal("parseConfigWithFile() error = nil, want error")
 	}
 }
 
@@ -312,4 +433,16 @@ func writeTempFont(t *testing.T, name string) string {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func intPtr(value int) *int {
+	return &value
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/daemon"
 	"github.com/hmgle/tmux-connect/internal/httpapi"
 	"github.com/hmgle/tmux-connect/internal/tagb"
@@ -21,7 +22,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	socket, args, err := parseGlobalArgs(os.Args[1:])
+	configPath, args, err := tagbconfig.ExtractPath(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(tagb.ExitUsage)
+	}
+
+	loadedConfig, err := tagbconfig.Load(configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(tagb.ExitUsage)
+	}
+
+	socket, args, err := parseGlobalArgs(args, loadedConfig.Config)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(tagb.ExitUsage)
@@ -30,7 +43,7 @@ func main() {
 	service := tagb.NewService(tmux.NewClient(tmux.RealRunner{}, socket))
 	app := tagb.NewApp(os.Stdout, os.Stderr, service)
 	if len(args) > 0 && args[0] == "serve" {
-		if err := runServe(ctx, os.Stdout, os.Stderr, service, args[1:]); err != nil {
+		if err := runServe(ctx, os.Stdout, os.Stderr, service, loadedConfig.Config.Serve, args[1:]); err != nil {
 			code := tagb.ExitCode(err)
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(code)
@@ -38,7 +51,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "daemon" {
-		if err := daemon.RunCLI(ctx, os.Stdout, os.Stderr, service, args[1:]); err != nil {
+		if err := daemon.RunCLIWithConfig(ctx, os.Stdout, os.Stderr, service, loadedConfig.Config.Daemon, args[1:]); err != nil {
 			code := tagb.ExitCode(err)
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(code)
@@ -52,20 +65,12 @@ func main() {
 	}
 }
 
-func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer, service *tagb.Service, args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	listen := fs.String("listen", "127.0.0.1:8080", "HTTP listen address")
-	if err := fs.Parse(args); err != nil {
-		return tagb.UsageError("%v", err)
+func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer, service *tagb.Service, fileCfg tagbconfig.Serve, args []string) error {
+	listen, err := parseServeArgs(stderr, fileCfg, args)
+	if err != nil {
+		return err
 	}
-	if strings.TrimSpace(*listen) == "" {
-		return tagb.UsageError("serve requires --listen")
-	}
-	if _, err := net.ResolveTCPAddr("tcp", *listen); err != nil {
-		return tagb.UsageError("invalid listen address %q: %v", *listen, err)
-	}
-	server := httpapi.NewServer(*listen, service)
+	server := httpapi.NewServer(listen, service)
 	if _, err := fmt.Fprintf(stdout, "serving HTTP API on %s\n", server.Addr()); err != nil {
 		return err
 	}
@@ -75,8 +80,34 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer, service *
 	return nil
 }
 
-func parseGlobalArgs(args []string) (string, []string, error) {
-	socket := strings.TrimSpace(os.Getenv("TAGB_TMUX_SOCKET"))
+func parseServeArgs(stderr io.Writer, fileCfg tagbconfig.Serve, args []string) (string, error) {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	listenDefault := "127.0.0.1:8080"
+	if fileCfg.Listen != nil {
+		listenDefault = strings.TrimSpace(*fileCfg.Listen)
+	}
+	listen := fs.String("listen", listenDefault, "HTTP listen address")
+	if err := fs.Parse(args); err != nil {
+		return "", tagb.UsageError("%v", err)
+	}
+	if strings.TrimSpace(*listen) == "" {
+		return "", tagb.UsageError("serve requires --listen or [serve].listen in config")
+	}
+	if _, err := net.ResolveTCPAddr("tcp", *listen); err != nil {
+		return "", tagb.UsageError("invalid listen address %q: %v", *listen, err)
+	}
+	return *listen, nil
+}
+
+func parseGlobalArgs(args []string, fileCfg tagbconfig.File) (string, []string, error) {
+	socket := ""
+	if fileCfg.Tmux.Socket != nil {
+		socket = strings.TrimSpace(*fileCfg.Tmux.Socket)
+	}
+	if value := strings.TrimSpace(os.Getenv("TAGB_TMUX_SOCKET")); value != "" {
+		socket = value
+	}
 	jsonOut := false
 	remaining := make([]string, 0, len(args))
 

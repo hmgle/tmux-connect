@@ -35,6 +35,11 @@ The repository name is `tmux-connect`; the binary name is `tagb`.
 
 ## CLI Quick Start
 
+Configuration can be loaded from `--config PATH` or, by default,
+`$XDG_CONFIG_HOME/tmux-connect/config.toml` (falling back to
+`$HOME/.config/tmux-connect/config.toml`). Command-line flags override
+environment variables, and environment variables override the TOML file.
+
 List panes:
 
 ```bash
@@ -74,17 +79,17 @@ go run ./cmd/tagb stream --pane %5
 The local CLI surface is:
 
 ```bash
-tagb [--socket NAME] [--json] list
-tagb [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tagb [--socket NAME] [--json] detach --pane %5
-tagb [--socket NAME] [--json] inspect --pane %5
-tagb [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tagb [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tagb [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tagb [--socket NAME] [--json] enter --pane %5
-tagb [--socket NAME] [--json] ctrl-c --pane %5
-tagb [--socket NAME] serve [--listen 127.0.0.1:8080]
-tagb [--socket NAME] daemon <run|doctor|status> [flags]
+tagb [--config PATH] [--socket NAME] [--json] list
+tagb [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+tagb [--config PATH] [--socket NAME] [--json] detach --pane %5
+tagb [--config PATH] [--socket NAME] [--json] inspect --pane %5
+tagb [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+tagb [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
+tagb [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+tagb [--config PATH] [--socket NAME] [--json] enter --pane %5
+tagb [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
+tagb [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
+tagb [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -118,6 +123,37 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 ```
 
 ## Remote Daemon
+
+Example config file:
+
+```toml
+[tmux]
+socket = "work"
+
+[serve]
+listen = "127.0.0.1:8080"
+
+[daemon]
+platform = "telegram"
+db = "/home/user/.tagb/tagb.db"
+allow_chats = ["123456789"]
+poll_timeout = "20s"
+snapshot_lines = 120
+follow_lines = 80
+follow_min_interval = "700ms"
+follow_debug = false
+
+[daemon.telegram]
+token = "123456:example-token"
+snapshot_theme = "dark"
+snapshot_font_size = 14
+snapshot_font_file = "/path/to/font.ttf"
+
+[daemon.slack]
+bot_token = "xoxb-..."
+app_token = "xapp-..."
+command_prefix = "tmux:"
+```
 
 Start the Telegram daemon:
 

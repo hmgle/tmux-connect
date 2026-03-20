@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/tagb"
 	"github.com/hmgle/tmux-connect/internal/termrender"
 	"time"
@@ -45,17 +46,21 @@ type Runtime struct {
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
+	return RunCLIWithConfig(ctx, stdout, stderr, service, tagbconfig.Daemon{}, args)
+}
+
+func RunCLIWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
 	if len(args) == 0 {
 		printUsage(stderr)
 		return tagb.UsageError("missing daemon command")
 	}
 	switch args[0] {
 	case "run":
-		return runDaemon(ctx, stdout, stderr, service, args[1:])
+		return runDaemonWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
 	case "doctor":
-		return runDoctor(ctx, stdout, stderr, service, args[1:])
+		return runDoctorWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
 	case "status":
-		return runStatus(ctx, stdout, stderr, service, args[1:])
+		return runStatusWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -66,7 +71,11 @@ func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service pan
 }
 
 func runDaemon(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
-	cfg, err := parseConfig(args, stderr, true)
+	return runDaemonWithConfig(ctx, stdout, stderr, service, tagbconfig.Daemon{}, args)
+}
+
+func runDaemonWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+	cfg, err := parseConfigWithFile(args, stderr, true, fileCfg)
 	if err != nil {
 		return err
 	}
@@ -83,7 +92,11 @@ func runDaemon(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 }
 
 func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
-	cfg, err := parseConfig(args, stderr, false)
+	return runDoctorWithConfig(ctx, stdout, stderr, service, tagbconfig.Daemon{}, args)
+}
+
+func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+	cfg, err := parseConfigWithFile(args, stderr, false, fileCfg)
 	if err != nil {
 		return err
 	}
@@ -93,15 +106,15 @@ func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 	switch cfg.Platform {
 	case "telegram":
 		if strings.TrimSpace(cfg.TelegramToken) == "" {
-			return tagb.UsageError("telegram token is required; pass --telegram-token or TAGB_TELEGRAM_TOKEN")
+			return tagb.UsageError("telegram token is required; pass --telegram-token, TAGB_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 		}
 		fmt.Fprintln(stdout, "telegram token: ok")
 	case "slack":
 		if strings.TrimSpace(cfg.SlackBotToken) == "" {
-			return tagb.UsageError("slack bot token is required; pass --slack-bot-token or TAGB_SLACK_BOT_TOKEN")
+			return tagb.UsageError("slack bot token is required; pass --slack-bot-token, TAGB_SLACK_BOT_TOKEN, or [daemon.slack].bot_token in config")
 		}
 		if strings.TrimSpace(cfg.SlackAppToken) == "" {
-			return tagb.UsageError("slack app token is required; pass --slack-app-token or TAGB_SLACK_APP_TOKEN")
+			return tagb.UsageError("slack app token is required; pass --slack-app-token, TAGB_SLACK_APP_TOKEN, or [daemon.slack].app_token in config")
 		}
 		fmt.Fprintln(stdout, "slack tokens: ok")
 		fmt.Fprintln(stdout, "slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read")
@@ -125,7 +138,11 @@ func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, service 
 }
 
 func runStatus(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
-	cfg, err := parseConfig(args, stderr, false)
+	return runStatusWithConfig(ctx, stdout, stderr, service, tagbconfig.Daemon{}, args)
+}
+
+func runStatusWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+	cfg, err := parseConfigWithFile(args, stderr, false, fileCfg)
 	if err != nil {
 		return err
 	}
@@ -223,36 +240,62 @@ func (f *stringListFlag) Set(value string) error {
 }
 
 func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, error) {
+	return parseConfigWithFile(args, stderr, requireRun, tagbconfig.Daemon{})
+}
+
+func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileCfg tagbconfig.Daemon) (Config, error) {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	snapshotFontSize, err := envFloat64("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", 14)
+	snapshotFontSize, err := float64Value(fileCfg.Telegram.SnapshotFontSize, 14)
+	if err != nil {
+		return Config{}, tagb.UsageError("%v", err)
+	}
+	snapshotFontSize, err = envFloat64("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", snapshotFontSize)
 	if err != nil {
 		return Config{}, tagb.UsageError("%v", err)
 	}
 
 	allowChats := &stringListFlag{}
 	cfg := Config{}
-	defaultPlatform := strings.TrimSpace(os.Getenv("TAGB_PLATFORM"))
-	if defaultPlatform == "" {
-		defaultPlatform = "telegram"
+	defaultPlatform := stringValue(fileCfg.Platform, "telegram")
+	defaultPlatform = envOrDefault("TAGB_PLATFORM", defaultPlatform)
+	defaultDBPath := stringValue(fileCfg.DB, defaultDBPath())
+	defaultPollTimeout, err := durationValue(fileCfg.PollTimeout, 20*time.Second)
+	if err != nil {
+		return Config{}, tagb.UsageError("[daemon].poll_timeout must be a duration")
 	}
+	defaultSnapshotLines := intValue(fileCfg.SnapshotLines, 120)
+	defaultSnapshotTheme := envOrDefault("TAGB_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
+	defaultFollowLines := intValue(fileCfg.FollowLines, 80)
+	defaultFollowMinGap, err := durationValue(fileCfg.FollowMinInterval, 700*time.Millisecond)
+	if err != nil {
+		return Config{}, tagb.UsageError("[daemon].follow_min_interval must be a duration")
+	}
+	defaultFollowDebug := boolValue(fileCfg.FollowDebug, false)
+	if envValue, ok := envBoolValue("TAGB_FOLLOW_DEBUG"); ok {
+		defaultFollowDebug = envValue
+	}
+
 	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack)")
-	fs.StringVar(&cfg.TelegramToken, "telegram-token", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_TOKEN")), "telegram bot token")
-	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_BOT_TOKEN")), "slack bot token")
-	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", strings.TrimSpace(os.Getenv("TAGB_SLACK_APP_TOKEN")), "slack app token for socket mode")
-	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TAGB_SLACK_COMMAND_PREFIX", defaultSlackCommandPrefix), "command prefix for slack messages")
-	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", defaultDBPath()), "sqlite db path")
-	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", 20*time.Second, "telegram long polling timeout")
-	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", 120, "default line count for /snapshot")
-	fs.StringVar(&cfg.SnapshotTheme, "telegram-snapshot-theme", envOrDefault("TAGB_TELEGRAM_SNAPSHOT_THEME", termrender.ThemeDark), "theme for Telegram snapshot images (dark|light)")
+	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TAGB_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
+	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", envOrDefault("TAGB_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, "")), "slack bot token")
+	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", envOrDefault("TAGB_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, "")), "slack app token for socket mode")
+	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TAGB_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix)), "command prefix for slack messages")
+	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", defaultDBPath), "sqlite db path")
+	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
+	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
+	fs.StringVar(&cfg.SnapshotTheme, "telegram-snapshot-theme", defaultSnapshotTheme, "theme for Telegram snapshot images (dark|light)")
 	fs.Float64Var(&cfg.SnapshotFontSize, "telegram-snapshot-font-size", snapshotFontSize, "font size for Telegram snapshot images")
-	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_SNAPSHOT_FONT_FILE")), "path to a .ttf or .otf font for Telegram snapshot images")
-	fs.IntVar(&cfg.FollowLines, "follow-lines", 80, "initial line count when starting /follow")
-	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", 700*time.Millisecond, "default minimum interval between /follow pushes")
-	fs.BoolVar(&cfg.FollowDebug, "follow-debug", envBool("TAGB_FOLLOW_DEBUG"), "log follow chunk/flush debug data to stderr")
-	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", strings.TrimSpace(os.Getenv("TAGB_TELEGRAM_API_BASE")), "telegram bot api base url")
+	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", envOrDefault("TAGB_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, "")), "path to a .ttf or .otf font for Telegram snapshot images")
+	fs.IntVar(&cfg.FollowLines, "follow-lines", defaultFollowLines, "initial line count when starting /follow")
+	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", defaultFollowMinGap, "default minimum interval between /follow pushes")
+	fs.BoolVar(&cfg.FollowDebug, "follow-debug", defaultFollowDebug, "log follow chunk/flush debug data to stderr")
+	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", envOrDefault("TAGB_TELEGRAM_API_BASE", stringValue(fileCfg.Telegram.APIBase, "")), "telegram bot api base url")
 	fs.Var(allowChats, "allow-chat", "allowed telegram chat id (repeatable or comma-separated)")
+	if fileCfg.AllowChats != nil {
+		allowChats.values = append(allowChats.values, (*fileCfg.AllowChats)...)
+	}
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, tagb.UsageError("%v", err)
@@ -261,7 +304,13 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 	if cfg.Platform == "" {
 		cfg.Platform = "telegram"
 	}
-	cfg.AllowChats = append(cfg.AllowChats, allowChats.values...)
+	cfg.AllowChats = append([]string(nil), allowChats.values...)
+	if !flagWasSet(fs, "allow-chat") && fileCfg.AllowChats == nil {
+		cfg.AllowChats = nil
+	}
+	if flagWasSet(fs, "allow-chat") {
+		cfg.AllowChats = append([]string(nil), allowChats.values[len(defaultAllowChats(fileCfg)):]...)
+	}
 	if cfg.PollTimeout <= 0 {
 		return Config{}, tagb.UsageError("--poll-timeout must be > 0")
 	}
@@ -288,11 +337,11 @@ func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, erro
 		switch cfg.Platform {
 		case "telegram":
 			if strings.TrimSpace(cfg.TelegramToken) == "" {
-				return Config{}, tagb.UsageError("daemon run requires --telegram-token or TAGB_TELEGRAM_TOKEN")
+				return Config{}, tagb.UsageError("daemon run requires --telegram-token, TAGB_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 			}
 		case "slack":
 			if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
-				return Config{}, tagb.UsageError("daemon run requires --slack-bot-token/--slack-app-token or TAGB_SLACK_BOT_TOKEN/TAGB_SLACK_APP_TOKEN")
+				return Config{}, tagb.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TAGB_SLACK_BOT_TOKEN/TAGB_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
 			}
 		default:
 			return Config{}, tagb.UsageError("unsupported --platform %q", cfg.Platform)
@@ -332,14 +381,77 @@ func envFloat64(key string, fallback float64) (float64, error) {
 	return parsed, nil
 }
 
-func envBool(key string) bool {
+func envBoolValue(key string) (bool, bool) {
 	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return false, false
+	}
 	switch value {
 	case "1", "true", "yes", "on":
-		return true
+		return true, true
 	default:
-		return false
+		return false, true
 	}
+}
+
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
+func defaultAllowChats(fileCfg tagbconfig.Daemon) []string {
+	if fileCfg.AllowChats == nil {
+		return nil
+	}
+	return append([]string(nil), (*fileCfg.AllowChats)...)
+}
+
+func stringValue(value *string, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return strings.TrimSpace(*value)
+}
+
+func intValue(value *int, fallback int) int {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func float64Value(value *float64, fallback float64) (float64, error) {
+	if value == nil {
+		return fallback, nil
+	}
+	return *value, nil
+}
+
+func boolValue(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func durationValue(value *string, fallback time.Duration) (time.Duration, error) {
+	if value == nil {
+		return fallback, nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return 0, fmt.Errorf("duration is required")
+	}
+	parsed, err := time.ParseDuration(trimmed)
+	if err != nil {
+		return 0, err
+	}
+	return parsed, nil
 }
 
 func printUsage(w io.Writer) {

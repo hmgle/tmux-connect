@@ -18,6 +18,32 @@ go run ./cmd/tagb inspect --pane %5
 
 ## Start the Daemon
 
+`tagb` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
+(falling back to `$HOME/.config/tmux-connect/config.toml`). Flags override
+environment variables, and environment variables override the TOML file.
+
+Using TOML config:
+
+```toml
+[daemon]
+platform = "telegram"
+db = "/home/user/.tagb/tagb.db"
+allow_chats = ["123456789"]
+snapshot_lines = 120
+follow_lines = 80
+follow_min_interval = "700ms"
+
+[daemon.telegram]
+token = "123456:example-token"
+snapshot_theme = "light"
+snapshot_font_size = 16
+snapshot_font_file = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+```
+
+```bash
+go run ./cmd/tagb daemon run
+```
+
 Using environment variables:
 
 ```bash
