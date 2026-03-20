@@ -12,13 +12,13 @@
 You can pre-manage a pane locally, or let Telegram manage it on first `/select`.
 
 ```bash
-go run ./cmd/tagb attach --pane %5 --agent codex --label backend
-go run ./cmd/tagb inspect --pane %5
+go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
+go run ./cmd/tmux-connect inspect --pane %5
 ```
 
 ## Start the Daemon
 
-`tagb` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
+`tmux-connect` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
 (falling back to `$HOME/.config/tmux-connect/config.toml`). Flags override
 environment variables, and environment variables override the TOML file.
 
@@ -27,7 +27,7 @@ Using TOML config:
 ```toml
 [daemon]
 platform = "telegram"
-db = "/home/user/.tagb/tagb.db"
+db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 snapshot_lines = 120
 follow_lines = 80
@@ -41,26 +41,26 @@ snapshot_font_file = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 ```
 
 ```bash
-go run ./cmd/tagb daemon run
+go run ./cmd/tmux-connect daemon run
 ```
 
 Using environment variables:
 
 ```bash
-export TAGB_TELEGRAM_TOKEN=123456:example-token
-export TAGB_DB_PATH="$HOME/.tagb/tagb.db"
-export TAGB_TELEGRAM_SNAPSHOT_THEME=light
-export TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE=16
+export TMUXCONN_TELEGRAM_TOKEN=123456:example-token
+export TMUXCONN_DB_PATH="$HOME/.tmux-connect/tmux-connect.db"
+export TMUXCONN_TELEGRAM_SNAPSHOT_THEME=light
+export TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE=16
 
-go run ./cmd/tagb daemon run --allow-chat 123456789
+go run ./cmd/tmux-connect daemon run --allow-chat 123456789
 ```
 
 Using explicit flags:
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --telegram-token 123456:example-token \
-  --db ~/.tagb/tagb.db \
+  --db ~/.tmux-connect/tmux-connect.db \
   --telegram-snapshot-theme light \
   --telegram-snapshot-font-size 16 \
   --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
@@ -71,7 +71,7 @@ go run ./cmd/tagb daemon run \
 
 ## Daemon Note
 
-Run one active `tagb daemon run` per bot token.
+Run one active `tmux-connect daemon run` per bot token.
 
 If you want to control multiple machines, the simple setup is one Telegram bot
 per machine.
@@ -93,26 +93,26 @@ Useful daemon flags:
 
 Supported environment variables:
 
-- `TAGB_TELEGRAM_TOKEN`
-- `TAGB_DB_PATH`
-- `TAGB_TELEGRAM_SNAPSHOT_THEME`
-- `TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE`
-- `TAGB_TELEGRAM_SNAPSHOT_FONT_FILE`
-- `TAGB_TELEGRAM_API_BASE`
-- `TAGB_FOLLOW_DEBUG`
+- `TMUXCONN_TELEGRAM_TOKEN`
+- `TMUXCONN_DB_PATH`
+- `TMUXCONN_TELEGRAM_SNAPSHOT_THEME`
+- `TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE`
+- `TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE`
+- `TMUXCONN_TELEGRAM_API_BASE`
+- `TMUXCONN_FOLLOW_DEBUG`
 
 ## Health Checks
 
 Validate runtime prerequisites:
 
 ```bash
-go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
+go run ./cmd/tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 ```
 
 Inspect stored state and current managed pane count:
 
 ```bash
-go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 ## Telegram Commands

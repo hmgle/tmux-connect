@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
+	"github.com/hmgle/tmux-connect/internal/config"
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -18,7 +18,7 @@ func TestParseConfigAcceptsSnapshotRenderFlags(t *testing.T) {
 	fontPath := writeTempFont(t, "mono.ttf")
 	cfg, err := parseConfig([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "light",
 		"--telegram-snapshot-font-size", "18",
 		"--telegram-snapshot-font-file", fontPath,
@@ -39,12 +39,12 @@ func TestParseConfigAcceptsSnapshotRenderFlags(t *testing.T) {
 
 func TestParseConfigReadsSnapshotRenderEnv(t *testing.T) {
 	fontPath := writeTempFont(t, "env-font.ttf")
-	t.Setenv("TAGB_TELEGRAM_TOKEN", "token")
-	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_THEME", "light")
-	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
-	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_FONT_FILE", fontPath)
+	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "token")
+	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", "light")
+	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
+	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", fontPath)
 
-	cfg, err := parseConfig([]string{"--db", filepath.Join(t.TempDir(), "tagb.db")}, &bytes.Buffer{}, true)
+	cfg, err := parseConfig([]string{"--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
@@ -64,7 +64,7 @@ func TestParseConfigRejectsInvalidSnapshotTheme(t *testing.T) {
 
 	_, err := parseConfig([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "sepia",
 	}, &bytes.Buffer{}, true)
 	if err == nil {
@@ -73,10 +73,10 @@ func TestParseConfigRejectsInvalidSnapshotTheme(t *testing.T) {
 }
 
 func TestParseConfigRejectsInvalidSnapshotFontSizeEnv(t *testing.T) {
-	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", "large")
+	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "large")
 	_, err := parseConfig([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err == nil {
 		t.Fatal("parseConfig() error = nil, want error")
@@ -92,7 +92,7 @@ func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 	}
 	_, err := parseConfig([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-font-file", fontPath,
 	}, &bytes.Buffer{}, true)
 	if err == nil {
@@ -103,14 +103,14 @@ func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 func TestParseConfigReadsFileDefaults(t *testing.T) {
 	t.Parallel()
 
-	cfg, err := parseConfigWithFile(nil, &bytes.Buffer{}, true, tagbconfig.Daemon{
-		DB:            stringPtr(filepath.Join(t.TempDir(), "tagb.db")),
+	cfg, err := parseConfigWithFile(nil, &bytes.Buffer{}, true, config.Daemon{
+		DB:            stringPtr(filepath.Join(t.TempDir(), "tmuxconn.db")),
 		Platform:      stringPtr("telegram"),
 		AllowChats:    &[]string{"123", "456"},
 		PollTimeout:   stringPtr("30s"),
 		SnapshotLines: intPtr(150),
 		FollowLines:   intPtr(90),
-		Telegram: tagbconfig.Telegram{
+		Telegram: config.Telegram{
 			Token:            stringPtr("file-token"),
 			SnapshotTheme:    stringPtr("light"),
 			SnapshotFontSize: float64Ptr(18),
@@ -143,11 +143,11 @@ func TestParseConfigReadsFileDefaults(t *testing.T) {
 }
 
 func TestParseConfigEnvOverridesFile(t *testing.T) {
-	t.Setenv("TAGB_TELEGRAM_TOKEN", "env-token")
-	t.Setenv("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
+	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "env-token")
+	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
 
-	cfg, err := parseConfigWithFile([]string{"--db", filepath.Join(t.TempDir(), "tagb.db")}, &bytes.Buffer{}, true, tagbconfig.Daemon{
-		Telegram: tagbconfig.Telegram{
+	cfg, err := parseConfigWithFile([]string{"--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Telegram: config.Telegram{
 			Token:            stringPtr("file-token"),
 			SnapshotFontSize: float64Ptr(18),
 		},
@@ -168,10 +168,10 @@ func TestParseConfigFlagsOverrideFile(t *testing.T) {
 
 	cfg, err := parseConfigWithFile([]string{
 		"--telegram-token", "flag-token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "light",
-	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
-		Telegram: tagbconfig.Telegram{
+	}, &bytes.Buffer{}, true, config.Daemon{
+		Telegram: config.Telegram{
 			Token:         stringPtr("file-token"),
 			SnapshotTheme: stringPtr("dark"),
 		},
@@ -192,10 +192,10 @@ func TestParseConfigAllowChatFlagOverridesFile(t *testing.T) {
 
 	cfg, err := parseConfigWithFile([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--allow-chat", "999",
 		"--allow-chat", "888",
-	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+	}, &bytes.Buffer{}, true, config.Daemon{
 		AllowChats: &[]string{"123", "456"},
 	})
 	if err != nil {
@@ -211,8 +211,8 @@ func TestParseConfigRejectsInvalidFileDuration(t *testing.T) {
 
 	_, err := parseConfigWithFile([]string{
 		"--telegram-token", "token",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
-	}, &bytes.Buffer{}, true, tagbconfig.Daemon{
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	}, &bytes.Buffer{}, true, config.Daemon{
 		PollTimeout: stringPtr("later"),
 	})
 	if err == nil {
@@ -307,7 +307,7 @@ func TestParseConfigSlackCommandPrefixFlag(t *testing.T) {
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
 		"--slack-command-prefix", "bot:",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -318,13 +318,13 @@ func TestParseConfigSlackCommandPrefixFlag(t *testing.T) {
 }
 
 func TestParseConfigSlackCommandPrefixEnv(t *testing.T) {
-	t.Setenv("TAGB_PLATFORM", "slack")
-	t.Setenv("TAGB_SLACK_BOT_TOKEN", "xoxb-test")
-	t.Setenv("TAGB_SLACK_APP_TOKEN", "xapp-test")
-	t.Setenv("TAGB_SLACK_COMMAND_PREFIX", "run:")
+	t.Setenv("TMUXCONN_PLATFORM", "slack")
+	t.Setenv("TMUXCONN_SLACK_BOT_TOKEN", "xoxb-test")
+	t.Setenv("TMUXCONN_SLACK_APP_TOKEN", "xapp-test")
+	t.Setenv("TMUXCONN_SLACK_COMMAND_PREFIX", "run:")
 
 	cfg, err := parseConfig([]string{
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -341,7 +341,7 @@ func TestParseConfigSlackCommandPrefixDefault(t *testing.T) {
 		"--platform", "slack",
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -359,7 +359,7 @@ func TestParseConfigRejectsEmptySlackCommandPrefix(t *testing.T) {
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
 		"--slack-command-prefix", "",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err == nil {
 		t.Fatal("parseConfig() error = nil, want error for empty prefix")
@@ -374,7 +374,7 @@ func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
 		"--slack-command-prefix", "my prefix",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err == nil {
 		t.Fatal("parseConfig() error = nil, want error for whitespace in prefix")
@@ -382,11 +382,11 @@ func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
 }
 
 func TestParseConfigTelegramClearsSlackPrefixEnv(t *testing.T) {
-	t.Setenv("TAGB_TELEGRAM_TOKEN", "token")
-	t.Setenv("TAGB_SLACK_COMMAND_PREFIX", "bad prefix")
+	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "token")
+	t.Setenv("TMUXCONN_SLACK_COMMAND_PREFIX", "bad prefix")
 
 	cfg, err := parseConfig([]string{
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -403,11 +403,11 @@ func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 	t.Parallel()
 
 	stdout := &bytes.Buffer{}
-	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), tagbconfig.Daemon{}, []string{
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
 		"--platform", "slack",
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
-		"--db", filepath.Join(t.TempDir(), "tagb.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	})
 	if err != nil {
 		t.Fatalf("runDoctor() error = %v", err)

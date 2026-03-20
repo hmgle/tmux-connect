@@ -10,19 +10,19 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type BridgeService interface {
-	List(ctx context.Context) ([]tagb.PaneRecord, error)
-	Attach(ctx context.Context, ref string, agent string, label string) (tagb.PaneRecord, error)
+	List(ctx context.Context) ([]tmuxconn.PaneRecord, error)
+	Attach(ctx context.Context, ref string, agent string, label string) (tmuxconn.PaneRecord, error)
 	Detach(ctx context.Context, ref string) error
-	Inspect(ctx context.Context, ref string) (tagb.PaneRecord, error)
+	Inspect(ctx context.Context, ref string) (tmuxconn.PaneRecord, error)
 	Snapshot(ctx context.Context, ref string, lines int) (string, error)
 	Send(ctx context.Context, ref string, text string, sendEnter bool) error
 	Enter(ctx context.Context, ref string) error
 	CtrlC(ctx context.Context, ref string) error
-	OpenStream(ctx context.Context, ref string, lines int) (tagb.PaneStream, error)
+	OpenStream(ctx context.Context, ref string, lines int) (tmuxconn.PaneStream, error)
 }
 
 type Server struct {
@@ -348,12 +348,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeServiceError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
-	switch tagb.ExitCode(err) {
-	case tagb.ExitUsage:
+	switch tmuxconn.ExitCode(err) {
+	case tmuxconn.ExitUsage:
 		status = http.StatusBadRequest
-	case tagb.ExitNotFound:
+	case tmuxconn.ExitNotFound:
 		status = http.StatusNotFound
-	case tagb.ExitTmuxFailure:
+	case tmuxconn.ExitTmuxFailure:
 		status = http.StatusBadGateway
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})

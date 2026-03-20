@@ -10,7 +10,7 @@ func TestStoreBindAndCurrentPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestStoreUnbindPaneEverywhere(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -87,7 +87,7 @@ func TestStoreStatsAndMessages(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -123,7 +123,7 @@ func TestStoreHasThread(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -161,7 +161,7 @@ func TestStoreMigratePhase2ToPhase3(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestStoreSessionLinksAndReplyTarget(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "tagb.db")
+	dbPath := filepath.Join(t.TempDir(), "tmuxconn.db")
 	store, err := OpenStore(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
@@ -280,7 +280,7 @@ func TestStoreSupportsSlackStringChatIDs(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

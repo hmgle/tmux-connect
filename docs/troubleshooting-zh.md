@@ -3,9 +3,9 @@
 ## 先做这三个检查
 
 ```bash
-tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
-tagb daemon status --db ~/.tagb/tagb.db
-tagb list
+tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+tmux-connect list
 ```
 
 这三个命令通常足够先判断问题在：
@@ -28,7 +28,7 @@ tagb list
 建议先执行：
 
 ```bash
-tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
+tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 ```
 
 ### Telegram 命令无响应
@@ -39,7 +39,7 @@ tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 - daemon 进程是否还活着
 - 服务器是否能访问 Telegram Bot API
 - token 是否正确
-- 是否有另一台机器也在用同一个 bot token 运行 `tagb daemon run`
+- 是否有另一台机器也在用同一个 bot token 运行 `tmux-connect daemon run`
 
 补充说明：
 
@@ -57,8 +57,8 @@ tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"
 建议：
 
 ```bash
-tagb list
-tagb inspect --pane %5
+tmux-connect list
+tmux-connect inspect --pane %5
 ```
 
 ### `/snapshot` 失败

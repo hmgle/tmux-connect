@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
 	"github.com/hmgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type IncomingMessage struct {
@@ -758,7 +758,7 @@ func parseSnapshotArgs(value string, fallbackLines int) (int, snapshotMode, erro
 	return lines, mode, nil
 }
 
-func formatCurrent(record tagb.PaneRecord, following bool) string {
+func formatCurrent(record tmuxconn.PaneRecord, following bool) string {
 	lines := []string{
 		"Current pane: " + displayPaneKey(record.Info.Target.PaneKey()),
 		"Where: " + formatPaneWhere(record.Info),
@@ -769,7 +769,7 @@ func formatCurrent(record tagb.PaneRecord, following bool) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatPaneList(records []tagb.PaneRecord, current string, following bool) string {
+func formatPaneList(records []tmuxconn.PaneRecord, current string, following bool) string {
 	if len(records) == 0 {
 		return "No managed panes.\n\nCurrent: none · Follow: " + onOff(following)
 	}

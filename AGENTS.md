@@ -1,15 +1,15 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`cmd/tagb` contains the CLI entrypoint for the local bridge, HTTP server, and Telegram daemon. Core logic lives under `internal/`: `tagb` exposes the service/app layer, `tmux` wraps tmux operations and stream handling, `httpapi` serves the local control plane, `daemon` manages Telegram routing and SQLite-backed state, and `telegram` contains the Bot API client. Keep new code inside the closest existing package, and place design or handoff notes in `docs/`.
+`cmd/tmux-connect` contains the CLI entrypoint for the local bridge, HTTP server, and Telegram daemon. Core logic lives under `internal/`: `tmux-connect` exposes the service/app layer, `tmux` wraps tmux operations and stream handling, `httpapi` serves the local control plane, `daemon` manages Telegram routing and SQLite-backed state, and `telegram` contains the Bot API client. Keep new code inside the closest existing package, and place design or handoff notes in `docs/`.
 
 ## Build, Test, and Development Commands
 Use the Go toolchain directly; there is no `Makefile`.
 
-- `go build ./cmd/tagb` builds the CLI binary.
-- `go run ./cmd/tagb list` exercises the local CLI against the current tmux server.
-- `go run ./cmd/tagb serve --listen 127.0.0.1:8080` starts the HTTP API.
-- `go run ./cmd/tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"` checks daemon prerequisites.
+- `go build ./cmd/tmux-connect` builds the CLI binary.
+- `go run ./cmd/tmux-connect list` exercises the local CLI against the current tmux server.
+- `go run ./cmd/tmux-connect serve --listen 127.0.0.1:8080` starts the HTTP API.
+- `go run ./cmd/tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"` checks daemon prerequisites.
 - `go test ./...` runs the full test suite across all packages.
 
 ## Coding Style & Naming Conventions
@@ -22,4 +22,4 @@ Keep tests beside the code they cover in `*_test.go` files. Favor table-driven t
 Recent history follows short imperative subjects, usually with Conventional Commit prefixes such as `fix:` and `feat:`. Prefer messages like `fix: preserve follow context for inline updates` over generic summaries. Pull requests should include the behavior change, the packages touched, and the exact verification command(s) run. For CLI, HTTP, or Telegram workflow changes, add a short example request, response, or transcript instead of screenshots.
 
 ## Runtime & Configuration Tips
-Local development assumes `tmux` is installed and that the target pane already exists. The Telegram daemon also requires `sqlite3` in `PATH` and a valid `TAGB_TELEGRAM_TOKEN`. Avoid committing local build artifacts such as the root-level `tagb` binary or cache directories.
+Local development assumes `tmux` is installed and that the target pane already exists. The Telegram daemon also requires `sqlite3` in `PATH` and a valid `TMUXCONN_TELEGRAM_TOKEN`. Avoid committing local build artifacts such as the root-level `tmux-connect` binary or cache directories.

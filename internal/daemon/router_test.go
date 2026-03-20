@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
 	"github.com/hmgle/tmux-connect/internal/telegram"
 	"github.com/hmgle/tmux-connect/internal/termrender"
 	"github.com/hmgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type fakeMessenger struct {
@@ -133,7 +133,7 @@ func (m *fakeMessenger) snapshot() []sentMessage {
 }
 
 type fakePaneService struct {
-	records       map[string]tagb.PaneRecord
+	records       map[string]tmuxconn.PaneRecord
 	sub           *tmux.Subscription
 	snapshotText  string
 	snapshotRich  string
@@ -157,7 +157,7 @@ type keyCall struct {
 }
 
 func newFakePaneService() *fakePaneService {
-	record := tagb.PaneRecord{
+	record := tmuxconn.PaneRecord{
 		Info: tmux.PaneInfo{
 			Target:      tmux.Target{Socket: "default", PaneID: "%5"},
 			SessionName: "dev",
@@ -168,7 +168,7 @@ func newFakePaneService() *fakePaneService {
 		Metadata: tmux.BridgeMetadata{Managed: true, Agent: tmux.AgentCodex, Mode: tmux.ModeRelay},
 	}
 	return &fakePaneService{
-		records: map[string]tagb.PaneRecord{
+		records: map[string]tmuxconn.PaneRecord{
 			record.Info.Target.PaneKey(): record,
 		},
 		sub:           tmux.NewSubscriptionForTest(),
@@ -178,9 +178,9 @@ func newFakePaneService() *fakePaneService {
 	}
 }
 
-func (s *fakePaneService) List(context.Context) ([]tagb.PaneRecord, error) {
+func (s *fakePaneService) List(context.Context) ([]tmuxconn.PaneRecord, error) {
 	s.listCalls++
-	out := make([]tagb.PaneRecord, 0, len(s.records))
+	out := make([]tmuxconn.PaneRecord, 0, len(s.records))
 	for _, record := range s.records {
 		out = append(out, record)
 	}
@@ -191,7 +191,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -241,12 +241,12 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	}
 }
 
-func (s *fakePaneService) Attach(_ context.Context, ref string, agent string, _ string) (tagb.PaneRecord, error) {
+func (s *fakePaneService) Attach(_ context.Context, ref string, agent string, _ string) (tmuxconn.PaneRecord, error) {
 	s.attachCalls++
 	key := normalizePaneRef(ref)
 	record, ok := s.records[key]
 	if !ok {
-		return tagb.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
+		return tmuxconn.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
 	}
 	record.Metadata.Managed = true
 	record.Metadata.Mode = tmux.ModeRelay
@@ -267,11 +267,11 @@ func (s *fakePaneService) Detach(_ context.Context, ref string) error {
 	return nil
 }
 
-func (s *fakePaneService) Inspect(_ context.Context, ref string) (tagb.PaneRecord, error) {
+func (s *fakePaneService) Inspect(_ context.Context, ref string) (tmuxconn.PaneRecord, error) {
 	key := normalizePaneRef(ref)
 	record, ok := s.records[key]
 	if !ok {
-		return tagb.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
+		return tmuxconn.PaneRecord{}, fmt.Errorf("pane not found: %s", ref)
 	}
 	return record, nil
 }
@@ -306,8 +306,8 @@ func (s *fakePaneService) CtrlCManaged(ctx context.Context, paneKey string) erro
 	return s.SendKeysManaged(ctx, paneKey, "C-c")
 }
 
-func (s *fakePaneService) OpenStream(context.Context, string, int) (tagb.PaneStream, error) {
-	return tagb.PaneStream{
+func (s *fakePaneService) OpenStream(context.Context, string, int) (tmuxconn.PaneStream, error) {
+	return tmuxconn.PaneStream{
 		Pane:         s.records["default:%5"].Info,
 		Initial:      s.initialOutput,
 		Subscription: s.sub,
@@ -369,7 +369,7 @@ func TestRouterSelectAndSnapshot(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -411,7 +411,7 @@ func TestRouterSelectPromptsForPaneAndExecutesReply(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -462,7 +462,7 @@ func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -501,7 +501,7 @@ func TestRouterPlainTextSendsToCurrentPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -528,7 +528,7 @@ func TestRouterPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -552,7 +552,7 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -583,7 +583,7 @@ func TestRouterKeysRejectsUnknownKey(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -616,7 +616,7 @@ func TestRouterKeysPromptUsesReply(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -651,7 +651,7 @@ func TestRouterEnterAndCtrlCAliasKeySending(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -684,7 +684,7 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -720,7 +720,7 @@ func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -757,7 +757,7 @@ func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -803,7 +803,7 @@ func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
 func TestFormatPaneListShortensLongDirectoryNames(t *testing.T) {
 	t.Parallel()
 
-	text := formatPaneList([]tagb.PaneRecord{{
+	text := formatPaneList([]tmuxconn.PaneRecord{{
 		Info: tmux.PaneInfo{
 			Target:      tmux.Target{Socket: "default", PaneID: "%7"},
 			SessionName: "workspace",
@@ -825,7 +825,7 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -858,7 +858,7 @@ func TestReplyBusReplySnapshotUsesConfiguredRenderOptions(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -893,7 +893,7 @@ func TestRouterFollow(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -954,7 +954,7 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -991,7 +991,7 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1029,7 +1029,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1094,7 +1094,7 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1129,7 +1129,7 @@ func TestRouterClearStopsFollowAndKeepsSelectionHistory(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1179,7 +1179,7 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1292,7 +1292,7 @@ func TestRouterSlackAcceptsPrefixedCommands(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1327,7 +1327,7 @@ func TestRouterSlackAppMentionAcceptsCommandWithoutPrefix(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1351,7 +1351,7 @@ func TestRouterSlackHelpUsesCommandPrefix(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1387,7 +1387,7 @@ func TestRouterSlackPlainTextUsesCurrentPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1414,7 +1414,7 @@ func TestRouterSlackPlainTextInManagedThreadUsesCurrentPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -1441,7 +1441,7 @@ func TestRouterSlackPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) 
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

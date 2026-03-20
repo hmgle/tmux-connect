@@ -158,7 +158,7 @@ func TestSlackHandleMessageAcceptsPersistedChannelThreadWithoutWarmCache(t *test
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestSlackHandleMessageAcceptsPersistedChannelThreadAfterCacheEviction(t *te
 	t.Parallel()
 
 	ctx := context.Background()
-	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

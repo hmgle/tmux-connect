@@ -982,7 +982,7 @@ func isReturningUnsupported(err error) bool {
 func defaultDBPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
-		return filepath.Join(".", ".tagb", "tagb.db")
+		return filepath.Join(".", ".tmuxconn", "tmuxconn.db")
 	}
-	return filepath.Join(home, ".tagb", "tagb.db")
+	return filepath.Join(home, ".tmuxconn", "tmuxconn.db")
 }

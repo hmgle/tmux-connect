@@ -1,4 +1,4 @@
-package tagb
+package tmuxconn
 
 import (
 	"context"

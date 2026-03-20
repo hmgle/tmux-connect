@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type FollowManager struct {
@@ -150,7 +150,7 @@ func (m *FollowManager) Close() {
 	}
 }
 
-func (m *FollowManager) run(ctx context.Context, session *followSession, stream tagb.PaneStream) {
+func (m *FollowManager) run(ctx context.Context, session *followSession, stream tmuxconn.PaneStream) {
 	defer stream.Subscription.Close()
 	defer m.removeSession(session.chat.Key(), session.paneKey)
 

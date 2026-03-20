@@ -38,10 +38,10 @@
 ### 1. 构建或直接运行
 
 ```bash
-go build ./cmd/tagb
+go build ./cmd/tmux-connect
 ```
 
-后文中的 `tagb` 也可以替换成 `go run ./cmd/tagb`。
+后文中的 `tmux-connect` 也可以替换成 `go run ./cmd/tmux-connect`。
 
 ### 2. 在 tmux 里启动你的 Agent
 
@@ -55,9 +55,9 @@ codex
 ### 3. 找到 pane 并纳入管理
 
 ```bash
-tagb list
-tagb attach --pane %5 --agent codex --label backend
-tagb inspect --pane %5
+tmux-connect list
+tmux-connect attach --pane %5 --agent codex --label backend
+tmux-connect inspect --pane %5
 ```
 
 这里的 `%5` 只是示例 pane ID。
@@ -65,16 +65,16 @@ tagb inspect --pane %5
 ### 4. 启动 Telegram daemon
 
 ```bash
-export TAGB_TELEGRAM_TOKEN="123456:ABC-DEF..."
+export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
 
-tagb daemon run \
-  --db ~/.tagb/tagb.db \
+tmux-connect daemon run \
+  --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
 
 注意：
 
-- 同一个 Telegram bot token 只支持一个活跃的 `tagb daemon run` 实例
+- 同一个 Telegram bot token 只支持一个活跃的 `tmux-connect daemon run` 实例
 - 如果要管理多台机器，最简单的方式是每台机器使用不同的 bot
 
 如果你还不知道 `chat_id`，见下文“获取 Telegram chat ID”。
@@ -155,19 +155,19 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 ### 本地 CLI
 
 ```bash
-tagb list
-tagb attach --pane %5 --agent codex --label backend
-tagb detach --pane %5
-tagb inspect --pane %5
-tagb snapshot --pane %5 --lines 120
-tagb send --pane %5 --text "continue" --enter
-tagb enter --pane %5
-tagb ctrl-c --pane %5
-tagb stream --pane %5 --lines 120
-tagb serve --listen 127.0.0.1:8080
-tagb daemon run --telegram-token TOKEN --db ~/.tagb/tagb.db
-tagb daemon doctor --telegram-token TOKEN
-tagb daemon status --db ~/.tagb/tagb.db
+tmux-connect list
+tmux-connect attach --pane %5 --agent codex --label backend
+tmux-connect detach --pane %5
+tmux-connect inspect --pane %5
+tmux-connect snapshot --pane %5 --lines 120
+tmux-connect send --pane %5 --text "continue" --enter
+tmux-connect enter --pane %5
+tmux-connect ctrl-c --pane %5
+tmux-connect stream --pane %5 --lines 120
+tmux-connect serve --listen 127.0.0.1:8080
+tmux-connect daemon run --telegram-token TOKEN --db ~/.tmux-connect/tmux-connect.db
+tmux-connect daemon doctor --telegram-token TOKEN
+tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 ### HTTP API
@@ -175,7 +175,7 @@ tagb daemon status --db ~/.tagb/tagb.db
 启动：
 
 ```bash
-tagb serve --listen 127.0.0.1:8080
+tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 常用端点：
@@ -204,9 +204,9 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 ## 常用 daemon 参数
 
 ```bash
-tagb daemon run \
-  --telegram-token "$TAGB_TELEGRAM_TOKEN" \
-  --db ~/.tagb/tagb.db \
+tmux-connect daemon run \
+  --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789 \
   --telegram-snapshot-theme dark \
   --telegram-snapshot-font-size 14 \
@@ -233,12 +233,12 @@ tagb daemon run \
 
 运行约束：
 
-- 同一个 bot token 上只应有一个活跃的 `tagb daemon run`
+- 同一个 bot token 上只应有一个活跃的 `tmux-connect daemon run`
 - 如果要管理多台机器，建议每台机器使用不同的 bot
 
 ## 运行方式建议
 
-- `tagb daemon run` 建议放在单独的 tmux pane、`systemd`、`launchd` 或其他守护方式下运行
+- `tmux-connect daemon run` 建议放在单独的 tmux pane、`systemd`、`launchd` 或其他守护方式下运行
 - 如果你只是本地调试，直接在终端里运行即可
 - 如果你的 pane 很重要，建议先手动 `attach` 并加上 `--label`
 
@@ -257,11 +257,11 @@ tagb daemon run \
 ## 最常见的问题
 
 - daemon 启不来：
-  先跑 `tagb daemon doctor --telegram-token "$TAGB_TELEGRAM_TOKEN"`
+  先跑 `tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"`
 - Telegram 没反应：
   先检查 `--allow-chat`、bot token、网络连通性
 - `/select` 后 pane 不可用：
-  说明 tmux pane 已消失，重新 `tagb list` 或 `/panes`
+  说明 tmux pane 已消失，重新 `tmux-connect list` 或 `/panes`
 - `/follow on` 没输出：
   先用 `/snapshot` 看当前 pane 是否真的有新内容
 

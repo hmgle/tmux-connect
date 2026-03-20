@@ -257,10 +257,10 @@ func TestInjectInputUsesNamedBuffer(t *testing.T) {
 	if len(runner.calls) != 2 {
 		t.Fatalf("expected 2 tmux calls, got %d", len(runner.calls))
 	}
-	if got := runner.calls[0].args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tagb-5-") || got[3] != "-" {
+	if got := runner.calls[0].args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") || got[3] != "-" {
 		t.Fatalf("unexpected load-buffer args: %v", got)
 	}
-	if got := runner.calls[1].args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tagb-5-") {
+	if got := runner.calls[1].args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") {
 		t.Fatalf("unexpected paste-buffer args: %v", got)
 	}
 	if runner.calls[0].args[2] != runner.calls[1].args[2] {
@@ -351,12 +351,12 @@ func TestSetMetadataUsesSingleTmuxCommand(t *testing.T) {
 	got := runner.calls[0].args
 	joined := strings.Join(got, " ")
 	for _, fragment := range []string{
-		"set-option -p -t %5 @tagb_managed 1",
-		"set-option -p -t %5 @tagb_mode relay",
-		"set-option -p -t %5 @tagb_agent codex",
-		"set-option -p -t %5 @tagb_label backend",
-		"set-option -p -t %5 @tagb_created_by manual-attach",
-		"set-option -p -t %5 @tagb_last_activity_unix 1700000000",
+		"set-option -p -t %5 @tmuxconn_managed 1",
+		"set-option -p -t %5 @tmuxconn_mode relay",
+		"set-option -p -t %5 @tmuxconn_agent codex",
+		"set-option -p -t %5 @tmuxconn_label backend",
+		"set-option -p -t %5 @tmuxconn_created_by manual-attach",
+		"set-option -p -t %5 @tmuxconn_last_activity_unix 1700000000",
 	} {
 		if !strings.Contains(joined, fragment) {
 			t.Fatalf("missing fragment %q in args %v", fragment, got)

@@ -22,69 +22,69 @@
 
 - Go `1.25` 或更高版本
 - `tmux`
-- 如果要运行 `tagb daemon`，需要 `PATH` 中可用的 `sqlite3`
+- 如果要运行 `tmux-connect daemon`，需要 `PATH` 中可用的 `sqlite3`
 - 如果要远程控制，需要 Telegram bot token 或 Slack bot/app token
 
 ## Build
 
 ```bash
-go build ./cmd/tagb
+go build ./cmd/tmux-connect
 ```
 
-仓库名是 `tmux-connect`，生成的二进制名是 `tagb`。
+仓库名是 `tmux-connect`，生成的二进制名是 `tmux-connect`。
 
 ## CLI Quick Start
 
 列出 pane：
 
 ```bash
-go run ./cmd/tagb list
+go run ./cmd/tmux-connect list
 ```
 
 接入一个已存在的 pane：
 
 ```bash
-go run ./cmd/tagb attach --pane %5 --agent codex --label backend
+go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
 ```
 
 查看 bridge metadata：
 
 ```bash
-go run ./cmd/tagb inspect --pane %5
+go run ./cmd/tmux-connect inspect --pane %5
 ```
 
 发送文本并附带回车：
 
 ```bash
-go run ./cmd/tagb send --pane %5 --text "continue" --enter
+go run ./cmd/tmux-connect send --pane %5 --text "continue" --enter
 ```
 
 抓取最近输出：
 
 ```bash
-go run ./cmd/tagb snapshot --pane %5 --lines 120
+go run ./cmd/tmux-connect snapshot --pane %5 --lines 120
 ```
 
 持续跟随输出：
 
 ```bash
-go run ./cmd/tagb stream --pane %5
+go run ./cmd/tmux-connect stream --pane %5
 ```
 
 本地 CLI 入口如下：
 
 ```bash
-tagb [--socket NAME] [--json] list
-tagb [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tagb [--socket NAME] [--json] detach --pane %5
-tagb [--socket NAME] [--json] inspect --pane %5
-tagb [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tagb [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tagb [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tagb [--socket NAME] [--json] enter --pane %5
-tagb [--socket NAME] [--json] ctrl-c --pane %5
-tagb [--socket NAME] serve [--listen 127.0.0.1:8080]
-tagb [--socket NAME] daemon <run|doctor|status> [flags]
+tmux-connect [--socket NAME] [--json] list
+tmux-connect [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+tmux-connect [--socket NAME] [--json] detach --pane %5
+tmux-connect [--socket NAME] [--json] inspect --pane %5
+tmux-connect [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+tmux-connect [--socket NAME] [--json] stream --pane %5 [--lines 120]
+tmux-connect [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+tmux-connect [--socket NAME] [--json] enter --pane %5
+tmux-connect [--socket NAME] [--json] ctrl-c --pane %5
+tmux-connect [--socket NAME] serve [--listen 127.0.0.1:8080]
+tmux-connect [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -92,7 +92,7 @@ tagb [--socket NAME] daemon <run|doctor|status> [flags]
 启动服务：
 
 ```bash
-go run ./cmd/tagb serve --listen 127.0.0.1:8080
+go run ./cmd/tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 端点：
@@ -122,21 +122,21 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 启动 Telegram daemon：
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --platform telegram \
-  --telegram-token "$TAGB_TELEGRAM_TOKEN" \
-  --db ~/.tagb/tagb.db \
+  --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
 
 启动 Slack daemon：
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --platform slack \
-  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
-  --slack-app-token "$TAGB_SLACK_APP_TOKEN" \
-  --db ~/.tagb/tagb.db
+  --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db
 ```
 
 如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
@@ -162,8 +162,8 @@ go run ./cmd/tagb daemon run \
 检查命令：
 
 ```bash
-go run ./cmd/tagb daemon doctor --platform telegram --telegram-token "$TAGB_TELEGRAM_TOKEN"
-go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+go run ./cmd/tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 Telegram 命令：
@@ -194,18 +194,18 @@ Slack 命令：
 - `tmux: ctrlc` 或 `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
-Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本会直接发送到当前 pane，但不会自动附带回车；需要执行时，用 `/enter <text>` 或 `tmux: enter <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本会直接发送到当前 pane，但不会自动附带回车；需要执行时，用 `/enter <text>` 或 `tmux: enter <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 
 ## Recovery Model
 
 tmux 仍然是 pane 身份和管理元数据的事实来源。bridge 会通过 tmux user options 把恢复状态写回 pane：
 
-- `@tagb_managed=1`
-- `@tagb_mode=relay`
-- `@tagb_agent=<agent>`
-- `@tagb_label=<label>`
-- `@tagb_created_by=manual-attach`
-- `@tagb_last_activity_unix=<unix timestamp>`
+- `@tmuxconn_managed=1`
+- `@tmuxconn_mode=relay`
+- `@tmuxconn_agent=<agent>`
+- `@tmuxconn_label=<label>`
+- `@tmuxconn_created_by=manual-attach`
+- `@tmuxconn_last_activity_unix=<unix timestamp>`
 
 remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系、当前 pane 选择、session 和消息关联。
 

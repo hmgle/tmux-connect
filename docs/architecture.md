@@ -14,14 +14,14 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 ## Main Components
 
-### `cmd/tagb`
+### `cmd/tmux-connect`
 
 - CLI entrypoint
 - global flag parsing
 - HTTP server bootstrap
 - daemon command dispatch
 
-### `internal/tagb`
+### `internal/tmux-connect`
 
 - bridge service for pane list, attach, detach, inspect, snapshot, send, and stream
 - CLI rendering and exit-code handling
@@ -72,7 +72,7 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 ### Remote Daemon
 
-1. `tagb daemon run` starts with a connector config and SQLite path.
+1. `tmux-connect daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
 3. Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection.
 4. Incoming platform messages are parsed into commands.

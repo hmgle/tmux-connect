@@ -1,4 +1,4 @@
-/tagb
+/tmux-connect
 *.db
 *.db-shm
 *.db-wal

@@ -1,4 +1,4 @@
-package tagb
+package tmuxconn
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
+	"github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
@@ -345,11 +345,11 @@ func (a *App) runStream(ctx context.Context, args []string) error {
 }
 
 func (a *App) printUsage() {
-	defaultConfigPath := "$XDG_CONFIG_HOME/" + tagbconfig.DefaultDirName + `/config.toml`
-	fmt.Fprintf(a.stderr, `tagb manages tmux panes for local relay workflows.
+	defaultConfigPath := "$XDG_CONFIG_HOME/" + config.DefaultDirName + `/config.toml`
+	fmt.Fprintf(a.stderr, `tmux-connect manages tmux panes for local relay workflows.
 
 Usage:
-  tagb [--config PATH] [--socket NAME] [--json] <command> [flags]
+  tmux-connect [--config PATH] [--socket NAME] [--json] <command> [flags]
 
 Global flags:
   --config PATH  load TOML config (default: %s)

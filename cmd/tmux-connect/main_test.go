@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"testing"
 
-	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
+	"github.com/hmgle/tmux-connect/internal/config"
 )
 
 func TestParseGlobalArgsUsesConfigSocket(t *testing.T) {
 	t.Parallel()
 
-	socket, args, err := parseGlobalArgs([]string{"list"}, tagbconfig.File{
-		Tmux: tagbconfig.Tmux{Socket: stringPtr("cfg-sock")},
+	socket, args, err := parseGlobalArgs([]string{"list"}, config.File{
+		Tmux: config.Tmux{Socket: stringPtr("cfg-sock")},
 	})
 	if err != nil {
 		t.Fatalf("parseGlobalArgs() error = %v", err)
@@ -25,10 +25,10 @@ func TestParseGlobalArgsUsesConfigSocket(t *testing.T) {
 }
 
 func TestParseGlobalArgsEnvOverridesConfigSocket(t *testing.T) {
-	t.Setenv("TAGB_TMUX_SOCKET", "env-sock")
+	t.Setenv("TMUXCONN_TMUX_SOCKET", "env-sock")
 
-	socket, _, err := parseGlobalArgs([]string{"list"}, tagbconfig.File{
-		Tmux: tagbconfig.Tmux{Socket: stringPtr("cfg-sock")},
+	socket, _, err := parseGlobalArgs([]string{"list"}, config.File{
+		Tmux: config.Tmux{Socket: stringPtr("cfg-sock")},
 	})
 	if err != nil {
 		t.Fatalf("parseGlobalArgs() error = %v", err)
@@ -39,10 +39,10 @@ func TestParseGlobalArgsEnvOverridesConfigSocket(t *testing.T) {
 }
 
 func TestParseGlobalArgsFlagOverridesEnvSocket(t *testing.T) {
-	t.Setenv("TAGB_TMUX_SOCKET", "env-sock")
+	t.Setenv("TMUXCONN_TMUX_SOCKET", "env-sock")
 
-	socket, _, err := parseGlobalArgs([]string{"--socket", "flag-sock", "list"}, tagbconfig.File{
-		Tmux: tagbconfig.Tmux{Socket: stringPtr("cfg-sock")},
+	socket, _, err := parseGlobalArgs([]string{"--socket", "flag-sock", "list"}, config.File{
+		Tmux: config.Tmux{Socket: stringPtr("cfg-sock")},
 	})
 	if err != nil {
 		t.Fatalf("parseGlobalArgs() error = %v", err)
@@ -55,7 +55,7 @@ func TestParseGlobalArgsFlagOverridesEnvSocket(t *testing.T) {
 func TestParseServeArgsUsesConfigListen(t *testing.T) {
 	t.Parallel()
 
-	listen, err := parseServeArgs(&bytes.Buffer{}, tagbconfig.Serve{Listen: stringPtr("127.0.0.1:9090")}, nil)
+	listen, err := parseServeArgs(&bytes.Buffer{}, config.Serve{Listen: stringPtr("127.0.0.1:9090")}, nil)
 	if err != nil {
 		t.Fatalf("parseServeArgs() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestParseServeArgsUsesConfigListen(t *testing.T) {
 func TestParseServeArgsFlagOverridesConfigListen(t *testing.T) {
 	t.Parallel()
 
-	listen, err := parseServeArgs(&bytes.Buffer{}, tagbconfig.Serve{Listen: stringPtr("127.0.0.1:9090")}, []string{"--listen", "127.0.0.1:9191"})
+	listen, err := parseServeArgs(&bytes.Buffer{}, config.Serve{Listen: stringPtr("127.0.0.1:9090")}, []string{"--listen", "127.0.0.1:9191"})
 	if err != nil {
 		t.Fatalf("parseServeArgs() error = %v", err)
 	}

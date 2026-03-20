@@ -27,12 +27,12 @@ const (
 )
 
 const (
-	OptionManaged      = "@tagb_managed"
-	OptionMode         = "@tagb_mode"
-	OptionAgent        = "@tagb_agent"
-	OptionLabel        = "@tagb_label"
-	OptionCreatedBy    = "@tagb_created_by"
-	OptionLastActivity = "@tagb_last_activity_unix"
+	OptionManaged      = "@tmuxconn_managed"
+	OptionMode         = "@tmuxconn_mode"
+	OptionAgent        = "@tmuxconn_agent"
+	OptionLabel        = "@tmuxconn_label"
+	OptionCreatedBy    = "@tmuxconn_created_by"
+	OptionLastActivity = "@tmuxconn_last_activity_unix"
 )
 
 type BridgeMetadata struct {

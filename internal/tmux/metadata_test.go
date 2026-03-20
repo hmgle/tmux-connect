@@ -23,7 +23,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 func TestParseUserOptions(t *testing.T) {
 	t.Parallel()
 
-	output := "@tagb_managed 1\n@tagb_mode relay\nstatus on\n"
+	output := "@tmuxconn_managed 1\n@tmuxconn_mode relay\nstatus on\n"
 	got := parseUserOptions(output)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 options, got %d", len(got))

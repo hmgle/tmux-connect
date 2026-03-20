@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	tagbconfig "github.com/hmgle/tmux-connect/internal/config"
-	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/termrender"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type Config struct {
@@ -46,13 +46,13 @@ type Runtime struct {
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
-	return RunCLIWithConfig(ctx, stdout, stderr, service, tagbconfig.Daemon{}, args)
+	return RunCLIWithConfig(ctx, stdout, stderr, service, config.Daemon{}, args)
 }
 
-func RunCLIWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+func RunCLIWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg config.Daemon, args []string) error {
 	if len(args) == 0 {
 		printUsage(stderr)
-		return tagb.UsageError("missing daemon command")
+		return tmuxconn.UsageError("missing daemon command")
 	}
 	switch args[0] {
 	case "run":
@@ -66,11 +66,11 @@ func RunCLIWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, s
 		return nil
 	default:
 		printUsage(stderr)
-		return tagb.UsageError("unknown daemon command: %s", args[0])
+		return tmuxconn.UsageError("unknown daemon command: %s", args[0])
 	}
 }
 
-func runDaemonWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+func runDaemonWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg config.Daemon, args []string) error {
 	cfg, err := parseConfigWithFile(args, stderr, true, fileCfg)
 	if err != nil {
 		return err
@@ -81,71 +81,71 @@ func runDaemonWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 	}
 	defer runtime.Close()
 
-	if _, err := fmt.Fprintf(stdout, "tagb daemon running with db %s\n", runtime.store.Path()); err != nil {
+	if _, err := fmt.Fprintf(stdout, "tmux-connect daemon running with db %s\n", runtime.store.Path()); err != nil {
 		return err
 	}
 	return runtime.Run(ctx)
 }
 
-func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg config.Daemon, args []string) error {
 	cfg, err := parseConfigWithFile(args, stderr, false, fileCfg)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(stdout, "tagb daemon doctor")
+	fmt.Fprintln(stdout, "tmux-connect daemon doctor")
 
 	switch cfg.Platform {
 	case "telegram":
 		if strings.TrimSpace(cfg.TelegramToken) == "" {
-			return tagb.UsageError("telegram token is required; pass --telegram-token, TAGB_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
+			return tmuxconn.UsageError("telegram token is required; pass --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 		}
 		fmt.Fprintln(stdout, "telegram token: ok")
 	case "slack":
 		if strings.TrimSpace(cfg.SlackBotToken) == "" {
-			return tagb.UsageError("slack bot token is required; pass --slack-bot-token, TAGB_SLACK_BOT_TOKEN, or [daemon.slack].bot_token in config")
+			return tmuxconn.UsageError("slack bot token is required; pass --slack-bot-token, TMUXCONN_SLACK_BOT_TOKEN, or [daemon.slack].bot_token in config")
 		}
 		if strings.TrimSpace(cfg.SlackAppToken) == "" {
-			return tagb.UsageError("slack app token is required; pass --slack-app-token, TAGB_SLACK_APP_TOKEN, or [daemon.slack].app_token in config")
+			return tmuxconn.UsageError("slack app token is required; pass --slack-app-token, TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].app_token in config")
 		}
 		fmt.Fprintln(stdout, "slack tokens: ok")
 		fmt.Fprintln(stdout, "slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read")
 		fmt.Fprintln(stdout, "slack snapshot uploads: uses the current Web API upload flow; reinstall the app after scope changes")
 	default:
-		return tagb.UsageError("unsupported platform %q", cfg.Platform)
+		return tmuxconn.UsageError("unsupported platform %q", cfg.Platform)
 	}
 
 	store, err := OpenStore(ctx, cfg.DBPath)
 	if err != nil {
-		return tagb.UsageError("open sqlite store: %v", err)
+		return tmuxconn.UsageError("open sqlite store: %v", err)
 	}
 	fmt.Fprintf(stdout, "sqlite store: ok (%s)\n", store.Path())
 
 	registry := NewPaneRegistry(service)
 	if err := registry.Refresh(ctx); err != nil {
-		return tagb.TmuxError("list panes: %v", err)
+		return tmuxconn.TmuxError("list panes: %v", err)
 	}
 	fmt.Fprintf(stdout, "tmux panes: ok (%d managed)\n", registry.ManagedCount())
 	return nil
 }
 
-func runStatusWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg tagbconfig.Daemon, args []string) error {
+func runStatusWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg config.Daemon, args []string) error {
 	cfg, err := parseConfigWithFile(args, stderr, false, fileCfg)
 	if err != nil {
 		return err
 	}
 	store, err := OpenStore(ctx, cfg.DBPath)
 	if err != nil {
-		return tagb.UsageError("open sqlite store: %v", err)
+		return tmuxconn.UsageError("open sqlite store: %v", err)
 	}
 	stats, err := store.Stats(ctx)
 	if err != nil {
-		return tagb.UsageError("read sqlite stats: %v", err)
+		return tmuxconn.UsageError("read sqlite stats: %v", err)
 	}
 	registry := NewPaneRegistry(service)
 	refreshErr := registry.Refresh(ctx)
 
-	fmt.Fprintln(stdout, "tagb daemon status")
+	fmt.Fprintln(stdout, "tmux-connect daemon status")
 	fmt.Fprintf(stdout, "db: %s\n", cfg.DBPath)
 	fmt.Fprintf(stdout, "registered chats: %d\n", stats.Chats)
 	fmt.Fprintf(stdout, "bindings: %d\n", stats.Bindings)
@@ -161,11 +161,11 @@ func runStatusWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.Writer) (*Runtime, error) {
 	store, err := OpenStore(ctx, cfg.DBPath)
 	if err != nil {
-		return nil, tagb.UsageError("open sqlite store: %v", err)
+		return nil, tmuxconn.UsageError("open sqlite store: %v", err)
 	}
 	registry := NewPaneRegistry(service)
 	if err := registry.Refresh(ctx); err != nil {
-		return nil, tagb.TmuxError("initial pane refresh: %v", err)
+		return nil, tmuxconn.TmuxError("initial pane refresh: %v", err)
 	}
 
 	adapter, err := newPlatformAdapter(cfg, stderr, store)
@@ -228,60 +228,60 @@ func (f *stringListFlag) Set(value string) error {
 }
 
 func parseConfig(args []string, stderr io.Writer, requireRun bool) (Config, error) {
-	return parseConfigWithFile(args, stderr, requireRun, tagbconfig.Daemon{})
+	return parseConfigWithFile(args, stderr, requireRun, config.Daemon{})
 }
 
-func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileCfg tagbconfig.Daemon) (Config, error) {
+func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileCfg config.Daemon) (Config, error) {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
 	snapshotFontSize := float64Value(fileCfg.Telegram.SnapshotFontSize, 14)
 	var err error
-	snapshotFontSize, err = envFloat64("TAGB_TELEGRAM_SNAPSHOT_FONT_SIZE", snapshotFontSize)
+	snapshotFontSize, err = envFloat64("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", snapshotFontSize)
 	if err != nil {
-		return Config{}, tagb.UsageError("%v", err)
+		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 
 	allowChats := &stringListFlag{}
 	cfg := Config{}
 	defaultPlatform := stringValue(fileCfg.Platform, "telegram")
-	defaultPlatform = envOrDefault("TAGB_PLATFORM", defaultPlatform)
+	defaultPlatform = envOrDefault("TMUXCONN_PLATFORM", defaultPlatform)
 	resolvedDBPath := stringValue(fileCfg.DB, defaultDBPath())
 	defaultPollTimeout, err := durationValue("[daemon].poll_timeout", fileCfg.PollTimeout, 20*time.Second)
 	if err != nil {
-		return Config{}, tagb.UsageError("%v", err)
+		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	defaultSnapshotLines := intValue(fileCfg.SnapshotLines, 120)
-	defaultSnapshotTheme := envOrDefault("TAGB_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
+	defaultSnapshotTheme := envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
 	defaultFollowLines := intValue(fileCfg.FollowLines, 80)
 	defaultFollowMinGap, err := durationValue("[daemon].follow_min_interval", fileCfg.FollowMinInterval, 700*time.Millisecond)
 	if err != nil {
-		return Config{}, tagb.UsageError("%v", err)
+		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	defaultFollowDebug := boolValue(fileCfg.FollowDebug, false)
-	if envValue, ok := envBoolValue("TAGB_FOLLOW_DEBUG"); ok {
+	if envValue, ok := envBoolValue("TMUXCONN_FOLLOW_DEBUG"); ok {
 		defaultFollowDebug = envValue
 	}
 
 	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack)")
-	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TAGB_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
-	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", envOrDefault("TAGB_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, "")), "slack bot token")
-	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", envOrDefault("TAGB_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, "")), "slack app token for socket mode")
-	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TAGB_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix)), "command prefix for slack messages")
-	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TAGB_DB_PATH", resolvedDBPath), "sqlite db path")
+	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
+	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", envOrDefault("TMUXCONN_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, "")), "slack bot token")
+	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", envOrDefault("TMUXCONN_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, "")), "slack app token for socket mode")
+	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix)), "command prefix for slack messages")
+	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
 	fs.StringVar(&cfg.SnapshotTheme, "telegram-snapshot-theme", defaultSnapshotTheme, "theme for Telegram snapshot images (dark|light)")
 	fs.Float64Var(&cfg.SnapshotFontSize, "telegram-snapshot-font-size", snapshotFontSize, "font size for Telegram snapshot images")
-	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", envOrDefault("TAGB_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, "")), "path to a .ttf or .otf font for Telegram snapshot images")
+	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, "")), "path to a .ttf or .otf font for Telegram snapshot images")
 	fs.IntVar(&cfg.FollowLines, "follow-lines", defaultFollowLines, "initial line count when starting /follow")
 	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", defaultFollowMinGap, "default minimum interval between /follow pushes")
 	fs.BoolVar(&cfg.FollowDebug, "follow-debug", defaultFollowDebug, "log follow chunk/flush debug data to stderr")
-	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", envOrDefault("TAGB_TELEGRAM_API_BASE", stringValue(fileCfg.Telegram.APIBase, "")), "telegram bot api base url")
+	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", envOrDefault("TMUXCONN_TELEGRAM_API_BASE", stringValue(fileCfg.Telegram.APIBase, "")), "telegram bot api base url")
 	fs.Var(allowChats, "allow-chat", "allowed telegram chat id (repeatable or comma-separated)")
 
 	if err := fs.Parse(args); err != nil {
-		return Config{}, tagb.UsageError("%v", err)
+		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	cfg.Platform = strings.TrimSpace(strings.ToLower(cfg.Platform))
 	if cfg.Platform == "" {
@@ -294,23 +294,23 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		cfg.AllowChats = append([]string(nil), (*fileCfg.AllowChats)...)
 	}
 	if cfg.PollTimeout <= 0 {
-		return Config{}, tagb.UsageError("--poll-timeout must be > 0")
+		return Config{}, tmuxconn.UsageError("--poll-timeout must be > 0")
 	}
 	if cfg.SnapshotLines <= 0 {
-		return Config{}, tagb.UsageError("--snapshot-lines must be > 0")
+		return Config{}, tmuxconn.UsageError("--snapshot-lines must be > 0")
 	}
 	if err := termrender.ValidateOptions(snapshotRenderOptions(cfg)); err != nil {
-		return Config{}, tagb.UsageError("%v", err)
+		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	if cfg.FollowLines <= 0 {
-		return Config{}, tagb.UsageError("--follow-lines must be > 0")
+		return Config{}, tmuxconn.UsageError("--follow-lines must be > 0")
 	}
 	if cfg.FollowMinGap <= 0 {
-		return Config{}, tagb.UsageError("--follow-min-interval must be > 0")
+		return Config{}, tmuxconn.UsageError("--follow-min-interval must be > 0")
 	}
 	if cfg.Platform == "slack" {
 		if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
-			return Config{}, tagb.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
+			return Config{}, tmuxconn.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
 		}
 	} else {
 		cfg.SlackCommandPrefix = ""
@@ -319,18 +319,18 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		switch cfg.Platform {
 		case "telegram":
 			if strings.TrimSpace(cfg.TelegramToken) == "" {
-				return Config{}, tagb.UsageError("daemon run requires --telegram-token, TAGB_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
+				return Config{}, tmuxconn.UsageError("daemon run requires --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 			}
 		case "slack":
 			if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
-				return Config{}, tagb.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TAGB_SLACK_BOT_TOKEN/TAGB_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
+				return Config{}, tmuxconn.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TMUXCONN_SLACK_BOT_TOKEN/TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
 			}
 		default:
-			return Config{}, tagb.UsageError("unsupported --platform %q", cfg.Platform)
+			return Config{}, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
 		}
 	}
 	if strings.TrimSpace(cfg.DBPath) == "" {
-		return Config{}, tagb.UsageError("--db is required")
+		return Config{}, tmuxconn.UsageError("--db is required")
 	}
 	return cfg, nil
 }
@@ -430,10 +430,10 @@ func durationValue(fieldName string, value *string, fallback time.Duration) (tim
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprint(w, `tagb daemon manages remote relay access for tmux panes.
+	fmt.Fprint(w, `tmux-connect daemon manages remote relay access for tmux panes.
 
 Usage:
-  tagb daemon <command> [flags]
+  tmux-connect daemon <command> [flags]
 
 Commands:
   run      Start the Telegram relay daemon
@@ -465,6 +465,6 @@ func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAda
 	case "slack":
 		return newSlackAdapter(cfg, stderr, store)
 	default:
-		return nil, tagb.UsageError("unsupported --platform %q", cfg.Platform)
+		return nil, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
 	}
 }

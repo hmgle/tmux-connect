@@ -133,7 +133,7 @@ func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) er
 	if len(data) == 0 {
 		return nil
 	}
-	bufferName := fmt.Sprintf("tagb-%s-%d", strings.TrimPrefix(target.PaneID, "%"), injectBufferSeq.Add(1))
+	bufferName := fmt.Sprintf("tmuxconn-%s-%d", strings.TrimPrefix(target.PaneID, "%"), injectBufferSeq.Add(1))
 	if _, err := c.run(ctx, data, "load-buffer", "-b", bufferName, "-"); err != nil {
 		return err
 	}
@@ -363,7 +363,7 @@ func parseUserOptions(output string) map[string]string {
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "@tagb_") {
+		if !strings.HasPrefix(line, "@tmuxconn_") {
 			continue
 		}
 		parts := strings.SplitN(line, " ", 2)
@@ -403,12 +403,12 @@ func paneStateFormat() string {
 		"#{pane_dead}",
 		"#{pane_width}",
 		"#{pane_height}",
-		"#{@tagb_managed}",
-		"#{@tagb_mode}",
-		"#{@tagb_agent}",
-		"#{@tagb_label}",
-		"#{@tagb_created_by}",
-		"#{@tagb_last_activity_unix}",
+		"#{@tmuxconn_managed}",
+		"#{@tmuxconn_mode}",
+		"#{@tmuxconn_agent}",
+		"#{@tmuxconn_label}",
+		"#{@tmuxconn_created_by}",
+		"#{@tmuxconn_last_activity_unix}",
 	}, paneFieldSep)
 }
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
 	"github.com/hmgle/tmux-connect/internal/telegram"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type telegramAdapter struct {
@@ -96,7 +96,7 @@ func (a *telegramAdapter) SnapshotCaption(paneKey string) string {
 func (a *telegramAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {
 	offset, err := a.client.DrainPendingUpdates(ctx)
 	if err != nil {
-		return tagb.TmuxError("drain telegram updates: %v", err)
+		return tmuxconn.TmuxError("drain telegram updates: %v", err)
 	}
 	for {
 		if ctx.Err() != nil {
@@ -150,7 +150,7 @@ func (a *telegramAdapter) RegisterCommands(ctx context.Context, specs []botComma
 		})
 	}
 	if err := a.client.SetMyCommands(ctx, commands); err != nil {
-		return tagb.TmuxError("configure telegram commands: %v", err)
+		return tmuxconn.TmuxError("configure telegram commands: %v", err)
 	}
 	return nil
 }

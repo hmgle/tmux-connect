@@ -22,16 +22,16 @@ Current scope:
 
 - Go `1.25` or later
 - `tmux`
-- `sqlite3` in `PATH` if you want to run `tagb daemon`
+- `sqlite3` in `PATH` if you want to run `tmux-connect daemon`
 - a Telegram bot token or Slack bot/app tokens if you want remote control
 
 ## Build
 
 ```bash
-go build ./cmd/tagb
+go build ./cmd/tmux-connect
 ```
 
-The repository name is `tmux-connect`; the binary name is `tagb`.
+The repository name is `tmux-connect`; the binary name is `tmux-connect`.
 
 ## CLI Quick Start
 
@@ -45,53 +45,53 @@ before the subcommand.
 List panes:
 
 ```bash
-go run ./cmd/tagb list
+go run ./cmd/tmux-connect list
 ```
 
 Attach an existing pane:
 
 ```bash
-go run ./cmd/tagb attach --pane %5 --agent codex --label backend
+go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
 ```
 
 Inspect bridge metadata:
 
 ```bash
-go run ./cmd/tagb inspect --pane %5
+go run ./cmd/tmux-connect inspect --pane %5
 ```
 
 Send text and press Enter:
 
 ```bash
-go run ./cmd/tagb send --pane %5 --text "continue" --enter
+go run ./cmd/tmux-connect send --pane %5 --text "continue" --enter
 ```
 
 Capture recent output:
 
 ```bash
-go run ./cmd/tagb snapshot --pane %5 --lines 120
+go run ./cmd/tmux-connect snapshot --pane %5 --lines 120
 ```
 
 Follow output:
 
 ```bash
-go run ./cmd/tagb stream --pane %5
+go run ./cmd/tmux-connect stream --pane %5
 ```
 
 The local CLI surface is:
 
 ```bash
-tagb [--config PATH] [--socket NAME] [--json] list
-tagb [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tagb [--config PATH] [--socket NAME] [--json] detach --pane %5
-tagb [--config PATH] [--socket NAME] [--json] inspect --pane %5
-tagb [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tagb [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tagb [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tagb [--config PATH] [--socket NAME] [--json] enter --pane %5
-tagb [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
-tagb [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
-tagb [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
+tmux-connect [--config PATH] [--socket NAME] [--json] list
+tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
+tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
+tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
+tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -99,7 +99,7 @@ tagb [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 Start the server:
 
 ```bash
-go run ./cmd/tagb serve --listen 127.0.0.1:8080
+go run ./cmd/tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 Endpoints:
@@ -137,7 +137,7 @@ listen = "127.0.0.1:8080"
 
 [daemon]
 platform = "telegram"
-db = "/home/user/.tagb/tagb.db"
+db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
@@ -160,21 +160,21 @@ command_prefix = "tmux:"
 Start the Telegram daemon:
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --platform telegram \
-  --telegram-token "$TAGB_TELEGRAM_TOKEN" \
-  --db ~/.tagb/tagb.db \
+  --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
 
 Start the Slack daemon:
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --platform slack \
-  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
-  --slack-app-token "$TAGB_SLACK_APP_TOKEN" \
-  --db ~/.tagb/tagb.db
+  --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db
 ```
 
 For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
@@ -200,8 +200,8 @@ Common flags:
 Checks:
 
 ```bash
-go run ./cmd/tagb daemon doctor --platform telegram --telegram-token "$TAGB_TELEGRAM_TOKEN"
-go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+go run ./cmd/tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 Telegram commands:
@@ -232,18 +232,18 @@ Slack commands:
 - `tmux: ctrlc` or `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
-In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads is sent to the current pane without pressing Enter. Use `/enter <text>` or `tmux: enter <text>` to append Enter, and `/keys` or `tmux: keys` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads is sent to the current pane without pressing Enter. Use `/enter <text>` or `tmux: enter <text>` to append Enter, and `/keys` or `tmux: keys` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 
 ## Recovery Model
 
 tmux remains the source of truth for pane identity and management metadata. The bridge writes recovery state onto the pane with tmux user options:
 
-- `@tagb_managed=1`
-- `@tagb_mode=relay`
-- `@tagb_agent=<agent>`
-- `@tagb_label=<label>`
-- `@tagb_created_by=manual-attach`
-- `@tagb_last_activity_unix=<unix timestamp>`
+- `@tmuxconn_managed=1`
+- `@tmuxconn_mode=relay`
+- `@tmuxconn_agent=<agent>`
+- `@tmuxconn_label=<label>`
+- `@tmuxconn_created_by=manual-attach`
+- `@tmuxconn_last_activity_unix=<unix timestamp>`
 
 The remote daemon stores platform chat state in SQLite, including bindings, current pane selection, sessions, and message links.
 

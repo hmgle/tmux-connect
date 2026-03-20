@@ -6,14 +6,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hmgle/tmux-connect/internal/tagb"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 type paneService interface {
-	List(context.Context) ([]tagb.PaneRecord, error)
-	Attach(context.Context, string, string, string) (tagb.PaneRecord, error)
+	List(context.Context) ([]tmuxconn.PaneRecord, error)
+	Attach(context.Context, string, string, string) (tmuxconn.PaneRecord, error)
 	Detach(context.Context, string) error
-	Inspect(context.Context, string) (tagb.PaneRecord, error)
+	Inspect(context.Context, string) (tmuxconn.PaneRecord, error)
 	Snapshot(context.Context, string, int) (string, error)
 	SnapshotRich(context.Context, string, int) (string, error)
 	Send(context.Context, string, string, bool) error
@@ -24,15 +24,15 @@ type paneService interface {
 	EnterManaged(context.Context, string) error
 	CtrlC(context.Context, string) error
 	CtrlCManaged(context.Context, string) error
-	OpenStream(context.Context, string, int) (tagb.PaneStream, error)
+	OpenStream(context.Context, string, int) (tmuxconn.PaneStream, error)
 }
 
 type PaneRegistry struct {
 	service paneService
 
 	mu         sync.RWMutex
-	records    map[string]tagb.PaneRecord
-	managed    map[string]tagb.PaneRecord
+	records    map[string]tmuxconn.PaneRecord
+	managed    map[string]tmuxconn.PaneRecord
 	lastErr    error
 	lastLoaded bool
 	dirty      bool
@@ -41,8 +41,8 @@ type PaneRegistry struct {
 func NewPaneRegistry(service paneService) *PaneRegistry {
 	return &PaneRegistry{
 		service: service,
-		records: make(map[string]tagb.PaneRecord),
-		managed: make(map[string]tagb.PaneRecord),
+		records: make(map[string]tmuxconn.PaneRecord),
+		managed: make(map[string]tmuxconn.PaneRecord),
 	}
 }
 
@@ -54,8 +54,8 @@ func (r *PaneRegistry) Refresh(ctx context.Context) error {
 		r.lastErr = err
 		return err
 	}
-	all := make(map[string]tagb.PaneRecord, len(records))
-	managed := make(map[string]tagb.PaneRecord)
+	all := make(map[string]tmuxconn.PaneRecord, len(records))
+	managed := make(map[string]tmuxconn.PaneRecord)
 	for _, record := range records {
 		key := record.Info.Target.PaneKey()
 		all[key] = record
@@ -71,13 +71,13 @@ func (r *PaneRegistry) Refresh(ctx context.Context) error {
 	return nil
 }
 
-func (r *PaneRegistry) All() []tagb.PaneRecord {
+func (r *PaneRegistry) All() []tmuxconn.PaneRecord {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return sortedRecords(r.records)
 }
 
-func (r *PaneRegistry) Managed() []tagb.PaneRecord {
+func (r *PaneRegistry) Managed() []tmuxconn.PaneRecord {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return sortedRecords(r.managed)
@@ -112,12 +112,12 @@ func (r *PaneRegistry) MarkDirty() {
 	r.dirty = true
 }
 
-func sortedRecords(source map[string]tagb.PaneRecord) []tagb.PaneRecord {
-	records := make([]tagb.PaneRecord, 0, len(source))
+func sortedRecords(source map[string]tmuxconn.PaneRecord) []tmuxconn.PaneRecord {
+	records := make([]tmuxconn.PaneRecord, 0, len(source))
 	for _, record := range source {
 		records = append(records, record)
 	}
-	slices.SortFunc(records, func(a, b tagb.PaneRecord) int {
+	slices.SortFunc(records, func(a, b tmuxconn.PaneRecord) int {
 		if a.Info.SessionName != b.Info.SessionName {
 			return strings.Compare(a.Info.SessionName, b.Info.SessionName)
 		}

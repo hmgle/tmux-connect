@@ -26,7 +26,7 @@ Slack snapshot images use Slack's current Web API file upload flow, so `files:wr
 
 ## Start the Daemon
 
-`tagb` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
+`tmux-connect` also reads `$XDG_CONFIG_HOME/tmux-connect/config.toml` by default
 (falling back to `$HOME/.config/tmux-connect/config.toml`). Flags override
 environment variables, and environment variables override the TOML file.
 
@@ -35,7 +35,7 @@ Using TOML config:
 ```toml
 [daemon]
 platform = "slack"
-db = "/home/user/.tagb/tagb.db"
+db = "/home/user/.tmux-connect/tmux-connect.db"
 snapshot_lines = 120
 follow_lines = 80
 follow_min_interval = "700ms"
@@ -47,15 +47,15 @@ command_prefix = "tmux:"
 ```
 
 ```bash
-go run ./cmd/tagb daemon run
+go run ./cmd/tmux-connect daemon run
 ```
 
 ```bash
-go run ./cmd/tagb daemon run \
+go run ./cmd/tmux-connect daemon run \
   --platform slack \
-  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
-  --slack-app-token "$TAGB_SLACK_APP_TOKEN" \
-  --db ~/.tagb/tagb.db
+  --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
+  --db ~/.tmux-connect/tmux-connect.db
 ```
 
 Useful flags:
@@ -72,22 +72,22 @@ Useful flags:
 
 Supported environment variables:
 
-- `TAGB_PLATFORM=slack`
-- `TAGB_SLACK_BOT_TOKEN`
-- `TAGB_SLACK_APP_TOKEN`
-- `TAGB_SLACK_COMMAND_PREFIX`
-- `TAGB_DB_PATH`
-- `TAGB_FOLLOW_DEBUG`
+- `TMUXCONN_PLATFORM=slack`
+- `TMUXCONN_SLACK_BOT_TOKEN`
+- `TMUXCONN_SLACK_APP_TOKEN`
+- `TMUXCONN_SLACK_COMMAND_PREFIX`
+- `TMUXCONN_DB_PATH`
+- `TMUXCONN_FOLLOW_DEBUG`
 
 ## Health Checks
 
 ```bash
-go run ./cmd/tagb daemon doctor \
+go run ./cmd/tmux-connect daemon doctor \
   --platform slack \
-  --slack-bot-token "$TAGB_SLACK_BOT_TOKEN" \
-  --slack-app-token "$TAGB_SLACK_APP_TOKEN"
+  --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
+  --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN"
 
-go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
+go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 `daemon doctor` echoes the Slack scopes the bot needs for snapshot image uploads. If `tmux: snapshot` falls back to text, check the daemon log for `reply bus send snapshot image`.
@@ -97,7 +97,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - in a DM with the bot, send commands directly
 - in a channel, mention the bot once to start a managed thread
 - follow-up commands can continue inside that thread without re-mentioning the bot
-- in channels, use an app mention as the command prefix, for example `@tagb panes`
+- in channels, use an app mention as the command prefix, for example `@tmux-connect panes`
 - in DMs and managed threads, plain text sends directly to the current pane without pressing Enter
 - in DMs and managed threads, prefix explicit commands with `tmux:`, for example `tmux: select %5`, `tmux: keys C-c`, or `tmux: send /start`
 - slash-prefixed forms like `/panes` are still accepted by the router, but Slack may intercept them as real Slash Commands before they reach the bot
