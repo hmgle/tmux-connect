@@ -35,23 +35,24 @@ func (m IncomingMessage) pendingKey() string {
 }
 
 type Router struct {
-	service            paneService
-	registry           *PaneRegistry
-	store              *Store
-	replyBus           *ReplyBus
-	follow             *FollowManager
-	snapshotLines      int
-	slackCommandPrefix string
-	allowChats         map[string]struct{}
-	pendingMu          sync.Mutex
-	pending            map[string]pendingCommand
+	service              paneService
+	registry             *PaneRegistry
+	store                *Store
+	replyBus             *ReplyBus
+	follow               *FollowManager
+	snapshotLines        int
+	slackCommandPrefix   string
+	discordCommandPrefix string
+	allowChats           map[string]struct{}
+	pendingMu            sync.Mutex
+	pending              map[string]pendingCommand
 }
 
 type pendingCommand struct {
 	Command string
 }
 
-func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string, slackCommandPrefix string) *Router {
+func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string, slackCommandPrefix string, discordCommandPrefix string) *Router {
 	allowed := make(map[string]struct{}, len(allowChats))
 	for _, chatID := range allowChats {
 		allowed[strings.TrimSpace(chatID)] = struct{}{}
@@ -62,16 +63,20 @@ func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyB
 	if strings.TrimSpace(slackCommandPrefix) == "" {
 		slackCommandPrefix = defaultSlackCommandPrefix
 	}
+	if strings.TrimSpace(discordCommandPrefix) == "" {
+		discordCommandPrefix = defaultDiscordCommandPrefix
+	}
 	return &Router{
-		service:            service,
-		registry:           registry,
-		store:              store,
-		replyBus:           replyBus,
-		follow:             follow,
-		snapshotLines:      snapshotLines,
-		slackCommandPrefix: slackCommandPrefix,
-		allowChats:         allowed,
-		pending:            make(map[string]pendingCommand),
+		service:              service,
+		registry:             registry,
+		store:                store,
+		replyBus:             replyBus,
+		follow:               follow,
+		snapshotLines:        snapshotLines,
+		slackCommandPrefix:   slackCommandPrefix,
+		discordCommandPrefix: discordCommandPrefix,
+		allowChats:           allowed,
+		pending:              make(map[string]pendingCommand),
 	}
 }
 
@@ -107,7 +112,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 	switch command {
 	case "start", "help":
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "help", helpText(r.commandPrefix(message.Chat)))
+		return r.replyBus.Reply(ctx, message.Chat, "", "help", r.helpText(message.Chat))
 	case "panes":
 		return r.handlePanes(ctx, message)
 	case "select":
@@ -132,7 +137,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText(r.commandPrefix(message.Chat)))
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+r.helpText(message.Chat))
 	}
 }
 
@@ -415,7 +420,7 @@ func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage
 		return r.handleFollow(ctx, message, args)
 	default:
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+helpText(r.commandPrefix(message.Chat)))
+		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+r.helpText(message.Chat))
 	}
 }
 
@@ -427,7 +432,11 @@ func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMess
 	r.setPending(message.pendingKey(), pendingCommand{
 		Command: spec.Command,
 	})
-	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", spec.Prompt.Message, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
+	promptText := spec.Prompt.Message
+	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "discord") && strings.TrimSpace(message.ThreadID) != "" {
+		promptText += "\n\nIn Discord channels, reply with " + strconv.Quote(r.discordCommandPrefix+" <value>") + "."
+	}
+	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", promptText, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
 }
 
 func (r *Router) setPending(key string, pending pendingCommand) {
@@ -484,8 +493,16 @@ func (r *Router) allowed(chat ChatRef) bool {
 	if len(r.allowChats) == 0 {
 		return true
 	}
-	_, ok := r.allowChats[chat.ChatID]
+	_, ok := r.allowChats[chat.Key()]
+	if ok {
+		return true
+	}
+	_, ok = r.allowChats[chat.ChatID]
 	return ok
+}
+
+func (r *Router) helpText(chat ChatRef) string {
+	return helpTextForPlatform(chat.Platform, r.commandPrefix(chat), r.discordCommandPrefix)
 }
 
 func (r *Router) parseCommand(message IncomingMessage, text string) (string, string) {

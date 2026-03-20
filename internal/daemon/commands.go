@@ -6,6 +6,7 @@ import (
 )
 
 const defaultSlackCommandPrefix = "tmux:"
+const defaultDiscordCommandPrefix = "tmux:"
 
 type botCommandSpec struct {
 	Command     string
@@ -54,18 +55,37 @@ func daemonCommandSpecs() []botCommandSpec {
 }
 
 func helpText(commandPrefix string) string {
+	return helpTextForPlatform("telegram", commandPrefix, defaultDiscordCommandPrefix)
+}
+
+func helpTextForPlatform(platform string, commandPrefix string, discordCommandPrefix string) string {
+	platform = strings.TrimSpace(strings.ToLower(platform))
 	lines := make([]string, 0, len(daemonCommandSpecs())+4)
 	lines = append(lines, "Commands:")
-	if commandPrefix != "" {
+	switch {
+	case platform == "slack" && commandPrefix != "":
 		lines = append(lines, fmt.Sprintf(`In channels, mention the bot with a command such as "@bot panes". In DMs and managed threads, prefix commands with %q, for example %q.`, commandPrefix, commandPrefix+" panes"))
 		lines = append(lines, fmt.Sprintf("In DMs and managed threads, plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
-	} else {
+	case platform == "discord":
+		prefix := strings.TrimSpace(discordCommandPrefix)
+		if prefix == "" {
+			prefix = defaultDiscordCommandPrefix
+		}
+		lines = append(lines, `Use slash commands such as "/panes" for explicit actions.`)
+		lines = append(lines, fmt.Sprintf(`In channels, you can also prefix text commands with %q, for example %q.`, prefix, prefix+" panes"))
+		lines = append(lines, fmt.Sprintf(`In DMs, plain text sends to the current pane. Use %q to force a command.`, prefix+" current"))
+		lines = append(lines, `When the text itself starts with "/", use "/send <text>" to pass it through.`)
+	default:
 		lines = append(lines, fmt.Sprintf("Plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
 	}
+	usagePrefix := commandPrefix
+	if platform == "discord" {
+		usagePrefix = ""
+	}
 	for _, spec := range daemonCommandSpecs() {
-		lines = append(lines, formatCommandUsage(commandPrefix, spec.Usage))
+		lines = append(lines, formatCommandUsage(usagePrefix, spec.Usage))
 	}
 	return strings.Join(lines, "\n")
 }

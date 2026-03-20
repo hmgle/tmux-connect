@@ -4,18 +4,19 @@
 [![tmux](https://img.shields.io/badge/tmux-required-1BB91F?style=flat-square&logo=tmux)](https://github.com/tmux/tmux)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
+[![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README.zh-CN](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
 
 English | [简体中文](./README.zh-CN.md)
 
-`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram or Slack without taking ownership of the pane lifecycle.
+`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram, Slack, or Discord without taking ownership of the pane lifecycle.
 
 Current scope:
 
 - local CLI for attach, inspect, snapshot, stream, and input
 - local HTTP control plane over the same bridge service
-- multi-connector daemon with Telegram long polling and Slack Socket Mode
+- multi-connector daemon with Telegram long polling, Slack Socket Mode, and Discord gateway events
 - relay-first behavior only; there is no structured Codex/Claude/Gemini protocol yet
 
 ## Requirements
@@ -23,7 +24,7 @@ Current scope:
 - Go `1.25` or later
 - `tmux`
 - `sqlite3` in `PATH` if you want to run `tmux-connect daemon`
-- a Telegram bot token or Slack bot/app tokens if you want remote control
+- a Telegram bot token, Slack bot/app tokens, or a Discord bot token if you want remote control
 
 ## Build
 
@@ -155,6 +156,10 @@ snapshot_font_file = "/path/to/font.ttf"
 bot_token = "xoxb-..."
 app_token = "xapp-..."
 command_prefix = "tmux:"
+
+[daemon.discord]
+token = "discord-bot-token"
+command_prefix = "tmux:"
 ```
 
 Start the Telegram daemon:
@@ -177,14 +182,27 @@ go run ./cmd/tmux-connect daemon run \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
+Start the Discord daemon:
+
+```bash
+go run ./cmd/tmux-connect daemon run \
+  --platform discord \
+  --discord-token "$TMUXCONN_DISCORD_TOKEN" \
+  --discord-command-prefix "tmux:" \
+  --db ~/.tmux-connect/tmux-connect.db
+```
+
 For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
+For Discord prefix commands in channels or DMs, enable the Message Content intent in the developer portal.
 
 Common flags:
 
-- `--platform telegram|slack`
+- `--platform telegram|slack|discord`
 - `--telegram-token TOKEN`
 - `--slack-bot-token TOKEN`
 - `--slack-app-token TOKEN`
+- `--discord-token TOKEN`
+- `--discord-command-prefix PREFIX`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
@@ -232,7 +250,22 @@ Slack commands:
 - `tmux: ctrlc` or `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
+Discord commands:
+
+- `/panes`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/keys <key...>`
+- `/enter [text]`
+- `/ctrlc` or `/ctrl-c`
+- `/follow on [interval]|off`
+
 In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads is sent to the current pane without pressing Enter. Use `/enter <text>` or `tmux: enter <text>` to append Enter, and `/keys` or `tmux: keys` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+In Discord, slash commands are the primary control surface. Prefixed forms such as `tmux: panes` also work in channels. Plain text is treated as pane input only in DMs; channel replies should keep using slash or prefixed commands.
 
 ## Recovery Model
 
@@ -254,6 +287,7 @@ The remote daemon stores platform chat state in SQLite, including bindings, curr
 - [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) for Chinese troubleshooting
 - [docs/telegram.md](./docs/telegram.md) for Telegram setup and operations
 - [docs/slack.md](./docs/slack.md) for Slack setup and operations
+- [docs/discord.md](./docs/discord.md) for Discord setup and operations
 - [docs/architecture.md](./docs/architecture.md) for the current system architecture
 - [docs/roadmap.md](./docs/roadmap.md) for near-term roadmap items
 

@@ -16,22 +16,24 @@ import (
 )
 
 type Config struct {
-	Platform           string
-	TelegramToken      string
-	SlackBotToken      string
-	SlackAppToken      string
-	SlackCommandPrefix string
-	DBPath             string
-	AllowChats         []string
-	PollTimeout        time.Duration
-	SnapshotLines      int
-	SnapshotTheme      string
-	SnapshotFontSize   float64
-	SnapshotFontFile   string
-	FollowLines        int
-	FollowMinGap       time.Duration
-	FollowDebug        bool
-	APIBaseURL         string
+	Platform             string
+	TelegramToken        string
+	SlackBotToken        string
+	SlackAppToken        string
+	SlackCommandPrefix   string
+	DiscordToken         string
+	DiscordCommandPrefix string
+	DBPath               string
+	AllowChats           []string
+	PollTimeout          time.Duration
+	SnapshotLines        int
+	SnapshotTheme        string
+	SnapshotFontSize     float64
+	SnapshotFontFile     string
+	FollowLines          int
+	FollowMinGap         time.Duration
+	FollowDebug          bool
+	APIBaseURL           string
 }
 
 type Runtime struct {
@@ -111,6 +113,12 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 		fmt.Fprintln(stdout, "slack tokens: ok")
 		fmt.Fprintln(stdout, "slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read")
 		fmt.Fprintln(stdout, "slack snapshot uploads: uses the current Web API upload flow; reinstall the app after scope changes")
+	case "discord":
+		if strings.TrimSpace(cfg.DiscordToken) == "" {
+			return tmuxconn.UsageError("discord token is required; pass --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
+		}
+		fmt.Fprintln(stdout, "discord token: ok")
+		fmt.Fprintln(stdout, "discord gateway intents: enable Message Content intent for prefix commands and DMs")
 	default:
 		return tmuxconn.UsageError("unsupported platform %q", cfg.Platform)
 	}
@@ -178,7 +186,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	if cfg.FollowDebug {
 		follow.SetDebugWriter(stderr)
 	}
-	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix)
+	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, cfg.DiscordCommandPrefix)
 
 	return &Runtime{
 		cfg:      cfg,
@@ -263,11 +271,13 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		defaultFollowDebug = envValue
 	}
 
-	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack)")
+	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack|discord)")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
 	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", envOrDefault("TMUXCONN_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, "")), "slack bot token")
 	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", envOrDefault("TMUXCONN_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, "")), "slack app token for socket mode")
 	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix)), "command prefix for slack messages")
+	fs.StringVar(&cfg.DiscordToken, "discord-token", envOrDefault("TMUXCONN_DISCORD_TOKEN", stringValue(fileCfg.Discord.Token, "")), "discord bot token")
+	fs.StringVar(&cfg.DiscordCommandPrefix, "discord-command-prefix", envOrDefault("TMUXCONN_DISCORD_COMMAND_PREFIX", stringValue(fileCfg.Discord.CommandPrefix, defaultDiscordCommandPrefix)), "command prefix for discord channel messages")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
@@ -315,6 +325,13 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	} else {
 		cfg.SlackCommandPrefix = ""
 	}
+	if cfg.Platform == "discord" {
+		if strings.TrimSpace(cfg.DiscordCommandPrefix) == "" || strings.ContainsAny(cfg.DiscordCommandPrefix, " \t\n") {
+			return Config{}, tmuxconn.UsageError("--discord-command-prefix must be non-empty and contain no whitespace")
+		}
+	} else {
+		cfg.DiscordCommandPrefix = ""
+	}
 	if requireRun {
 		switch cfg.Platform {
 		case "telegram":
@@ -324,6 +341,10 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		case "slack":
 			if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
 				return Config{}, tmuxconn.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TMUXCONN_SLACK_BOT_TOKEN/TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
+			}
+		case "discord":
+			if strings.TrimSpace(cfg.DiscordToken) == "" {
+				return Config{}, tmuxconn.UsageError("daemon run requires --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
 			}
 		default:
 			return Config{}, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
@@ -436,15 +457,17 @@ Usage:
   tmux-connect daemon <command> [flags]
 
 Commands:
-  run      Start the Telegram relay daemon
+  run      Start the relay daemon
   doctor   Validate token, sqlite store, and tmux access
   status   Show sqlite counts and current managed pane count
 
 Common flags:
-  --platform telegram|slack
+  --platform telegram|slack|discord
   --telegram-token TOKEN
   --slack-bot-token TOKEN
   --slack-app-token TOKEN
+  --discord-token TOKEN
+  --discord-command-prefix PREFIX
   --db PATH
   --allow-chat 123456
   --poll-timeout 20s
@@ -464,6 +487,8 @@ func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAda
 		return newTelegramAdapter(cfg, stderr), nil
 	case "slack":
 		return newSlackAdapter(cfg, stderr, store)
+	case "discord":
+		return newDiscordAdapter(cfg, stderr)
 	default:
 		return nil, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
 	}

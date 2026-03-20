@@ -42,3 +42,18 @@ func TestDecorateTelegramMessagePanesPassthroughHTML(t *testing.T) {
 		t.Fatalf("text = %q, want passthrough", text)
 	}
 }
+
+func TestDecorateDiscordMessageUsesEmbedForSnapshot(t *testing.T) {
+	t.Parallel()
+
+	text, opts := decorateDiscordMessage("snapshot", "line 1\nline 2", SendOptions{})
+	if text != "" {
+		t.Fatalf("text = %q, want empty when embed is used", text)
+	}
+	if opts.Embed == nil {
+		t.Fatal("Embed = nil, want snapshot embed")
+	}
+	if opts.Embed.Description == "" || opts.Embed.Color != discordEmbedColorInfo {
+		t.Fatalf("embed = %#v, want info embed with description", opts.Embed)
+	}
+}

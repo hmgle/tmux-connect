@@ -14,6 +14,12 @@ type ReplyBus struct {
 	snapshotRenderOptions termrender.Options
 }
 
+type interactionReplyContextKey struct{}
+
+type interactionReplyContext struct {
+	ID string
+}
+
 func NewReplyBus(adapter platformAdapter, store *Store, snapshotRenderOptions termrender.Options) *ReplyBus {
 	return &ReplyBus{adapter: adapter, store: store, snapshotRenderOptions: snapshotRenderOptions}
 }
@@ -24,6 +30,7 @@ func (b *ReplyBus) Reply(ctx context.Context, chat ChatRef, paneKey string, kind
 
 func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chat ChatRef, paneKey string, kind string, text string, opts SendOptions) error {
 	state := b.prepareOutbound(ctx, chat, paneKey)
+	opts = applyInteractionReplyContext(ctx, opts)
 	if opts.ReplyToMessageID == "" {
 		opts.ReplyToMessageID = state.replyToMessageID
 	}
@@ -45,6 +52,7 @@ func (b *ReplyBus) ReplySnapshot(ctx context.Context, chat ChatRef, paneKey stri
 		ReplyToMessageID: state.replyToMessageID,
 		ThreadID:         state.threadID,
 	}
+	sendOpts = applyInteractionReplyContext(ctx, sendOpts)
 	if data, err := termrender.RenderPNG(richText, b.snapshotRenderOptions); err == nil {
 		message, sendErr := b.adapter.SendImage(ctx, chat, "pane-snapshot.png", data, b.adapter.SnapshotCaption(paneKey), sendOpts)
 		if sendErr == nil {
@@ -140,4 +148,24 @@ func (b *ReplyBus) warnStoreError(action string, err error) {
 		return
 	}
 	log.Printf("warn: reply bus %s: %v", strings.TrimSpace(action), err)
+}
+
+func withInteractionReplyContext(ctx context.Context, interactionID string) context.Context {
+	interactionID = strings.TrimSpace(interactionID)
+	if interactionID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, interactionReplyContextKey{}, interactionReplyContext{ID: interactionID})
+}
+
+func applyInteractionReplyContext(ctx context.Context, opts SendOptions) SendOptions {
+	if strings.TrimSpace(opts.InteractionID) != "" {
+		return opts
+	}
+	value, ok := ctx.Value(interactionReplyContextKey{}).(interactionReplyContext)
+	if !ok {
+		return opts
+	}
+	opts.InteractionID = strings.TrimSpace(value.ID)
+	return opts
 }

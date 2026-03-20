@@ -38,6 +38,7 @@ type Daemon struct {
 	FollowDebug       *bool     `toml:"follow_debug"`
 	Telegram          Telegram  `toml:"telegram"`
 	Slack             Slack     `toml:"slack"`
+	Discord           Discord   `toml:"discord"`
 }
 
 type Telegram struct {
@@ -51,6 +52,11 @@ type Telegram struct {
 type Slack struct {
 	BotToken      *string `toml:"bot_token"`
 	AppToken      *string `toml:"app_token"`
+	CommandPrefix *string `toml:"command_prefix"`
+}
+
+type Discord struct {
+	Token         *string `toml:"token"`
 	CommandPrefix *string `toml:"command_prefix"`
 }
 

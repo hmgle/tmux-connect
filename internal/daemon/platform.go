@@ -37,11 +37,27 @@ const (
 	MessageFormatTelegramHTML MessageFormat = "telegram-html"
 )
 
+type EmbedField struct {
+	Name   string
+	Value  string
+	Inline bool
+}
+
+type EmbedData struct {
+	Title       string
+	Description string
+	Color       int
+	Fields      []EmbedField
+	Footer      string
+}
+
 type SendOptions struct {
 	ReplyToMessageID string
 	ThreadID         string
 	ReplyMarkup      any
 	Format           MessageFormat
+	Embed            *EmbedData
+	InteractionID    string
 }
 
 type OutboundMessage struct {

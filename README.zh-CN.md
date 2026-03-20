@@ -4,18 +4,19 @@
 [![tmux](https://img.shields.io/badge/tmux-required-1BB91F?style=flat-square&logo=tmux)](https://github.com/tmux/tmux)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
+[![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README](https://img.shields.io/badge/README-English-1F2937?style=flat-square)](./README.md)
 
 [English](./README.md) | 简体中文
 
-`tmux-connect` 是一个面向现有 tmux pane 的 tmux-first 中继工具。它允许你查看输出、发送输入、暴露本地 HTTP API，并通过 Telegram 或 Slack 控制选定的 pane，而不接管 pane 生命周期。
+`tmux-connect` 是一个面向现有 tmux pane 的 tmux-first 中继工具。它允许你查看输出、发送输入、暴露本地 HTTP API，并通过 Telegram、Slack 或 Discord 控制选定的 pane，而不接管 pane 生命周期。
 
 当前范围：
 
 - 面向 attach、inspect、snapshot、stream 和 input 的本地 CLI
 - 基于同一桥接服务的本地 HTTP 控制面
-- 同一个 daemon 支持 Telegram 长轮询和 Slack Socket Mode
+- 同一个 daemon 支持 Telegram 长轮询、Slack Socket Mode 和 Discord gateway 事件
 - 当前仍以 relay-first 为主；尚未提供结构化的 Codex/Claude/Gemini 协议
 
 ## Requirements
@@ -23,7 +24,7 @@
 - Go `1.25` 或更高版本
 - `tmux`
 - 如果要运行 `tmux-connect daemon`，需要 `PATH` 中可用的 `sqlite3`
-- 如果要远程控制，需要 Telegram bot token 或 Slack bot/app token
+- 如果要远程控制，需要 Telegram bot token、Slack bot/app token 或 Discord bot token
 
 ## Build
 
@@ -139,14 +140,27 @@ go run ./cmd/tmux-connect daemon run \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
+启动 Discord daemon：
+
+```bash
+go run ./cmd/tmux-connect daemon run \
+  --platform discord \
+  --discord-token "$TMUXCONN_DISCORD_TOKEN" \
+  --discord-command-prefix "tmux:" \
+  --db ~/.tmux-connect/tmux-connect.db
+```
+
 如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
+如果要让 Discord 在频道或私聊里识别前缀命令，需要在开发者后台启用 Message Content intent。
 
 常用参数：
 
-- `--platform telegram|slack`
+- `--platform telegram|slack|discord`
 - `--telegram-token TOKEN`
 - `--slack-bot-token TOKEN`
 - `--slack-app-token TOKEN`
+- `--discord-token TOKEN`
+- `--discord-command-prefix PREFIX`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
@@ -194,7 +208,22 @@ Slack 命令：
 - `tmux: ctrlc` 或 `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
+Discord 命令：
+
+- `/panes`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/keys <key...>`
+- `/enter [text]`
+- `/ctrlc` 或 `/ctrl-c`
+- `/follow on [interval]|off`
+
 Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本会直接发送到当前 pane，但不会自动附带回车；需要执行时，用 `/enter <text>` 或 `tmux: enter <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Discord 里建议优先使用 Slash Commands。频道中也支持 `tmux: panes` 这类前缀命令；纯文本只会在 Discord 私聊里被当作 pane 输入。
 
 ## Recovery Model
 
@@ -216,6 +245,7 @@ remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系�
 - [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) 中文故障排查
 - [docs/telegram.md](./docs/telegram.md) Telegram 配置与操作
 - [docs/slack.md](./docs/slack.md) Slack 配置与操作
+- [docs/discord.md](./docs/discord.md) Discord 配置与操作
 - [docs/architecture.md](./docs/architecture.md) 当前系统架构
 - [docs/roadmap.md](./docs/roadmap.md) 近期路线图
 

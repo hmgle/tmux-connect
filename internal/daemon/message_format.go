@@ -66,6 +66,57 @@ func renderSlackCodeBlock(text string) string {
 	return "```" + strings.ReplaceAll(text, "```", "`\u200b``") + "```"
 }
 
+const (
+	discordEmbedColorSuccess = 0x2ECC71
+	discordEmbedColorError   = 0xE74C3C
+	discordEmbedColorInfo    = 0x3498DB
+	discordMaxEmbedChars     = 4096
+)
+
+func decorateDiscordMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	switch strings.TrimSpace(kind) {
+	case "snapshot", "follow-initial", "follow-output":
+		text = strings.TrimSpace(text)
+		if text == "" {
+			text = "(empty output)"
+		}
+		text = truncateDiscordEmbedText(text, discordMaxEmbedChars-8)
+		opts.Embed = &EmbedData{
+			Description: "```\n" + text + "\n```",
+			Color:       discordEmbedColorInfo,
+		}
+		return "", opts
+	case "error", "unauthorized", "usage", "unknown-command":
+		opts.Embed = &EmbedData{
+			Title:       "Error",
+			Description: truncateDiscordEmbedText(strings.TrimSpace(text), discordMaxEmbedChars),
+			Color:       discordEmbedColorError,
+		}
+		return "", opts
+	case "select", "clear", "unmanage", "send", "keys", "enter", "follow":
+		opts.Embed = &EmbedData{
+			Description: truncateDiscordEmbedText(strings.TrimSpace(text), discordMaxEmbedChars),
+			Color:       discordEmbedColorSuccess,
+		}
+		return "", opts
+	default:
+		return text, opts
+	}
+}
+
+func truncateDiscordEmbedText(text string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(text) <= limit {
+		return text
+	}
+	if limit <= len("\n...") {
+		return text[:limit]
+	}
+	return text[:limit-len("\n...")] + "\n..."
+}
+
 func formatSnapshotCaption(paneKey string) string {
 	paneKey = strings.TrimSpace(paneKey)
 	if paneKey == "" {

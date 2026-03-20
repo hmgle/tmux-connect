@@ -351,6 +351,53 @@ func TestParseConfigSlackCommandPrefixDefault(t *testing.T) {
 	}
 }
 
+func TestParseConfigDiscordCommandPrefixFlag(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfig([]string{
+		"--platform", "discord",
+		"--discord-token", "discord-token",
+		"--discord-command-prefix", "bot:",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.DiscordCommandPrefix != "bot:" {
+		t.Fatalf("DiscordCommandPrefix = %q, want %q", cfg.DiscordCommandPrefix, "bot:")
+	}
+}
+
+func TestParseConfigDiscordCommandPrefixDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfig([]string{
+		"--platform", "discord",
+		"--discord-token", "discord-token",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	}, &bytes.Buffer{}, true)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.DiscordCommandPrefix != defaultDiscordCommandPrefix {
+		t.Fatalf("DiscordCommandPrefix = %q, want %q", cfg.DiscordCommandPrefix, defaultDiscordCommandPrefix)
+	}
+}
+
+func TestParseConfigRejectsWhitespaceDiscordCommandPrefix(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfig([]string{
+		"--platform", "discord",
+		"--discord-token", "discord-token",
+		"--discord-command-prefix", "bad prefix",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	}, &bytes.Buffer{}, true)
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error")
+	}
+}
+
 func TestParseConfigRejectsEmptySlackCommandPrefix(t *testing.T) {
 	t.Parallel()
 
@@ -418,6 +465,30 @@ func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 		"slack tokens: ok",
 		"files:write",
 		"reinstall the app",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("runDoctor() output = %q, want %q", output, want)
+		}
+	}
+}
+
+func TestRunDoctorDiscordPrintsIntentHint(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
+		"--platform", "discord",
+		"--discord-token", "discord-token",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"discord token: ok",
+		"Message Content intent",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("runDoctor() output = %q, want %q", output, want)
