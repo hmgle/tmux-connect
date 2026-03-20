@@ -36,9 +36,13 @@ func daemonCommandSpecs() []botCommandSpec {
 		}},
 		{Command: "current", Description: "Show the current pane", Usage: "current"},
 		{Command: "snapshot", Description: "Capture pane output", Usage: "snapshot [lines] [image|text]"},
-		{Command: "send", Description: "Send text to the current pane", Usage: "send <text>", Prompt: &commandPromptSpec{
+		{Command: "send", Description: "Send text to the current pane (legacy explicit form)", Usage: "send <text>", Prompt: &commandPromptSpec{
 			Message:     "Reply with the text to send to the current pane.",
 			Placeholder: "status",
+		}},
+		{Command: "keys", Aliases: []string{"key"}, Description: "Send tmux keys like Enter or C-c", Usage: "keys <key...>", Prompt: &commandPromptSpec{
+			Message:     "Reply with the tmux key names to send, for example C-c or Enter.",
+			Placeholder: "C-c",
 		}},
 		{Command: "enter", Description: "Send Enter to the current pane", Usage: "enter"},
 		{Command: "ctrlc", Aliases: []string{"ctrl-c"}, Description: "Send Ctrl-C to the current pane", Usage: "ctrlc"},
@@ -50,10 +54,15 @@ func daemonCommandSpecs() []botCommandSpec {
 }
 
 func helpText(commandPrefix string) string {
-	lines := make([]string, 0, len(daemonCommandSpecs())+1)
+	lines := make([]string, 0, len(daemonCommandSpecs())+4)
 	lines = append(lines, "Commands:")
 	if commandPrefix != "" {
 		lines = append(lines, fmt.Sprintf(`In channels, mention the bot with a command such as "@bot panes". In DMs and managed threads, prefix commands with %q, for example %q.`, commandPrefix, commandPrefix+" panes"))
+		lines = append(lines, fmt.Sprintf("In DMs and managed threads, plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
+		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
+	} else {
+		lines = append(lines, fmt.Sprintf("Plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
+		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
 	}
 	for _, spec := range daemonCommandSpecs() {
 		lines = append(lines, formatCommandUsage(commandPrefix, spec.Usage))

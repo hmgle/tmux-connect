@@ -135,6 +135,14 @@ func (s *Service) SendManaged(ctx context.Context, ref string, text string, send
 	return s.send(ctx, ref, text, sendEnter, true)
 }
 
+func (s *Service) SendKeys(ctx context.Context, ref string, keys ...string) error {
+	return s.sendKeys(ctx, ref, false, keys...)
+}
+
+func (s *Service) SendKeysManaged(ctx context.Context, ref string, keys ...string) error {
+	return s.sendKeys(ctx, ref, true, keys...)
+}
+
 func (s *Service) send(ctx context.Context, ref string, text string, sendEnter bool, managed bool) error {
 	pane, err := s.ResolvePane(ctx, ref)
 	if err != nil {
@@ -155,23 +163,19 @@ func (s *Service) send(ctx context.Context, ref string, text string, sendEnter b
 }
 
 func (s *Service) Enter(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "Enter", false)
-	return err
+	return s.SendKeys(ctx, ref, "Enter")
 }
 
 func (s *Service) CtrlC(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "C-c", false)
-	return err
+	return s.SendKeys(ctx, ref, "C-c")
 }
 
 func (s *Service) EnterManaged(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "Enter", true)
-	return err
+	return s.SendKeysManaged(ctx, ref, "Enter")
 }
 
 func (s *Service) CtrlCManaged(ctx context.Context, ref string) error {
-	_, err := s.sendControlKey(ctx, ref, "C-c", true)
-	return err
+	return s.SendKeysManaged(ctx, ref, "C-c")
 }
 
 type PaneStream struct {
@@ -180,18 +184,21 @@ type PaneStream struct {
 	Subscription *tmux.Subscription
 }
 
-func (s *Service) sendControlKey(ctx context.Context, ref string, key string, managed bool) (tmux.PaneInfo, error) {
+func (s *Service) sendKeys(ctx context.Context, ref string, managed bool, keys ...string) error {
+	if len(keys) == 0 {
+		return UsageError("send keys requires at least one key")
+	}
 	pane, err := s.ResolvePane(ctx, ref)
 	if err != nil {
-		return tmux.PaneInfo{}, err
+		return err
 	}
-	if err := s.tmux.SendKeys(ctx, pane.Target, key); err != nil {
-		return tmux.PaneInfo{}, TmuxError("send %s to %s: %v", key, pane.Target.PaneKey(), err)
+	if err := s.tmux.SendKeys(ctx, pane.Target, keys...); err != nil {
+		return TmuxError("send keys %q to %s: %v", strings.Join(keys, " "), pane.Target.PaneKey(), err)
 	}
 	if err := s.touchPaneMetadata(ctx, pane.Target, managed); err != nil {
-		return tmux.PaneInfo{}, TmuxError("update metadata for %s: %v", pane.Target.PaneKey(), err)
+		return TmuxError("update metadata for %s: %v", pane.Target.PaneKey(), err)
 	}
-	return pane, nil
+	return nil
 }
 
 func (s *Service) OpenStream(ctx context.Context, ref string, lines int) (PaneStream, error) {

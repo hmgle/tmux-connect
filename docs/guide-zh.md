@@ -87,7 +87,7 @@ tagb daemon run \
 /panes
 /select %5
 /snapshot
-/send continue
+continue
 /enter
 /follow on
 ```
@@ -95,7 +95,7 @@ tagb daemon run \
 如果需要中断：
 
 ```text
-/ctrlc
+/keys C-c
 ```
 
 关闭实时推送：
@@ -130,7 +130,9 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 | `/select <pane>` | 选择当前聊天使用的 pane |
 | `/current` | 查看当前 pane |
 | `/snapshot [lines] [image\|text]` | 查看最近输出 |
-| `/send <text>` | 向 pane 发送文本 |
+| 直接发送文本 | 向当前 pane 发送文本，不自动回车 |
+| `/send <text>` | 显式发送文本，适合文本本身以 `/` 开头 |
+| `/keys <key...>` | 发送 tmux 组合键或功能键，如 `C-c`、`Enter` |
 | `/enter` | 发送回车 |
 | `/ctrlc` 或 `/ctrl-c` | 发送 Ctrl-C |
 | `/follow on [interval]` | 开启实时推送 |
@@ -141,6 +143,10 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 说明：
 
 - `/select` 会在 pane 尚未管理时自动 `attach`
+- 直接发送的文本会进入当前 pane，但不会自动附带回车
+- 需要执行时，先发送文本，再发 `/enter`
+- `/keys` 用来发送 tmux key name，比如 `C-c`、`Enter`、`Escape`、方向键
+- 如果文本本身以 `/` 开头，使用 `/send <text>`
 - `/snapshot` 默认发图片，显式写 `text` 才会发纯文本
 - `/follow on` 默认聚合间隔是 `700ms`
 - `/follow on 2s` 这样的写法也是支持的

@@ -98,6 +98,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		if pending, ok := r.consumePending(message.pendingKey()); ok {
 			return r.handlePendingInput(ctx, message, pending, text)
 		}
+		return r.handlePlainText(ctx, message, text)
 	}
 	if command != "" {
 		r.clearPending(message.pendingKey())
@@ -121,6 +122,8 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.handleSnapshot(ctx, message, args)
 	case "send":
 		return r.handleSend(ctx, message, args)
+	case "keys":
+		return r.handleKeys(ctx, message, args)
 	case "enter":
 		return r.handleEnter(ctx, message)
 	case "ctrlc":
@@ -273,6 +276,39 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 }
 
 func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
+	text := strings.TrimSpace(args)
+	if text == "" {
+		chat := message.Chat
+		paneKey, err := r.requireCurrentPane(ctx, chat)
+		if err != nil {
+			r.logInbound(ctx, message, paneKey, "")
+			return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		}
+		r.logInbound(ctx, message, paneKey, "")
+		return r.promptForCommandInput(ctx, message, "send")
+	}
+	return r.sendText(ctx, message, text, "command")
+}
+
+func (r *Router) handlePlainText(ctx context.Context, message IncomingMessage, text string) error {
+	return r.sendText(ctx, message, text, "input")
+}
+
+func (r *Router) sendText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
+	if err != nil {
+		r.logInboundKind(ctx, message, paneKey, "", inboundKind)
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+	}
+	r.logInboundKind(ctx, message, paneKey, "", inboundKind)
+	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
+	}
+	return r.replyBus.Reply(ctx, chat, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
+}
+
+func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args string) error {
 	chat := message.Chat
 	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
@@ -280,14 +316,17 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
-	text := strings.TrimSpace(args)
-	if text == "" {
-		return r.promptForCommandInput(ctx, message, "send")
+	keys, err := parseKeysArgs(args)
+	if err != nil {
+		if strings.TrimSpace(args) == "" {
+			return r.promptForCommandInput(ctx, message, "keys")
+		}
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "keys <key...>"))
 	}
-	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
+	if err := r.service.SendKeysManaged(ctx, paneKey, keys...); err != nil {
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send keys failed: %v", err))
 	}
-	return r.replyBus.Reply(ctx, chat, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
+	return r.replyBus.Reply(ctx, chat, paneKey, "keys", fmt.Sprintf("sent keys %s to %s", strings.Join(keys, " "), paneKey))
 }
 
 func (r *Router) handleEnter(ctx context.Context, message IncomingMessage) error {
@@ -363,6 +402,8 @@ func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage
 		return r.handleUnmanage(ctx, message, args)
 	case "send":
 		return r.handleSend(ctx, message, args)
+	case "keys":
+		return r.handleKeys(ctx, message, args)
 	case "follow":
 		return r.handleFollow(ctx, message, args)
 	default:
@@ -425,7 +466,11 @@ func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, 
 }
 
 func (r *Router) logInbound(ctx context.Context, message IncomingMessage, paneKey string, agent string) {
-	r.replyBus.LogInbound(ctx, message, paneKey, agent, "command")
+	r.logInboundKind(ctx, message, paneKey, agent, "command")
+}
+
+func (r *Router) logInboundKind(ctx context.Context, message IncomingMessage, paneKey string, agent string, kind string) {
+	r.replyBus.LogInbound(ctx, message, paneKey, agent, kind)
 }
 
 func (r *Router) allowed(chat ChatRef) bool {
@@ -504,6 +549,47 @@ func optionalInt(value string, fallback int) (int, error) {
 		return 0, err
 	}
 	return parsed, nil
+}
+
+func parseKeysArgs(value string) ([]string, error) {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("missing keys")
+	}
+	keys := make([]string, 0, len(fields))
+	for _, field := range fields {
+		key := normalizeTmuxKeyName(field)
+		if key == "" {
+			return nil, fmt.Errorf("invalid key")
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+func normalizeTmuxKeyName(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "enter", "return":
+		return "Enter"
+	case "ctrlc", "ctrl-c", "c-c":
+		return "C-c"
+	case "esc", "escape":
+		return "Escape"
+	case "up":
+		return "Up"
+	case "down":
+		return "Down"
+	case "left":
+		return "Left"
+	case "right":
+		return "Right"
+	case "tab":
+		return "Tab"
+	case "space":
+		return "Space"
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 func parseFollowArgs(value string) (string, FollowOptions, error) {

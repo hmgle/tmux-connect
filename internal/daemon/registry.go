@@ -18,6 +18,8 @@ type paneService interface {
 	SnapshotRich(context.Context, string, int) (string, error)
 	Send(context.Context, string, string, bool) error
 	SendManaged(context.Context, string, string, bool) error
+	SendKeys(context.Context, string, ...string) error
+	SendKeysManaged(context.Context, string, ...string) error
 	Enter(context.Context, string) error
 	EnterManaged(context.Context, string) error
 	CtrlC(context.Context, string) error

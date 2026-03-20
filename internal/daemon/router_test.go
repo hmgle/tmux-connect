@@ -139,14 +139,21 @@ type fakePaneService struct {
 	snapshotRich  string
 	initialOutput string
 	sendCalls     []sendCall
+	keyCalls      []keyCall
 	listCalls     int
 	attachCalls   int
 	detachCalls   int
 }
 
 type sendCall struct {
+	paneKey   string
+	text      string
+	sendEnter bool
+}
+
+type keyCall struct {
 	paneKey string
-	text    string
+	keys    []string
 }
 
 func newFakePaneService() *fakePaneService {
@@ -278,16 +285,26 @@ func (s *fakePaneService) SnapshotRich(context.Context, string, int) (string, er
 }
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
-func (s *fakePaneService) SendManaged(_ context.Context, paneKey string, text string, _ bool) error {
-	s.sendCalls = append(s.sendCalls, sendCall{paneKey: paneKey, text: text})
+func (s *fakePaneService) SendManaged(_ context.Context, paneKey string, text string, sendEnter bool) error {
+	s.sendCalls = append(s.sendCalls, sendCall{paneKey: paneKey, text: text, sendEnter: sendEnter})
 	return nil
 }
 
-func (s *fakePaneService) Enter(context.Context, string) error        { return nil }
-func (s *fakePaneService) EnterManaged(context.Context, string) error { return nil }
+func (s *fakePaneService) SendKeys(context.Context, string, ...string) error { return nil }
+func (s *fakePaneService) SendKeysManaged(_ context.Context, paneKey string, keys ...string) error {
+	s.keyCalls = append(s.keyCalls, keyCall{paneKey: paneKey, keys: append([]string(nil), keys...)})
+	return nil
+}
 
-func (s *fakePaneService) CtrlC(context.Context, string) error        { return nil }
-func (s *fakePaneService) CtrlCManaged(context.Context, string) error { return nil }
+func (s *fakePaneService) Enter(context.Context, string) error { return nil }
+func (s *fakePaneService) EnterManaged(ctx context.Context, paneKey string) error {
+	return s.SendKeysManaged(ctx, paneKey, "Enter")
+}
+
+func (s *fakePaneService) CtrlC(context.Context, string) error { return nil }
+func (s *fakePaneService) CtrlCManaged(ctx context.Context, paneKey string) error {
+	return s.SendKeysManaged(ctx, paneKey, "C-c")
+}
 
 func (s *fakePaneService) OpenStream(context.Context, string, int) (tagb.PaneStream, error) {
 	return tagb.PaneStream{
@@ -335,6 +352,17 @@ func slackAppMentionMessage(chatID string, messageID string, text string) Incomi
 	message := slackMessage(chatID, messageID, text)
 	message.IsAppMention = true
 	return message
+}
+
+func slackThreadMessage(chatID string, threadID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:         slackChat(chatID),
+		MessageID:    messageID,
+		Text:         text,
+		ChatType:     "channel",
+		ThreadID:     threadID,
+		PendingScope: threadID,
+	}
 }
 
 func TestRouterSelectAndSnapshot(t *testing.T) {
@@ -464,6 +492,159 @@ func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
 	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" {
 		t.Fatalf("send call = %#v, want pane default:%%5 and text", service.sendCalls[0])
 	}
+	if service.sendCalls[0].sendEnter {
+		t.Fatalf("send call = %#v, want sendEnter false", service.sendCalls[0])
+	}
+}
+
+func TestRouterPlainTextSendsToCurrentPane(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one send", service.sendCalls)
+	}
+	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" || service.sendCalls[0].sendEnter {
+		t.Fatalf("send call = %#v, want plain text send without Enter", service.sendCalls[0])
+	}
+}
+
+func TestRouterPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "no current pane; run /select <pane> first") {
+		t.Fatalf("last message = %q, want select error", last.Text)
+	}
+}
+
+func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys ctrl-c enter esc")); err != nil {
+		t.Fatalf("HandleMessage(keys) error = %v", err)
+	}
+	if len(service.keyCalls) != 1 {
+		t.Fatalf("keyCalls = %#v, want one send", service.keyCalls)
+	}
+	got := service.keyCalls[0]
+	if got.paneKey != "default:%5" {
+		t.Fatalf("key call pane = %q, want %q", got.paneKey, "default:%5")
+	}
+	if strings.Join(got.keys, " ") != "C-c Enter Escape" {
+		t.Fatalf("key call keys = %#v, want normalized keys", got.keys)
+	}
+}
+
+func TestRouterKeysPromptUsesReply(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys")); err != nil {
+		t.Fatalf("HandleMessage(keys) error = %v", err)
+	}
+	latest := messenger.snapshot()
+	prompt := latest[len(latest)-1]
+	if prompt.Text != "Reply with the tmux key names to send, for example C-c or Enter." {
+		t.Fatalf("prompt text = %q", prompt.Text)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "left tab")); err != nil {
+		t.Fatalf("HandleMessage(keys reply) error = %v", err)
+	}
+	if len(service.keyCalls) != 1 {
+		t.Fatalf("keyCalls = %#v, want one send", service.keyCalls)
+	}
+	if strings.Join(service.keyCalls[0].keys, " ") != "Left Tab" {
+		t.Fatalf("key call keys = %#v, want normalized keys", service.keyCalls[0].keys)
+	}
+}
+
+func TestRouterEnterAndCtrlCAliasKeySending(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/enter")); err != nil {
+		t.Fatalf("HandleMessage(enter) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 3, "/ctrl-c")); err != nil {
+		t.Fatalf("HandleMessage(ctrl-c) error = %v", err)
+	}
+	if len(service.keyCalls) != 2 {
+		t.Fatalf("keyCalls = %#v, want enter and ctrl-c", service.keyCalls)
+	}
+	if strings.Join(service.keyCalls[0].keys, " ") != "Enter" {
+		t.Fatalf("first key call = %#v, want Enter", service.keyCalls[0])
+	}
+	if strings.Join(service.keyCalls[1].keys, " ") != "C-c" {
+		t.Fatalf("second key call = %#v, want C-c", service.keyCalls[1])
+	}
 }
 
 func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
@@ -498,8 +679,8 @@ func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
 	}
 	latest := messenger.snapshot()
 	last := latest[len(latest)-1]
-	if !strings.Contains(last.Text, "unknown command") {
-		t.Fatalf("last message = %q, want unknown command", last.Text)
+	if !strings.Contains(last.Text, "no current pane; run /select <pane> first") {
+		t.Fatalf("last message = %q, want select error", last.Text)
 	}
 }
 
@@ -1119,6 +1300,12 @@ func TestRouterSlackHelpUsesCommandPrefix(t *testing.T) {
 	if !strings.Contains(last.Text, `prefix commands with "tmux:"`) {
 		t.Fatalf("last message = %q, want slack hint", last.Text)
 	}
+	if !strings.Contains(last.Text, "plain text sends to the current pane") {
+		t.Fatalf("last message = %q, want plain text hint", last.Text)
+	}
+	if !strings.Contains(last.Text, "tmux: keys C-c") {
+		t.Fatalf("last message = %q, want keys example", last.Text)
+	}
 	if strings.Contains(last.Text, "/select <pane>") {
 		t.Fatalf("last message = %q, want tmux:-prefixed slack commands", last.Text)
 	}
@@ -1127,7 +1314,7 @@ func TestRouterSlackHelpUsesCommandPrefix(t *testing.T) {
 	}
 }
 
-func TestRouterSlackRejectsLoosePrefixWithoutColon(t *testing.T) {
+func TestRouterSlackPlainTextUsesCurrentPane(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1140,18 +1327,68 @@ func TestRouterSlackRejectsLoosePrefixWithoutColon(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
-	// "tmux panes" (no colon) should NOT be recognized as a prefixed command
+	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux: select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, slackMessage("D123", "2", "tmux panes")); err != nil {
+		t.Fatalf("HandleMessage(plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one plain text send", service.sendCalls)
+	}
+	if service.sendCalls[0].text != "tmux panes" || service.sendCalls[0].sendEnter {
+		t.Fatalf("send call = %#v, want plain text send without Enter", service.sendCalls[0])
+	}
+}
+
+func TestRouterSlackPlainTextInManagedThreadUsesCurrentPane(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, slackThreadMessage("C123", "1", "2", "status --short")); err != nil {
+		t.Fatalf("HandleMessage(thread plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one plain text send", service.sendCalls)
+	}
+	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" {
+		t.Fatalf("send call = %#v, want thread plain text send", service.sendCalls[0])
+	}
+}
+
+func TestRouterSlackPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
 	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux panes")); err != nil {
-		t.Fatalf("HandleMessage() error = %v", err)
+		t.Fatalf("HandleMessage(plain text) error = %v", err)
 	}
 
 	messages := messenger.snapshot()
-	if len(messages) == 0 {
-		t.Fatal("expected a response")
-	}
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, "unknown command") {
-		t.Fatalf("last message = %q, want unknown command (not a pane list)", last.Text)
+	if !strings.Contains(last.Text, "no current pane; run tmux: select <pane> first") {
+		t.Fatalf("last message = %q, want select error", last.Text)
 	}
 }
 
@@ -1168,6 +1405,22 @@ func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentM
 			t.Fatalf("condition not met before timeout, messages = %#v", messages)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestParseKeysArgs(t *testing.T) {
+	t.Parallel()
+
+	keys, err := parseKeysArgs("ctrl-c enter esc left tab")
+	if err != nil {
+		t.Fatalf("parseKeysArgs() error = %v", err)
+	}
+	if strings.Join(keys, " ") != "C-c Enter Escape Left Tab" {
+		t.Fatalf("keys = %#v, want normalized key sequence", keys)
+	}
+
+	if _, err := parseKeysArgs("   "); err == nil {
+		t.Fatal("parseKeysArgs(empty) error = nil, want error")
 	}
 }
 
