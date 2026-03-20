@@ -175,7 +175,8 @@ Telegram commands:
 - `/current`
 - `/snapshot [lines] [image|text]`
 - `/send <text>`
-- `/enter`
+- `/keys <key...>`
+- `/enter [text]`
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
@@ -188,11 +189,12 @@ Slack commands:
 - `tmux: current`
 - `tmux: snapshot [lines] [image|text]`
 - `tmux: send <text>`
-- `tmux: enter`
+- `tmux: keys <key...>`
+- `tmux: enter [text]`
 - `tmux: ctrlc` or `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
-In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+In Slack channels, start with an app mention such as `@tagb panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads is sent to the current pane without pressing Enter. Use `/enter <text>` or `tmux: enter <text>` to append Enter, and `/keys` or `tmux: keys` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 
 ## Recovery Model
 

@@ -564,7 +564,7 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
 	}
-	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys ctrl-c enter esc")); err != nil {
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys ctrl-c enter esc pgup f2 m-x")); err != nil {
 		t.Fatalf("HandleMessage(keys) error = %v", err)
 	}
 	if len(service.keyCalls) != 1 {
@@ -574,8 +574,41 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	if got.paneKey != "default:%5" {
 		t.Fatalf("key call pane = %q, want %q", got.paneKey, "default:%5")
 	}
-	if strings.Join(got.keys, " ") != "C-c Enter Escape" {
+	if strings.Join(got.keys, " ") != "C-c Enter Escape PageUp F2 M-x" {
 		t.Fatalf("key call keys = %#v, want normalized keys", got.keys)
+	}
+}
+
+func TestRouterKeysRejectsUnknownKey(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/keys foobar")); err != nil {
+		t.Fatalf("HandleMessage(keys) error = %v", err)
+	}
+	if len(service.keyCalls) != 0 {
+		t.Fatalf("keyCalls = %#v, want no send on invalid key", service.keyCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, `invalid key: "foobar" is not a recognized tmux key name`) {
+		t.Fatalf("last message = %q, want invalid key error", last.Text)
+	}
+	if !strings.Contains(last.Text, "PageUp") || !strings.Contains(last.Text, "M-x") {
+		t.Fatalf("last message = %q, want key usage examples", last.Text)
 	}
 }
 
@@ -1447,16 +1480,19 @@ func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentM
 func TestParseKeysArgs(t *testing.T) {
 	t.Parallel()
 
-	keys, err := parseKeysArgs("ctrl-c enter esc left tab")
+	keys, err := parseKeysArgs("ctrl-c enter esc left tab pgup f12 ctrl+x m-z")
 	if err != nil {
 		t.Fatalf("parseKeysArgs() error = %v", err)
 	}
-	if strings.Join(keys, " ") != "C-c Enter Escape Left Tab" {
+	if strings.Join(keys, " ") != "C-c Enter Escape Left Tab PageUp F12 C-x M-z" {
 		t.Fatalf("keys = %#v, want normalized key sequence", keys)
 	}
 
 	if _, err := parseKeysArgs("   "); err == nil {
 		t.Fatal("parseKeysArgs(empty) error = nil, want error")
+	}
+	if _, err := parseKeysArgs("ctrl+1"); err == nil {
+		t.Fatal("parseKeysArgs(ctrl+1) error = nil, want error")
 	}
 }
 

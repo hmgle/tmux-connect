@@ -175,7 +175,8 @@ Telegram 命令：
 - `/current`
 - `/snapshot [lines] [image|text]`
 - `/send <text>`
-- `/enter`
+- `/keys <key...>`
+- `/enter [text]`
 - `/ctrlc` 或 `/ctrl-c`
 - `/follow on [interval]|off`
 
@@ -188,11 +189,12 @@ Slack 命令：
 - `tmux: current`
 - `tmux: snapshot [lines] [image|text]`
 - `tmux: send <text>`
-- `tmux: enter`
+- `tmux: keys <key...>`
+- `tmux: enter [text]`
 - `tmux: ctrlc` 或 `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
-Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Slack 频道里建议用 app mention 起命令，例如 `@tagb panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本会直接发送到当前 pane，但不会自动附带回车；需要执行时，用 `/enter <text>` 或 `tmux: enter <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 
 ## Recovery Model
 

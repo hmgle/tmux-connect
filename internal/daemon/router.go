@@ -321,7 +321,7 @@ func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args s
 		if strings.TrimSpace(args) == "" {
 			return r.promptForCommandInput(ctx, message, "keys")
 		}
-		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "keys <key...>"))
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", fmt.Sprintf("invalid key: %v\n\n%s", err, keysUsage(r.commandPrefix(chat))))
 	}
 	if err := r.service.SendKeysManaged(ctx, paneKey, keys...); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send keys failed: %v", err))
@@ -565,38 +565,97 @@ func parseKeysArgs(value string) ([]string, error) {
 	}
 	keys := make([]string, 0, len(fields))
 	for _, field := range fields {
-		key := normalizeTmuxKeyName(field)
-		if key == "" {
-			return nil, fmt.Errorf("invalid key")
+		key, ok := normalizeTmuxKeyName(field)
+		if !ok {
+			return nil, fmt.Errorf("%q is not a recognized tmux key name", field)
 		}
 		keys = append(keys, key)
 	}
 	return keys, nil
 }
 
-func normalizeTmuxKeyName(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
+var namedTmuxKeys = map[string]string{
+	"enter":     "Enter",
+	"return":    "Enter",
+	"esc":       "Escape",
+	"escape":    "Escape",
+	"tab":       "Tab",
+	"btab":      "BTab",
+	"space":     "Space",
+	"bspace":    "BSpace",
+	"backspace": "BSpace",
+	"up":        "Up",
+	"down":      "Down",
+	"left":      "Left",
+	"right":     "Right",
+	"home":      "Home",
+	"end":       "End",
+	"pageup":    "PageUp",
+	"pgup":      "PageUp",
+	"pagedown":  "PageDown",
+	"pgdn":      "PageDown",
+	"insert":    "Insert",
+	"ic":        "IC",
+	"delete":    "Delete",
+	"del":       "Delete",
+	"dc":        "DC",
+	"f1":        "F1",
+	"f2":        "F2",
+	"f3":        "F3",
+	"f4":        "F4",
+	"f5":        "F5",
+	"f6":        "F6",
+	"f7":        "F7",
+	"f8":        "F8",
+	"f9":        "F9",
+	"f10":       "F10",
+	"f11":       "F11",
+	"f12":       "F12",
+}
+
+func normalizeTmuxKeyName(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	lower := strings.ToLower(trimmed)
+	switch lower {
 	case "enter", "return":
-		return "Enter"
+		return "Enter", true
 	case "ctrlc", "ctrl-c", "c-c":
-		return "C-c"
-	case "esc", "escape":
-		return "Escape"
-	case "up":
-		return "Up"
-	case "down":
-		return "Down"
-	case "left":
-		return "Left"
-	case "right":
-		return "Right"
-	case "tab":
-		return "Tab"
-	case "space":
-		return "Space"
-	default:
-		return strings.TrimSpace(value)
+		return "C-c", true
 	}
+	if mapped, ok := namedTmuxKeys[lower]; ok {
+		return mapped, true
+	}
+	for _, prefix := range []string{"ctrl-", "ctrl+"} {
+		if strings.HasPrefix(lower, prefix) {
+			ch := lower[len(prefix):]
+			if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
+				return "C-" + ch, true
+			}
+			return "", false
+		}
+	}
+	if strings.HasPrefix(lower, "c-") {
+		ch := lower[2:]
+		if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
+			return "C-" + ch, true
+		}
+		return "", false
+	}
+	if strings.HasPrefix(lower, "m-") {
+		ch := lower[2:]
+		if len(ch) == 1 && ch[0] >= 'a' && ch[0] <= 'z' {
+			return "M-" + ch, true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+func keysUsage(commandPrefix string) string {
+	return fmt.Sprintf(
+		"usage: %s\n\nExamples: C-c, Enter, Tab, Escape, Up, PageUp, F1-F12\nModifiers: C-a..C-z, ctrl-c, ctrl+x, M-x",
+		formatCommandUsage(commandPrefix, "keys <key...>"),
+	)
 }
 
 func parseFollowArgs(value string) (string, FollowOptions, error) {

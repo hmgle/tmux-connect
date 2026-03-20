@@ -91,7 +91,7 @@ Supported commands:
 - `tmux: current`
 - `tmux: snapshot [lines] [image|text]`
 - `tmux: send <text>` for explicit text sends, especially if the text itself starts with `/`
-- `tmux: keys <key...>` or `tmux: key <key...>`
+- `tmux: keys <key...>` or `tmux: key <key...>` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`
 - `tmux: enter [text]`
 - `tmux: ctrlc` or `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
@@ -104,7 +104,7 @@ If `tmux: select`, `tmux: unmanage`, `tmux: send`, `tmux: keys`, or `tmux: follo
 - plain text is routed to the current pane only in DMs or managed threads; channel mainline chatter is never treated as pane input
 - plain text does not press Enter automatically; use `tmux: enter` after reviewing the command
 - `tmux: enter <text>` sends text and presses Enter in one step
-- use `tmux: keys ...` for tmux key names such as `C-c`, `Enter`, `Escape`, or arrows
+- use `tmux: keys ...` for tmux key names such as `C-c`, `Enter`, `Escape`, arrows, `PageUp`, `F1`-`F12`, `C-a`-`C-z`, or `M-x`
 - `tmux: snapshot` defaults to `image`; `tmux: snapshot text` forces plain text output
 - follow mode is one active subscription per Slack conversation tracked by the daemon
 - current pane bindings and reply continuity survive daemon restart through SQLite

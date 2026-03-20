@@ -100,7 +100,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - `/current`
 - `/snapshot [lines] [image|text]`
 - `/send <text>` for explicit text sends, especially if the text itself starts with `/`
-- `/keys <key...>` or `/key <key...>`
+- `/keys <key...>` or `/key <key...>` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`
 - `/enter [text]`
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
@@ -127,7 +127,7 @@ If `/select`, `/unmanage`, `/send`, `/keys`, or `/follow` is sent without argume
 - `/select` automatically attaches the pane if it is not already managed
 - plain text sends directly to the current pane; use `/enter` to execute after reviewing the text
 - `/enter <text>` sends text and presses Enter in one step
-- `/keys` sends tmux key names such as `Enter`, `C-c`, `Escape`, or arrow keys
+- `/keys` sends tmux key names such as `Enter`, `C-c`, `Escape`, arrows, `PageUp`, `F1`-`F12`, `C-a`-`C-z`, or `M-x`
 - `/send` remains available when you need to send text that starts with `/`
 - `/clear` clears only the current pane for the current chat and disables that chat's follow session
 - `/snapshot` defaults to `image`; `text` skips image rendering and sends plain text
