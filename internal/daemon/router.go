@@ -125,7 +125,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 	case "keys":
 		return r.handleKeys(ctx, message, args)
 	case "enter":
-		return r.handleEnter(ctx, message)
+		return r.handleEnter(ctx, message, args)
 	case "ctrlc":
 		return r.handleCtrlC(ctx, message)
 	case "follow":
@@ -329,7 +329,7 @@ func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args s
 	return r.replyBus.Reply(ctx, chat, paneKey, "keys", fmt.Sprintf("sent keys %s to %s", strings.Join(keys, " "), paneKey))
 }
 
-func (r *Router) handleEnter(ctx context.Context, message IncomingMessage) error {
+func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args string) error {
 	chat := message.Chat
 	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
@@ -337,6 +337,13 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage) error
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
+	text := strings.TrimSpace(args)
+	if text != "" {
+		if err := r.service.SendManaged(ctx, paneKey, text, true); err != nil {
+			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
+		}
+		return r.replyBus.Reply(ctx, chat, paneKey, "enter", fmt.Sprintf("sent to %s and pressed Enter", paneKey))
+	}
 	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
 	}

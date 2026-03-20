@@ -92,7 +92,7 @@ Supported commands:
 - `tmux: snapshot [lines] [image|text]`
 - `tmux: send <text>` for explicit text sends, especially if the text itself starts with `/`
 - `tmux: keys <key...>` or `tmux: key <key...>`
-- `tmux: enter`
+- `tmux: enter [text]`
 - `tmux: ctrlc` or `tmux: ctrl-c`
 - `tmux: follow on [interval]|off`
 
@@ -103,6 +103,7 @@ If `tmux: select`, `tmux: unmanage`, `tmux: send`, `tmux: keys`, or `tmux: follo
 - Slack replies are posted in a thread rooted at the triggering message
 - plain text is routed to the current pane only in DMs or managed threads; channel mainline chatter is never treated as pane input
 - plain text does not press Enter automatically; use `tmux: enter` after reviewing the command
+- `tmux: enter <text>` sends text and presses Enter in one step
 - use `tmux: keys ...` for tmux key names such as `C-c`, `Enter`, `Escape`, or arrows
 - `tmux: snapshot` defaults to `image`; `tmux: snapshot text` forces plain text output
 - follow mode is one active subscription per Slack conversation tracked by the daemon

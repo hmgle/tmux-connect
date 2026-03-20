@@ -101,7 +101,7 @@ go run ./cmd/tagb daemon status --db ~/.tagb/tagb.db
 - `/snapshot [lines] [image|text]`
 - `/send <text>` for explicit text sends, especially if the text itself starts with `/`
 - `/keys <key...>` or `/key <key...>`
-- `/enter`
+- `/enter [text]`
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
@@ -117,7 +117,7 @@ If `/select`, `/unmanage`, `/send`, `/keys`, or `/follow` is sent without argume
 4. Check the current selection with `/current`.
 5. Read output with `/snapshot` or `/snapshot text`.
 6. Send input by typing `continue`.
-7. Press Enter with `/enter`.
+7. Press Enter with `/enter`, or run a one-shot command with `/enter continue`.
 8. Send control keys with `/keys C-c` when needed.
 9. Enable follow mode with `/follow on` or `/follow on 2s`.
 
@@ -126,6 +126,7 @@ If `/select`, `/unmanage`, `/send`, `/keys`, or `/follow` is sent without argume
 - if `--allow-chat` is set, chats outside the allowlist are rejected
 - `/select` automatically attaches the pane if it is not already managed
 - plain text sends directly to the current pane; use `/enter` to execute after reviewing the text
+- `/enter <text>` sends text and presses Enter in one step
 - `/keys` sends tmux key names such as `Enter`, `C-c`, `Escape`, or arrow keys
 - `/send` remains available when you need to send text that starts with `/`
 - `/clear` clears only the current pane for the current chat and disables that chat's follow session

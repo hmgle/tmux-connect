@@ -133,7 +133,7 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 | 直接发送文本 | 向当前 pane 发送文本，不自动回车 |
 | `/send <text>` | 显式发送文本，适合文本本身以 `/` 开头 |
 | `/keys <key...>` | 发送 tmux 组合键或功能键，如 `C-c`、`Enter` |
-| `/enter` | 发送回车 |
+| `/enter [text]` | 发送回车；带文本时等于“发送文本并回车” |
 | `/ctrlc` 或 `/ctrl-c` | 发送 Ctrl-C |
 | `/follow on [interval]` | 开启实时推送 |
 | `/follow off` | 关闭实时推送 |
@@ -145,6 +145,7 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 - `/select` 会在 pane 尚未管理时自动 `attach`
 - 直接发送的文本会进入当前 pane，但不会自动附带回车
 - 需要执行时，先发送文本，再发 `/enter`
+- 也可以直接用 `/enter make test` 这样的一步写法
 - `/keys` 用来发送 tmux key name，比如 `C-c`、`Enter`、`Escape`、方向键
 - 如果文本本身以 `/` 开头，使用 `/send <text>`
 - `/snapshot` 默认发图片，显式写 `text` 才会发纯文本

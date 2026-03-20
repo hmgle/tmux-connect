@@ -44,7 +44,7 @@ func daemonCommandSpecs() []botCommandSpec {
 			Message:     "Reply with the tmux key names to send, for example C-c or Enter.",
 			Placeholder: "C-c",
 		}},
-		{Command: "enter", Description: "Send Enter to the current pane", Usage: "enter"},
+		{Command: "enter", Description: "Send Enter, or send text and Enter", Usage: "enter [text]"},
 		{Command: "ctrlc", Aliases: []string{"ctrl-c"}, Description: "Send Ctrl-C to the current pane", Usage: "ctrlc"},
 		{Command: "follow", Description: "Stream pane updates", Usage: "follow on [interval]|off", Prompt: &commandPromptSpec{
 			Message:     "Reply with follow mode: on, on 2s, or off.",

@@ -647,6 +647,42 @@ func TestRouterEnterAndCtrlCAliasKeySending(t *testing.T) {
 	}
 }
 
+func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tagb.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "/enter make test")); err != nil {
+		t.Fatalf("HandleMessage(enter with text) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one send", service.sendCalls)
+	}
+	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "make test" || !service.sendCalls[0].sendEnter {
+		t.Fatalf("send call = %#v, want text send with Enter", service.sendCalls[0])
+	}
+	if len(service.keyCalls) != 0 {
+		t.Fatalf("keyCalls = %#v, want no direct key send", service.keyCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "sent to default:%5 and pressed Enter") {
+		t.Fatalf("last message = %q, want send-and-enter confirmation", last.Text)
+	}
+}
+
 func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
 	t.Parallel()
 

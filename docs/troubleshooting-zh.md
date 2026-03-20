@@ -83,7 +83,7 @@ tagb inspect --pane %5
 
 1. `/snapshot` 看当前内容
 2. 确认 Agent 是否在等待输入
-3. 先直接发送命令文本，再补一个 `/enter`
+3. 先直接发送命令文本，再补一个 `/enter`，或者直接用 `/enter <命令>`
 4. 如果 daemon 刚重启过，重新执行一次 `/follow on`
 
 ### daemon 重启后 follow 丢失
