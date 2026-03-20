@@ -208,6 +208,41 @@ func TestDiscordHandleInteractionCreateDefersAndPropagatesContext(t *testing.T) 
 	}
 }
 
+func TestDiscordHandleInteractionCreateIncludesStringArguments(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeDiscordGatewayClient{commandPrefix: "tmux:"}
+	adapter := &discordAdapter{client: client, stderr: io.Discard, commandPrefix: "tmux:"}
+
+	var got IncomingMessage
+	adapter.handler = func(_ context.Context, message IncomingMessage) error {
+		got = message
+		return nil
+	}
+
+	adapter.handleInteractionCreate(nil, &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "i-2",
+			Type:      discordgo.InteractionApplicationCommand,
+			GuildID:   "G123",
+			ChannelID: "C123",
+			Member:    &discordgo.Member{User: &discordgo.User{ID: "U123"}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "select",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
+					Type:  discordgo.ApplicationCommandOptionString,
+					Name:  "pane",
+					Value: "%9",
+				}},
+			},
+		},
+	})
+
+	if got.Text != "/select %9" {
+		t.Fatalf("incoming message text = %q, want /select %%9", got.Text)
+	}
+}
+
 func TestDiscordAdapterRegisterCommandsMapsCommandSpecs(t *testing.T) {
 	t.Parallel()
 
@@ -216,12 +251,22 @@ func TestDiscordAdapterRegisterCommandsMapsCommandSpecs(t *testing.T) {
 
 	err := adapter.RegisterCommands(context.Background(), []botCommandSpec{
 		{Command: "help", Description: "Show command help"},
-		{Command: "panes", Description: "List managed panes"},
+		{Command: "select", Description: "Select the current pane"},
 	})
 	if err != nil {
 		t.Fatalf("RegisterCommands() error = %v", err)
 	}
-	if len(client.registered) != 2 || client.registered[0].Name != "help" || client.registered[1].Name != "panes" {
+	if len(client.registered) != 2 || client.registered[0].Name != "help" || client.registered[1].Name != "select" {
 		t.Fatalf("registered = %#v, want mapped command specs", client.registered)
+	}
+	if len(client.registered[0].Options) != 0 {
+		t.Fatalf("help options = %#v, want none", client.registered[0].Options)
+	}
+	if len(client.registered[1].Options) != 1 {
+		t.Fatalf("select options = %#v, want one pane option", client.registered[1].Options)
+	}
+	option := client.registered[1].Options[0]
+	if option.Type != discordgo.ApplicationCommandOptionString || option.Name != "pane" || !option.Required {
+		t.Fatalf("select option = %#v, want required string pane", option)
 	}
 }
