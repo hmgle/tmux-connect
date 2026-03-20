@@ -1,10 +1,12 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	toml "github.com/pelletier/go-toml/v2"
 )
 
 func TestDefaultPathUsesXDGConfigHome(t *testing.T) {
@@ -45,8 +47,8 @@ func TestLoadMissingDefaultFileIsIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if loaded.Exists {
-		t.Fatal("Load() Exists = true, want false")
+	if loaded.Path == "" {
+		t.Fatal("Load() Path = empty, want resolved default path")
 	}
 }
 
@@ -60,7 +62,8 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load() error = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "strict mode") {
-		t.Fatalf("Load() error = %q, want strict mode detail", err)
+	var strictErr *toml.StrictMissingError
+	if !errors.As(err, &strictErr) {
+		t.Fatalf("Load() error = %T, want *toml.StrictMissingError", err)
 	}
 }

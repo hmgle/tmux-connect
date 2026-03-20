@@ -39,6 +39,8 @@ Configuration can be loaded from `--config PATH` or, by default,
 `$XDG_CONFIG_HOME/tmux-connect/config.toml` (falling back to
 `$HOME/.config/tmux-connect/config.toml`). Command-line flags override
 environment variables, and environment variables override the TOML file.
+Global flags such as `--config`, `--socket`, and `--json` must appear
+before the subcommand.
 
 List panes:
 

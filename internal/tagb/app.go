@@ -355,6 +355,7 @@ Global flags:
   --config PATH  load TOML config (default: %s)
   --socket NAME  tmux socket name
   --json         pass --json to the selected command
+  note: global flags must appear before the command
 
 Commands:
   list [--json]

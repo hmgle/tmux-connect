@@ -57,7 +57,6 @@ type Slack struct {
 type Loaded struct {
 	Path   string
 	Config File
-	Exists bool
 }
 
 func DefaultPath() (string, error) {
@@ -94,7 +93,6 @@ func Load(path string) (Loaded, error) {
 	return Loaded{
 		Path:   path,
 		Config: cfg,
-		Exists: true,
 	}, nil
 }
 

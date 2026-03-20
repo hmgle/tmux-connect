@@ -403,7 +403,7 @@ func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 	t.Parallel()
 
 	stdout := &bytes.Buffer{}
-	err := runDoctor(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), []string{
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), tagbconfig.Daemon{}, []string{
 		"--platform", "slack",
 		"--slack-bot-token", "xoxb-test",
 		"--slack-app-token", "xapp-test",
