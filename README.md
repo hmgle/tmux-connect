@@ -5,18 +5,19 @@
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
 [![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
+[![WhatsApp](https://img.shields.io/badge/WhatsApp-whatsmeow-25D366?style=flat-square&logo=whatsapp)](https://pkg.go.dev/go.mau.fi/whatsmeow)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README.zh-CN](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
 
 English | [简体中文](./README.zh-CN.md)
 
-`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram, Slack, or Discord without taking ownership of the pane lifecycle.
+`tmux-connect` is a tmux-first relay for existing panes. It lets you inspect output, send input, expose a local HTTP API, and control a selected pane from Telegram, Slack, Discord, or WhatsApp without taking ownership of the pane lifecycle.
 
 Current scope:
 
 - local CLI for attach, inspect, snapshot, stream, and input
 - local HTTP control plane over the same bridge service
-- multi-connector daemon with Telegram long polling, Slack Socket Mode, and Discord gateway events
+- multi-connector daemon with Telegram long polling, Slack Socket Mode, Discord gateway events, and WhatsApp multi-device login
 - relay-first behavior only; there is no structured Codex/Claude/Gemini protocol yet
 
 ## Requirements
@@ -24,7 +25,7 @@ Current scope:
 - Go `1.25` or later
 - `tmux`
 - `sqlite3` in `PATH` if you want to run `tmux-connect daemon`
-- a Telegram bot token, Slack bot/app tokens, or a Discord bot token if you want remote control
+- a Telegram bot token, Slack bot/app tokens, a Discord bot token, or a paired WhatsApp device session if you want remote control
 
 ## Build
 
@@ -165,6 +166,11 @@ command_prefix = "tmux:"
 [daemon.discord]
 token = "discord-bot-token"
 command_prefix = "tmux:"
+
+[daemon.whatsapp]
+session_db = "/home/user/.tmux-connect/whatsapp-device.db"
+device_name = "tmux-connect"
+auto_mark_read = true
 ```
 
 By default, bare plain text stays in `type` mode: it is sent to the current
@@ -202,17 +208,31 @@ go run ./cmd/tmux-connect daemon run \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
+Start the WhatsApp daemon:
+
+```bash
+go run ./cmd/tmux-connect daemon run \
+  --platform whatsapp \
+  --whatsapp-session-db ~/.tmux-connect/whatsapp-device.db \
+  --db ~/.tmux-connect/tmux-connect.db \
+  --allow-chat whatsapp:8613800000000@s.whatsapp.net
+```
+
 For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
 For Discord prefix commands in channels or DMs, enable the Message Content intent in the developer portal.
+For WhatsApp, the first run prints a QR code and v1 accepts private chats only.
 
 Common flags:
 
-- `--platform telegram|slack|discord`
+- `--platform telegram|slack|discord|whatsapp`
 - `--telegram-token TOKEN`
 - `--slack-bot-token TOKEN`
 - `--slack-app-token TOKEN`
 - `--discord-token TOKEN`
 - `--discord-command-prefix PREFIX`
+- `--whatsapp-session-db PATH`
+- `--whatsapp-device-name NAME`
+- `--whatsapp-auto-mark-read`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
@@ -303,6 +323,7 @@ The remote daemon stores platform chat state in SQLite, including bindings, curr
 - [docs/telegram.md](./docs/telegram.md) for Telegram setup and operations
 - [docs/slack.md](./docs/slack.md) for Slack setup and operations
 - [docs/discord.md](./docs/discord.md) for Discord setup and operations
+- [docs/whatsapp.md](./docs/whatsapp.md) for WhatsApp setup and operations
 - [docs/architecture.md](./docs/architecture.md) for the current system architecture
 - [docs/roadmap.md](./docs/roadmap.md) for near-term roadmap items
 

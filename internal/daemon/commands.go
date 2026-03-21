@@ -76,6 +76,10 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 		lines = append(lines, fmt.Sprintf(`In channels, you can also prefix text commands with %q, for example %q.`, prefix, prefix+" panes"))
 		lines = append(lines, fmt.Sprintf(`In DMs, plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text or %q to force a command.`, "/send <text>", prefix+" current"))
 		lines = append(lines, `When the text itself starts with "/", use "/send <text>" to pass it through.`)
+	case platform == "whatsapp":
+		lines = append(lines, `In WhatsApp private chats, plain text targets the current pane and may execute immediately when execute mode is enabled.`)
+		lines = append(lines, `Use slash commands such as "/panes" or "/follow on" for explicit actions, and use "/send <text>" when the text itself starts with "/".`)
+		lines = append(lines, `When the bot asks for more input, reply in the same chat. For pane selection prompts, replying with "1" or "2" is supported.`)
 	default:
 		lines = append(lines, fmt.Sprintf("Plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))

@@ -26,6 +26,15 @@ func decorateSlackMessage(kind string, text string, opts SendOptions) (string, S
 	}
 }
 
+func decorateWhatsAppMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
+	switch strings.TrimSpace(kind) {
+	case "panes", "snapshot", "follow-initial", "follow-output":
+		return renderSlackCodeBlock(text), opts
+	default:
+		return text, opts
+	}
+}
+
 func isPreformattedHTML(kind string) bool {
 	return kind == "panes"
 }

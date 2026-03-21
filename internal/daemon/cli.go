@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,9 @@ type Config struct {
 	SlackCommandPrefix   string
 	DiscordToken         string
 	DiscordCommandPrefix string
+	WhatsAppSessionDB    string
+	WhatsAppDeviceName   string
+	WhatsAppAutoMarkRead bool
 	DBPath               string
 	AllowChats           []string
 	PollTimeout          time.Duration
@@ -146,6 +150,15 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 		}
 		fmt.Fprintln(stdout, "discord token: ok")
 		fmt.Fprintln(stdout, "discord gateway intents: enable Message Content intent for prefix commands and DMs")
+	case "whatsapp":
+		if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
+			return tmuxconn.UsageError("whatsapp session db is required; pass --whatsapp-session-db, TMUXCONN_WHATSAPP_SESSION_DB, or [daemon.whatsapp].session_db in config")
+		}
+		if err := os.MkdirAll(filepath.Dir(cfg.WhatsAppSessionDB), 0o755); err != nil {
+			return tmuxconn.UsageError("prepare whatsapp session db dir: %v", err)
+		}
+		fmt.Fprintf(stdout, "whatsapp session db: ok (%s)\n", cfg.WhatsAppSessionDB)
+		fmt.Fprintln(stdout, "whatsapp login: first run will print a pairing QR code if no device session exists")
 	default:
 		return tmuxconn.UsageError("unsupported platform %q", cfg.Platform)
 	}
@@ -320,6 +333,8 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		defaultPlainTextEchoTimeout = value
 	}
 	defaultSnapshotTheme := envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
+	defaultWhatsAppSessionDB := envOrDefault("TMUXCONN_WHATSAPP_SESSION_DB", stringValue(fileCfg.WhatsApp.SessionDB, defaultWhatsAppSessionDBPath(resolvedDBPath)))
+	defaultWhatsAppDeviceName := envOrDefault("TMUXCONN_WHATSAPP_DEVICE_NAME", stringValue(fileCfg.WhatsApp.DeviceName, "tmux-connect"))
 	defaultFollowLines := intValue(fileCfg.FollowLines, 80)
 	defaultFollowMinGap, err := durationValue("[daemon].follow_min_interval", fileCfg.FollowMinInterval, 700*time.Millisecond)
 	if err != nil {
@@ -329,16 +344,23 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if envValue, ok := envBoolValue("TMUXCONN_FOLLOW_DEBUG"); ok {
 		defaultFollowDebug = envValue
 	}
+	defaultWhatsAppAutoMarkRead := boolValue(fileCfg.WhatsApp.AutoMarkRead, true)
+	if envValue, ok := envBoolValue("TMUXCONN_WHATSAPP_AUTO_MARK_READ"); ok {
+		defaultWhatsAppAutoMarkRead = envValue
+	}
 	plainTextModeValue := defaultPlainTextMode
 	plainTextEchoValue := defaultPlainTextEcho
 
-	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack|discord)")
+	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack|discord|whatsapp)")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
 	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", envOrDefault("TMUXCONN_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, "")), "slack bot token")
 	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", envOrDefault("TMUXCONN_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, "")), "slack app token for socket mode")
 	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix)), "command prefix for slack messages")
 	fs.StringVar(&cfg.DiscordToken, "discord-token", envOrDefault("TMUXCONN_DISCORD_TOKEN", stringValue(fileCfg.Discord.Token, "")), "discord bot token")
 	fs.StringVar(&cfg.DiscordCommandPrefix, "discord-command-prefix", envOrDefault("TMUXCONN_DISCORD_COMMAND_PREFIX", stringValue(fileCfg.Discord.CommandPrefix, defaultDiscordCommandPrefix)), "command prefix for discord channel messages")
+	fs.StringVar(&cfg.WhatsAppSessionDB, "whatsapp-session-db", defaultWhatsAppSessionDB, "path to the WhatsApp multi-device session sqlite db")
+	fs.StringVar(&cfg.WhatsAppDeviceName, "whatsapp-device-name", defaultWhatsAppDeviceName, "device name shown for WhatsApp multi-device login")
+	fs.BoolVar(&cfg.WhatsAppAutoMarkRead, "whatsapp-auto-mark-read", defaultWhatsAppAutoMarkRead, "mark WhatsApp messages as read after successful handling")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
@@ -401,6 +423,9 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if cfg.FollowMinGap <= 0 {
 		return Config{}, tmuxconn.UsageError("--follow-min-interval must be > 0")
 	}
+	if cfg.Platform == "whatsapp" && !flagWasSet(fs, "follow-min-interval") && fileCfg.FollowMinInterval == nil && strings.TrimSpace(os.Getenv("TMUXCONN_FOLLOW_MIN_INTERVAL")) == "" {
+		cfg.FollowMinGap = 2 * time.Second
+	}
 	if cfg.Platform == "slack" {
 		if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
 			return Config{}, tmuxconn.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
@@ -414,6 +439,15 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		}
 	} else {
 		cfg.DiscordCommandPrefix = ""
+	}
+	if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
+		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
+	}
+	if !flagWasSet(fs, "whatsapp-session-db") && fileCfg.WhatsApp.SessionDB == nil && strings.TrimSpace(os.Getenv("TMUXCONN_WHATSAPP_SESSION_DB")) == "" {
+		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
+	}
+	if strings.TrimSpace(cfg.WhatsAppDeviceName) == "" {
+		cfg.WhatsAppDeviceName = "tmux-connect"
 	}
 	if requireRun {
 		switch cfg.Platform {
@@ -429,6 +463,10 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 			if strings.TrimSpace(cfg.DiscordToken) == "" {
 				return Config{}, tmuxconn.UsageError("daemon run requires --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
 			}
+		case "whatsapp":
+			if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
+				return Config{}, tmuxconn.UsageError("daemon run requires --whatsapp-session-db, TMUXCONN_WHATSAPP_SESSION_DB, or [daemon.whatsapp].session_db in config")
+			}
 		default:
 			return Config{}, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
 		}
@@ -437,6 +475,14 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		return Config{}, tmuxconn.UsageError("--db is required")
 	}
 	return cfg, nil
+}
+
+func defaultWhatsAppSessionDBPath(dbPath string) string {
+	dbPath = strings.TrimSpace(dbPath)
+	if dbPath == "" {
+		return filepath.Join(filepath.Dir(defaultDBPath()), "whatsapp-device.db")
+	}
+	return filepath.Join(filepath.Dir(dbPath), "whatsapp-device.db")
 }
 
 func snapshotRenderOptions(cfg Config) termrender.Options {
@@ -606,12 +652,15 @@ Commands:
   status   Show sqlite counts and current managed pane count
 
 Common flags:
-  --platform telegram|slack|discord
+  --platform telegram|slack|discord|whatsapp
   --telegram-token TOKEN
   --slack-bot-token TOKEN
   --slack-app-token TOKEN
   --discord-token TOKEN
   --discord-command-prefix PREFIX
+  --whatsapp-session-db PATH
+  --whatsapp-device-name NAME
+  --whatsapp-auto-mark-read
   --db PATH
   --allow-chat 123456
   --poll-timeout 20s
@@ -638,6 +687,8 @@ func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAda
 		return newSlackAdapter(cfg, stderr, store)
 	case "discord":
 		return newDiscordAdapter(cfg, stderr)
+	case "whatsapp":
+		return newWhatsAppAdapter(cfg, stderr)
 	default:
 		return nil, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
 	}

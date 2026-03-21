@@ -16,14 +16,16 @@ import (
 )
 
 type IncomingMessage struct {
-	Chat         ChatRef
-	MessageID    string
-	UserID       string
-	Text         string
-	ChatType     string
-	ThreadID     string
-	PendingScope string
-	IsAppMention bool
+	Chat            ChatRef
+	MessageID       string
+	UserID          string
+	Text            string
+	ChatType        string
+	ThreadID        string
+	PendingScope    string
+	IsAppMention    bool
+	QuotedMessageID string
+	QuotedSenderID  string
 }
 
 func (m IncomingMessage) pendingKey() string {
@@ -51,6 +53,7 @@ type Router struct {
 
 type pendingCommand struct {
 	Command string
+	Options []string
 }
 
 func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string, slackCommandPrefix string, discordCommandPrefix string) *Router {
@@ -165,6 +168,9 @@ func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, ar
 	r.logInbound(ctx, message, "", "")
 	ref := strings.TrimSpace(args)
 	if ref == "" {
+		if isWhatsAppChat(chat) {
+			return r.promptForWhatsAppPaneChoice(ctx, message, "unmanage")
+		}
 		return r.promptForCommandInput(ctx, message, "unmanage")
 	}
 	record, err := r.service.Inspect(ctx, ref)
@@ -192,6 +198,9 @@ func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args
 	ref := strings.TrimSpace(args)
 	if ref == "" {
 		r.logInbound(ctx, message, "", "")
+		if isWhatsAppChat(chat) {
+			return r.promptForWhatsAppPaneChoice(ctx, message, "select")
+		}
 		return r.promptForCommandInput(ctx, message, "select")
 	}
 	record, err := r.service.Inspect(ctx, ref)
@@ -515,6 +524,7 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 }
 
 func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage, pending pendingCommand, args string) error {
+	args = r.resolvePendingArgs(pending, args)
 	switch pending.Command {
 	case "select":
 		return r.handleSelect(ctx, message, args)
@@ -547,6 +557,42 @@ func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMess
 	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", promptText, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
 }
 
+func (r *Router) promptForWhatsAppPaneChoice(ctx context.Context, message IncomingMessage, command string) error {
+	if err := r.registry.Refresh(ctx); err != nil {
+		return r.replyBus.Reply(ctx, message.Chat, "", "error", fmt.Sprintf("list panes failed: %v", err))
+	}
+	records := r.registry.All()
+	if len(records) == 0 {
+		return r.replyBus.Reply(ctx, message.Chat, "", "panes", "No managed panes.")
+	}
+
+	options := make([]string, 0, len(records))
+	lines := make([]string, 0, len(records)+2)
+	switch command {
+	case "select":
+		lines = append(lines, "Reply with a pane number or pane id to select:")
+	case "unmanage":
+		lines = append(lines, "Reply with a pane number or pane id to stop managing:")
+	default:
+		lines = append(lines, "Reply with a pane number or pane id:")
+	}
+	for idx, record := range records {
+		paneKey := record.Info.Target.PaneKey()
+		options = append(options, paneKey)
+		lines = append(lines, fmt.Sprintf("%d. %s (%s/%s)", idx+1, paneKey, record.Info.SessionName, record.Info.WindowName))
+	}
+	lines = append(lines, "You can also reply with %5 or default:%5 directly.")
+
+	r.setPending(message.pendingKey(), pendingCommand{
+		Command: command,
+		Options: options,
+	})
+	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", strings.Join(lines, "\n"), r.replyBus.adapter.PromptOptions(message, commandPromptSpec{
+		Message:     lines[0],
+		Placeholder: "1",
+	}))
+}
+
 func (r *Router) setPending(key string, pending pendingCommand) {
 	r.pendingMu.Lock()
 	defer r.pendingMu.Unlock()
@@ -567,6 +613,18 @@ func (r *Router) clearPending(key string) {
 	r.pendingMu.Lock()
 	defer r.pendingMu.Unlock()
 	delete(r.pending, key)
+}
+
+func (r *Router) resolvePendingArgs(pending pendingCommand, args string) string {
+	args = strings.TrimSpace(args)
+	if len(pending.Options) == 0 {
+		return args
+	}
+	index, err := strconv.Atoi(args)
+	if err != nil || index <= 0 || index > len(pending.Options) {
+		return args
+	}
+	return pending.Options[index-1]
 }
 
 func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, error) {
@@ -611,6 +669,10 @@ func (r *Router) allowed(chat ChatRef) bool {
 
 func (r *Router) helpText(chat ChatRef) string {
 	return helpTextForPlatform(chat.Platform, r.commandPrefix(chat), r.discordCommandPrefix)
+}
+
+func isWhatsAppChat(chat ChatRef) bool {
+	return strings.EqualFold(strings.TrimSpace(chat.Platform), "whatsapp")
 }
 
 func (r *Router) parseCommand(message IncomingMessage, text string) (string, string) {

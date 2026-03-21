@@ -34,6 +34,9 @@ func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chat ChatRef, paneKey s
 	if opts.ReplyToMessageID == "" {
 		opts.ReplyToMessageID = state.replyToMessageID
 	}
+	if opts.ReplyToSenderID == "" && strings.EqualFold(chat.Platform, "whatsapp") && opts.ReplyToMessageID != "" {
+		opts.ReplyToSenderID = chat.ChatID
+	}
 	if opts.ThreadID == "" {
 		opts.ThreadID = state.threadID
 	}
@@ -50,6 +53,7 @@ func (b *ReplyBus) ReplySnapshot(ctx context.Context, chat ChatRef, paneKey stri
 	state := b.prepareOutbound(ctx, chat, paneKey)
 	sendOpts := SendOptions{
 		ReplyToMessageID: state.replyToMessageID,
+		ReplyToSenderID:  chat.ChatID,
 		ThreadID:         state.threadID,
 	}
 	sendOpts = applyInteractionReplyContext(ctx, sendOpts)

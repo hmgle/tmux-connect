@@ -57,6 +57,12 @@ The core design choice is that tmux remains the source of truth for pane identit
 - Slack Socket Mode client wrapper
 - outbound Slack message and image upload operations
 
+### `internal/whatsapp`
+
+- WhatsApp multi-device client wrapper based on `whatsmeow`
+- local session database for paired device state
+- QR-based first-time login and outbound text/image send operations
+
 ### `internal/termrender`
 
 - render terminal snapshots as PNG images for Telegram delivery
@@ -74,7 +80,7 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 1. `tmux-connect daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
-3. Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection.
+3. Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
 4. Incoming platform messages are parsed into commands.
 6. Commands are routed to the current pane or an explicit pane target.
 7. Replies are sent back through the originating platform.
