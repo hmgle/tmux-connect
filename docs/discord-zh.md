@@ -112,6 +112,11 @@ platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["discord:123456789012345678"]  # 允许的频道/用户 ID
 snapshot_lines = 120
+plain_text_mode = "type"
+plain_text_echo = "snapshot"
+plain_text_echo_lines = 12
+plain_text_echo_delay = "250ms"
+plain_text_echo_timeout = "2s"
 follow_lines = 80
 follow_min_interval = "700ms"
 
@@ -127,6 +132,8 @@ export TMUXCONN_PLATFORM=discord
 export TMUXCONN_DISCORD_TOKEN="your-discord-bot-token"
 export TMUXCONN_DISCORD_COMMAND_PREFIX="tmux:"
 export TMUXCONN_DB_PATH="$HOME/.tmux-connect/tmux-connect.db"
+export TMUXCONN_PLAIN_TEXT_MODE=execute
+export TMUXCONN_PLAIN_TEXT_ECHO=snapshot
 ```
 
 #### 方式三：使用命令行参数
@@ -136,6 +143,8 @@ go run ./cmd/tmux-connect daemon run \
   --platform discord \
   --discord-token "your-discord-bot-token" \
   --discord-command-prefix "tmux:" \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
@@ -199,7 +208,7 @@ managed panes: 0
 
 在 Discord 中找到你的 Bot，直接发送消息即可。
 
-**注意**：私聊中，**纯文本消息会直接发送到当前选中的 tmux 窗格**，不会自动按 Enter。
+**注意**：私聊中，纯文本消息始终会发送到当前选中的 tmux 窗格。默认 `type` 模式只输入不按 Enter；如果配置了 `plain_text_mode = "execute"` 或 `--plain-text-mode execute`，裸文本会直接“发送并回车”，并可返回一段文本快照回显。
 
 ### 4.2 服务器频道
 

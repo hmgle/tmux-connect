@@ -36,6 +36,12 @@ go build ./cmd/tmux-connect
 
 ## CLI Quick Start
 
+配置可以通过 `--config PATH` 指定，默认读取
+`$XDG_CONFIG_HOME/tmux-connect/config.toml`，若未设置则回退到
+`$HOME/.config/tmux-connect/config.toml`。优先级是命令行参数 >
+环境变量 > TOML 配置文件。像 `--config`、`--socket`、`--json`
+这类全局参数需要放在子命令之前。
+
 列出 pane：
 
 ```bash
@@ -75,17 +81,17 @@ go run ./cmd/tmux-connect stream --pane %5
 本地 CLI 入口如下：
 
 ```bash
-tmux-connect [--socket NAME] [--json] list
-tmux-connect [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tmux-connect [--socket NAME] [--json] detach --pane %5
-tmux-connect [--socket NAME] [--json] inspect --pane %5
-tmux-connect [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tmux-connect [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tmux-connect [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tmux-connect [--socket NAME] [--json] enter --pane %5
-tmux-connect [--socket NAME] [--json] ctrl-c --pane %5
-tmux-connect [--socket NAME] serve [--listen 127.0.0.1:8080]
-tmux-connect [--socket NAME] daemon <run|doctor|status> [flags]
+tmux-connect [--config PATH] [--socket NAME] [--json] list
+tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
+tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
+tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
+tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
+tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -119,6 +125,11 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 ```
 
 ## Remote Daemon
+
+daemon 也支持通过 `--config PATH` 或默认
+`$XDG_CONFIG_HOME/tmux-connect/config.toml` 读取配置，未设置时会回退到
+`$HOME/.config/tmux-connect/config.toml`。命令行参数优先于环境变量，
+环境变量优先于 TOML 配置文件。
 
 启动 Telegram daemon：
 
@@ -165,6 +176,11 @@ go run ./cmd/tmux-connect daemon run \
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
 - `--snapshot-lines 120`
+- `--plain-text-mode type|execute`
+- `--plain-text-echo off|snapshot`
+- `--plain-text-echo-lines 12`
+- `--plain-text-echo-delay 250ms`
+- `--plain-text-echo-timeout 2s`
 - `--telegram-snapshot-theme dark|light`
 - `--telegram-snapshot-font-size 14`
 - `--telegram-snapshot-font-file /path/to/font.ttf`
@@ -172,6 +188,10 @@ go run ./cmd/tmux-connect daemon run \
 - `--follow-min-interval 700ms`
 - `--follow-debug`
 - `--telegram-api-base URL`
+
+对应的 TOML 字段是 `[daemon].plain_text_mode`、
+`[daemon].plain_text_echo`、`[daemon].plain_text_echo_lines`、
+`[daemon].plain_text_echo_delay` 和 `[daemon].plain_text_echo_timeout`。
 
 检查命令：
 
@@ -222,8 +242,8 @@ Discord 命令：
 - `/ctrlc` 或 `/ctrl-c`
 - `/follow on [interval]|off`
 
-Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本会直接发送到当前 pane，但不会自动附带回车；需要执行时，用 `/enter <text>` 或 `tmux: enter <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
-Discord 里建议优先使用 Slash Commands。频道中也支持 `tmux: panes` 这类前缀命令；纯文本只会在 Discord 私聊里被当作 pane 输入。
+Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本始终会指向当前 pane。默认仍是原始 `type` 模式，只输入不回车；如果设置 `--plain-text-mode execute` 或 `plain_text_mode = "execute"`，裸文本就会变成“发送并回车”。当 execute 模式配合 snapshot echo 使用时，daemon 会在 pane 输出发生可见变化后返回一段文本快照。若你在 execute 模式下仍想只输入不执行，使用 `/send <text>` 或 `tmux: send <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+Discord 里建议优先使用 Slash Commands。频道中也支持 `tmux: panes` 这类前缀命令；纯文本只会在 Discord 私聊里被当作 pane 输入，并沿用同样可配置的 `type`/`execute` 行为。
 
 ## Recovery Model
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Is
 
-tmux-connect is a Go-based local tmux bridge for controlling existing panes from a CLI, HTTP API, or Telegram relay daemon. It attaches to existing tmux panes only — it does not create them. Tmux is the source of truth for pane existence and managed metadata.
+tmux-connect is a Go-based local tmux bridge for controlling existing panes from a CLI, HTTP API, or multi-platform relay daemon. It attaches to existing tmux panes only — it does not create them. Tmux is the source of truth for pane existence and managed metadata.
 
 ## Build and Test Commands
 
@@ -24,9 +24,9 @@ Format with `gofmt`. There is no separate lint command configured.
 Three operating modes share a common service layer, all routed from `cmd/tmux-connect/main.go`:
 
 ```
-CLI commands ──→ tmuxconn.App ──→ tmuxconn.Service ──→ tmux.Client
-HTTP server  ──→ httpapi.Server ──→ tmuxconn.Service ──→ tmux.Client
-Telegram     ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.Client
+CLI commands  ──→ tmuxconn.App ──→ tmuxconn.Service ──→ tmux.Client
+HTTP server   ──→ httpapi.Server ──→ tmuxconn.Service ──→ tmux.Client
+Remote daemon ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.Client
 ```
 
 **`internal/tmuxconn/`** — Service layer. `Service` wraps tmux operations (list/attach/detach/inspect/snapshot/send/stream). `App` handles CLI argument parsing and tabular/JSON output.
@@ -35,9 +35,13 @@ Telegram     ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.C
 
 **`internal/httpapi/`** — RESTful HTTP server. Endpoints under `/v1/panes/*` plus `/healthz`. Streaming is SSE-based.
 
-**`internal/daemon/`** — Telegram relay. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence (shells out to `sqlite3` CLI, not an embedded driver). `ReplyBus`/`Messenger` handle reply continuity via `reply_to_message_id`. Schema is versioned via `PRAGMA user_version`.
+**`internal/daemon/`** — Multi-connector relay daemon. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence (shells out to `sqlite3` CLI, not an embedded driver). `ReplyBus`/`Messenger` handle reply continuity across Telegram, Slack, and Discord. Schema is versioned via `PRAGMA user_version`.
 
 **`internal/telegram/`** — Thin long-polling Telegram Bot API client.
+
+**`internal/slack/`** — Slack Socket Mode and Web API client wrappers.
+
+**`internal/discord/`** — Discord gateway and interaction client wrappers.
 
 ## Key Conventions
 
@@ -50,7 +54,7 @@ Telegram     ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.C
 ## Runtime Requirements
 
 - `tmux` installed with an existing target pane
-- Telegram daemon additionally needs `sqlite3` in PATH and a valid `TMUXCONN_TELEGRAM_TOKEN`
+- the daemon additionally needs `sqlite3` in PATH and valid platform tokens such as `TMUXCONN_TELEGRAM_TOKEN`, `TMUXCONN_SLACK_BOT_TOKEN`, or `TMUXCONN_DISCORD_TOKEN`
 - `TMUXCONN_TMUX_SOCKET` env var overrides the default tmux socket
 - Don't commit the root-level `tmux-connect` binary or `.cache/` directory
 

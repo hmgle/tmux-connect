@@ -142,6 +142,11 @@ db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
+plain_text_mode = "type"
+plain_text_echo = "snapshot"
+plain_text_echo_lines = 12
+plain_text_echo_delay = "250ms"
+plain_text_echo_timeout = "2s"
 follow_lines = 80
 follow_min_interval = "700ms"
 follow_debug = false
@@ -161,6 +166,11 @@ command_prefix = "tmux:"
 token = "discord-bot-token"
 command_prefix = "tmux:"
 ```
+
+By default, bare plain text stays in `type` mode: it is sent to the current
+pane without pressing Enter. Set `plain_text_mode = "execute"` to treat bare
+text as `send + Enter`, and keep `plain_text_echo = "snapshot"` if you want the
+daemon to reply with a short text snapshot after visible pane output changes.
 
 Start the Telegram daemon:
 
@@ -207,6 +217,11 @@ Common flags:
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
 - `--snapshot-lines 120`
+- `--plain-text-mode type|execute`
+- `--plain-text-echo off|snapshot`
+- `--plain-text-echo-lines 12`
+- `--plain-text-echo-delay 250ms`
+- `--plain-text-echo-timeout 2s`
 - `--telegram-snapshot-theme dark|light`
 - `--telegram-snapshot-font-size 14`
 - `--telegram-snapshot-font-file /path/to/font.ttf`
@@ -264,8 +279,8 @@ Discord commands:
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
-In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads is sent to the current pane without pressing Enter. Use `/enter <text>` or `tmux: enter <text>` to append Enter, and `/keys` or `tmux: keys` for tmux key names such as `C-c`, `PageUp`, `F1`, or `M-x`. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
-In Discord, slash commands are the primary control surface. Prefixed forms such as `tmux: panes` also work in channels. Plain text is treated as pane input only in DMs; channel replies should keep using slash or prefixed commands.
+In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads always targets the current pane. By default it stays in raw `type` mode; set `--plain-text-mode execute` or `plain_text_mode = "execute"` to send text and Enter in one step. When execute mode is combined with snapshot echo, the daemon replies with a short text snapshot after visible output changes. Use `/send <text>` or `tmux: send <text>` when you want raw text even while execute mode is enabled. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+In Discord, slash commands are the primary control surface. Prefixed forms such as `tmux: panes` also work in channels. Plain text is treated as pane input only in DMs, where it follows the same configurable `type` or `execute` behavior; channel replies should keep using slash or prefixed commands.
 
 ## Recovery Model
 

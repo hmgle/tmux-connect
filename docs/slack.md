@@ -37,6 +37,11 @@ Using TOML config:
 platform = "slack"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 snapshot_lines = 120
+plain_text_mode = "type"
+plain_text_echo = "snapshot"
+plain_text_echo_lines = 12
+plain_text_echo_delay = "250ms"
+plain_text_echo_timeout = "2s"
 follow_lines = 80
 follow_min_interval = "700ms"
 
@@ -55,6 +60,8 @@ go run ./cmd/tmux-connect daemon run \
   --platform slack \
   --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
   --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
@@ -66,6 +73,11 @@ Useful flags:
 - `--slack-command-prefix PREFIX` (default: `tmux:`)
 - `--db PATH`
 - `--snapshot-lines 120`
+- `--plain-text-mode type|execute`
+- `--plain-text-echo off|snapshot`
+- `--plain-text-echo-lines 12`
+- `--plain-text-echo-delay 250ms`
+- `--plain-text-echo-timeout 2s`
 - `--follow-lines 80`
 - `--follow-min-interval 700ms`
 - `--follow-debug`
@@ -77,6 +89,11 @@ Supported environment variables:
 - `TMUXCONN_SLACK_APP_TOKEN`
 - `TMUXCONN_SLACK_COMMAND_PREFIX`
 - `TMUXCONN_DB_PATH`
+- `TMUXCONN_PLAIN_TEXT_MODE`
+- `TMUXCONN_PLAIN_TEXT_ECHO`
+- `TMUXCONN_PLAIN_TEXT_ECHO_LINES`
+- `TMUXCONN_PLAIN_TEXT_ECHO_DELAY`
+- `TMUXCONN_PLAIN_TEXT_ECHO_TIMEOUT`
 - `TMUXCONN_FOLLOW_DEBUG`
 
 ## Health Checks
@@ -98,7 +115,7 @@ go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 - in a channel, mention the bot once to start a managed thread
 - follow-up commands can continue inside that thread without re-mentioning the bot
 - in channels, use an app mention as the command prefix, for example `@tmux-connect panes`
-- in DMs and managed threads, plain text sends directly to the current pane without pressing Enter
+- in DMs and managed threads, plain text always targets the current pane; default `type` mode keeps it raw, while execute mode sends text and Enter in one step
 - in DMs and managed threads, prefix explicit commands with `tmux:`, for example `tmux: select %5`, `tmux: keys C-c`, or `tmux: send /start`
 - slash-prefixed forms like `/panes` are still accepted by the router, but Slack may intercept them as real Slash Commands before they reach the bot
 
@@ -126,7 +143,7 @@ If `tmux: select`, `tmux: unmanage`, `tmux: send`, `tmux: keys`, or `tmux: follo
 
 - Slack replies are posted in a thread rooted at the triggering message
 - plain text is routed to the current pane only in DMs or managed threads; channel mainline chatter is never treated as pane input
-- plain text does not press Enter automatically; use `tmux: enter` after reviewing the command
+- plain text stays raw in the default `type` mode; set `plain_text_mode = "execute"` to make bare text send and press Enter, and keep `tmux: send <text>` for raw input when execute mode is enabled
 - `tmux: enter <text>` sends text and presses Enter in one step
 - use `tmux: keys ...` for tmux key names such as `C-c`, `Enter`, `Escape`, arrows, `PageUp`, `F1`-`F12`, `C-a`-`C-z`, or `M-x`
 - `tmux: snapshot` defaults to `image`; `tmux: snapshot text` forces plain text output

@@ -36,6 +36,11 @@ platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["discord:123456789012345678"]
 snapshot_lines = 120
+plain_text_mode = "type"
+plain_text_echo = "snapshot"
+plain_text_echo_lines = 12
+plain_text_echo_delay = "250ms"
+plain_text_echo_timeout = "2s"
 follow_lines = 80
 follow_min_interval = "700ms"
 
@@ -55,6 +60,8 @@ go run ./cmd/tmux-connect daemon run \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN" \
   --discord-command-prefix "tmux:" \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat discord:123456789012345678
 ```
@@ -67,6 +74,11 @@ Useful flags:
 - `--db PATH`
 - `--allow-chat discord:CHANNEL_OR_DM_ID`
 - `--snapshot-lines 120`
+- `--plain-text-mode type|execute`
+- `--plain-text-echo off|snapshot`
+- `--plain-text-echo-lines 12`
+- `--plain-text-echo-delay 250ms`
+- `--plain-text-echo-timeout 2s`
 - `--follow-lines 80`
 - `--follow-min-interval 700ms`
 - `--follow-debug`
@@ -77,6 +89,11 @@ Supported environment variables:
 - `TMUXCONN_DISCORD_TOKEN`
 - `TMUXCONN_DISCORD_COMMAND_PREFIX`
 - `TMUXCONN_DB_PATH`
+- `TMUXCONN_PLAIN_TEXT_MODE`
+- `TMUXCONN_PLAIN_TEXT_ECHO`
+- `TMUXCONN_PLAIN_TEXT_ECHO_LINES`
+- `TMUXCONN_PLAIN_TEXT_ECHO_DELAY`
+- `TMUXCONN_PLAIN_TEXT_ECHO_TIMEOUT`
 - `TMUXCONN_FOLLOW_DEBUG`
 
 ## Health Checks
@@ -95,7 +112,7 @@ go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 
 - use slash commands such as `/panes`, `/select`, `/snapshot`, or `/follow`
 - in guild channels, you can also use prefixed commands such as `tmux: panes`
-- in DMs, plain text sends directly to the current pane without pressing Enter
+- in DMs, plain text always targets the current pane; default `type` mode keeps it raw, while execute mode sends text and Enter in one step
 - in channels, plain text is ignored unless it is a slash command or prefixed command
 - when a command prompts for more input in a channel, keep using the configured prefix, for example `tmux: %5`
 
@@ -131,7 +148,7 @@ Prefixed channel equivalents:
 
 - slash commands are acknowledged immediately and the daemon edits the original interaction response when it has the result
 - Discord channel replies stay scoped to the same channel conversation
-- DMs treat plain text as pane input; use `/enter` to execute after reviewing text
+- DMs treat plain text as pane input; default `type` mode keeps it raw, while `plain_text_mode = "execute"` makes bare text send and press Enter
 - snapshot defaults to image when rendering succeeds; text mode is still available
 - current pane bindings and message continuity survive daemon restarts through SQLite
 - allowlists should prefer `discord:<channel_id>` or `discord:<dm_id>` entries to avoid collisions with other platforms

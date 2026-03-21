@@ -130,7 +130,7 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 | `/select <pane>` | 选择当前聊天使用的 pane |
 | `/current` | 查看当前 pane |
 | `/snapshot [lines] [image\|text]` | 查看最近输出 |
-| 直接发送文本 | 向当前 pane 发送文本，不自动回车 |
+| 直接发送文本 | 默认向当前 pane 发送原始文本；开启 execute 模式后会直接发送并回车 |
 | `/send <text>` | 显式发送文本，适合文本本身以 `/` 开头 |
 | `/keys <key...>` | 发送 tmux 组合键或功能键，如 `C-c`、`Enter`、`PageUp`、`F1`、`M-x` |
 | `/enter [text]` | 发送回车；带文本时等于“发送文本并回车” |
@@ -143,8 +143,9 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 说明：
 
 - `/select` 会在 pane 尚未管理时自动 `attach`
-- 直接发送的文本会进入当前 pane，但不会自动附带回车
-- 需要执行时，先发送文本，再发 `/enter`
+- 直接发送的文本默认会进入当前 pane，但不会自动附带回车
+- 如果设置 `--plain-text-mode execute`，直接发送文本就会变成“发送并回车”，并可配合文本快照回显
+- 在默认 `type` 模式下，需要执行时，先发送文本，再发 `/enter`
 - 也可以直接用 `/enter make test` 这样的一步写法
 - `/keys` 用来发送 tmux key name，比如 `C-c`、`Enter`、`Escape`、方向键、`PageUp`、`F1-F12`、`C-a` 到 `C-z`、`M-x`
 - 如果文本本身以 `/` 开头，使用 `/send <text>`
@@ -223,6 +224,7 @@ tmux-connect daemon run \
 | `--allow-chat` | 允许访问的 chat ID，可重复传入 |
 | `--poll-timeout` | 长轮询超时，默认 `20s` |
 | `--snapshot-lines` | `/snapshot` 默认行数，默认 `120` |
+| `--plain-text-mode` | 纯文本输入行为：`type` 或 `execute` |
 | `--telegram-snapshot-theme` | `dark` 或 `light` |
 | `--telegram-snapshot-font-size` | 图片字号，默认 `14` |
 | `--telegram-snapshot-font-file` | 自定义字体文件 |
@@ -230,6 +232,11 @@ tmux-connect daemon run \
 | `--follow-min-interval` | `/follow` 推送最小间隔，默认 `700ms` |
 | `--follow-debug` | 输出 follow 调试日志 |
 | `--telegram-api-base` | 自定义 Telegram Bot API 地址 |
+
+如果开启 `--plain-text-mode execute`，还可以继续用
+`--plain-text-echo off|snapshot`、`--plain-text-echo-lines`、
+`--plain-text-echo-delay` 和 `--plain-text-echo-timeout`
+控制执行后的文本快照回显行为。
 
 运行约束：
 
