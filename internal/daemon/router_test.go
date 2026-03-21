@@ -101,12 +101,18 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 	if m.Platform() == "discord" {
 		return decorateDiscordMessage(kind, text, opts)
 	}
+	if m.Platform() == "whatsapp" {
+		return decorateWhatsAppMessage(kind, text, opts)
+	}
 	return decorateTelegramMessage(kind, text, opts)
 }
 
 func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
 	if m.Platform() == "slack" {
 		return SendOptions{ThreadID: message.replyThreadID()}
+	}
+	if m.Platform() == "whatsapp" {
+		return SendOptions{ReplyToMessageID: message.MessageID, ReplyToSenderID: message.Chat.ChatID}
 	}
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
@@ -359,6 +365,10 @@ func discordChat(id string) ChatRef {
 	return ChatRef{Platform: "discord", ChatID: id}
 }
 
+func whatsappChat(id string) ChatRef {
+	return ChatRef{Platform: "whatsapp", ChatID: id}
+}
+
 func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage {
 	return IncomingMessage{
 		Chat:      telegramChat(chatID),
@@ -402,6 +412,15 @@ func discordMessage(chatID string, messageID string, text string) IncomingMessag
 		Text:         text,
 		ThreadID:     chatID,
 		PendingScope: chatID,
+	}
+}
+
+func whatsappMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      whatsappChat(chatID),
+		MessageID: messageID,
+		Text:      text,
+		ChatType:  "private",
 	}
 }
 
@@ -1486,6 +1505,57 @@ func TestHelpTextUsesDiscordSlashCommands(t *testing.T) {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("helpTextForPlatform(discord) unexpectedly contains %q in %q", unwanted, text)
 		}
+	}
+}
+
+func TestHelpTextUsesWhatsAppReplyGuidance(t *testing.T) {
+	t.Parallel()
+
+	text := helpTextForPlatform("whatsapp", "", "tmux:")
+	for _, want := range []string{`"/panes"`, `"/follow on"`, `replying with "1" or "2"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("helpTextForPlatform(whatsapp) missing %q in %q", want, text)
+		}
+	}
+}
+
+func TestRouterWhatsAppSelectPromptSupportsNumericReply(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record2 := record
+	record2.Info.Target.PaneID = "%7"
+	service.records[record2.Info.Target.PaneKey()] = record2
+	messenger := &fakeMessenger{platform: "whatsapp"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, whatsappMessage("8613800000000@s.whatsapp.net", "wamid-1", "/select")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	prompt := messenger.snapshot()[0]
+	if !strings.Contains(prompt.Text, "1. default:%5") || !strings.Contains(prompt.Text, "2. default:%7") {
+		t.Fatalf("prompt text = %q, want numbered pane options", prompt.Text)
+	}
+	if prompt.ReplyToMessageID != 0 {
+		t.Fatalf("prompt reply_to = %d, want whatsapp adapter to leave numeric parse in text only", prompt.ReplyToMessageID)
+	}
+
+	if err := router.HandleMessage(ctx, whatsappMessage("8613800000000@s.whatsapp.net", "wamid-2", "2")); err != nil {
+		t.Fatalf("HandleMessage(select reply) error = %v", err)
+	}
+	current, err := store.CurrentPane(ctx, whatsappChat("8613800000000@s.whatsapp.net"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%7" {
+		t.Fatalf("current = %q, want default:%%7", current)
 	}
 }
 

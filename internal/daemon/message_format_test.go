@@ -57,3 +57,15 @@ func TestDecorateDiscordMessageUsesEmbedForSnapshot(t *testing.T) {
 		t.Fatalf("embed = %#v, want info embed with description", opts.Embed)
 	}
 }
+
+func TestDecorateWhatsAppMessageUsesCodeBlockForSnapshot(t *testing.T) {
+	t.Parallel()
+
+	text, opts := decorateWhatsAppMessage("snapshot", "line 1\nline 2", SendOptions{})
+	if text != "```line 1\nline 2```" {
+		t.Fatalf("text = %q, want WhatsApp code block", text)
+	}
+	if opts.Format != "" {
+		t.Fatalf("format = %q, want plain format", opts.Format)
+	}
+}

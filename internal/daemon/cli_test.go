@@ -243,6 +243,59 @@ func TestParseConfigFlagsOverrideFile(t *testing.T) {
 	}
 }
 
+func TestParseConfigReadsWhatsAppDefaults(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "tmuxconn.db")
+	cfg, err := parseConfigWithFile([]string{"--platform", "whatsapp", "--db", dbPath}, &bytes.Buffer{}, true, config.Daemon{
+		WhatsApp: config.WhatsApp{
+			DeviceName:   stringPtr("ops-phone"),
+			AutoMarkRead: boolPtr(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.WhatsAppSessionDB != filepath.Join(filepath.Dir(dbPath), "whatsapp-device.db") {
+		t.Fatalf("WhatsAppSessionDB = %q", cfg.WhatsAppSessionDB)
+	}
+	if cfg.WhatsAppDeviceName != "ops-phone" {
+		t.Fatalf("WhatsAppDeviceName = %q, want ops-phone", cfg.WhatsAppDeviceName)
+	}
+	if cfg.WhatsAppAutoMarkRead {
+		t.Fatal("WhatsAppAutoMarkRead = true, want false")
+	}
+	if cfg.FollowMinGap != 2*time.Second {
+		t.Fatalf("FollowMinGap = %s, want 2s default for whatsapp", cfg.FollowMinGap)
+	}
+}
+
+func TestParseConfigWhatsAppEnvOverridesFile(t *testing.T) {
+	t.Setenv("TMUXCONN_WHATSAPP_SESSION_DB", filepath.Join(t.TempDir(), "custom-wa.db"))
+	t.Setenv("TMUXCONN_WHATSAPP_DEVICE_NAME", "field-phone")
+	t.Setenv("TMUXCONN_WHATSAPP_AUTO_MARK_READ", "false")
+
+	cfg, err := parseConfigWithFile([]string{"--platform", "whatsapp", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		WhatsApp: config.WhatsApp{
+			SessionDB:    stringPtr("file-wa.db"),
+			DeviceName:   stringPtr("file-phone"),
+			AutoMarkRead: boolPtr(true),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if !strings.HasSuffix(cfg.WhatsAppSessionDB, "custom-wa.db") {
+		t.Fatalf("WhatsAppSessionDB = %q, want env override", cfg.WhatsAppSessionDB)
+	}
+	if cfg.WhatsAppDeviceName != "field-phone" {
+		t.Fatalf("WhatsAppDeviceName = %q, want env override", cfg.WhatsAppDeviceName)
+	}
+	if cfg.WhatsAppAutoMarkRead {
+		t.Fatal("WhatsAppAutoMarkRead = true, want false")
+	}
+}
+
 func TestParseConfigRejectsInvalidPlainTextMode(t *testing.T) {
 	t.Parallel()
 
@@ -592,6 +645,30 @@ func TestRunDoctorDiscordPrintsIntentHint(t *testing.T) {
 	}
 }
 
+func TestRunDoctorWhatsAppPrintsLoginHint(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
+		"--platform", "whatsapp",
+		"--whatsapp-session-db", filepath.Join(t.TempDir(), "whatsapp-device.db"),
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"whatsapp session db: ok",
+		"pairing QR code",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("runDoctor() output = %q, want %q", output, want)
+		}
+	}
+}
+
 func writeTempFont(t *testing.T, name string) string {
 	t.Helper()
 
@@ -611,5 +688,9 @@ func intPtr(value int) *int {
 }
 
 func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func boolPtr(value bool) *bool {
 	return &value
 }

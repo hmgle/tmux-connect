@@ -53,6 +53,7 @@ type EmbedData struct {
 
 type SendOptions struct {
 	ReplyToMessageID string
+	ReplyToSenderID  string
 	ThreadID         string
 	ReplyMarkup      any
 	Format           MessageFormat

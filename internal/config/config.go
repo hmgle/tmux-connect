@@ -44,6 +44,7 @@ type Daemon struct {
 	Telegram             Telegram  `toml:"telegram"`
 	Slack                Slack     `toml:"slack"`
 	Discord              Discord   `toml:"discord"`
+	WhatsApp             WhatsApp  `toml:"whatsapp"`
 }
 
 type Telegram struct {
@@ -63,6 +64,12 @@ type Slack struct {
 type Discord struct {
 	Token         *string `toml:"token"`
 	CommandPrefix *string `toml:"command_prefix"`
+}
+
+type WhatsApp struct {
+	SessionDB    *string `toml:"session_db"`
+	DeviceName   *string `toml:"device_name"`
+	AutoMarkRead *bool   `toml:"auto_mark_read"`
 }
 
 type Loaded struct {
