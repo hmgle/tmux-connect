@@ -54,6 +54,10 @@ type pendingCommand struct {
 }
 
 func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string, slackCommandPrefix string, discordCommandPrefix string) *Router {
+	return NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, snapshotLines, allowChats, slackCommandPrefix, discordCommandPrefix, PlainTextConfig{})
+}
+
+func NewRouterWithPlainTextConfig(service paneService, registry *PaneRegistry, store *Store, replyBus *ReplyBus, follow *FollowManager, snapshotLines int, allowChats []string, slackCommandPrefix string, discordCommandPrefix string, plainText PlainTextConfig) *Router {
 	allowed := make(map[string]struct{}, len(allowChats))
 	for _, chatID := range allowChats {
 		allowed[strings.TrimSpace(chatID)] = struct{}{}
@@ -74,16 +78,12 @@ func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyB
 		replyBus:             replyBus,
 		follow:               follow,
 		snapshotLines:        snapshotLines,
-		plainText:            normalizePlainTextConfig(PlainTextConfig{}),
+		plainText:            normalizePlainTextConfig(plainText),
 		slackCommandPrefix:   slackCommandPrefix,
 		discordCommandPrefix: discordCommandPrefix,
 		allowChats:           allowed,
 		pending:              make(map[string]pendingCommand),
 	}
-}
-
-func (r *Router) SetPlainTextConfig(cfg PlainTextConfig) {
-	r.plainText = normalizePlainTextConfig(cfg)
 }
 
 func (r *Router) commandPrefix(chat ChatRef) string {
@@ -326,6 +326,10 @@ func (r *Router) sendText(ctx context.Context, message IncomingMessage, text str
 //
 //	baseline snapshot -> send text + Enter -> bounded poll for visible change
 //	                 \-> timeout/no change => explicit fallback message
+//
+// "Visible change" here is intentionally heuristic. We compare plain tmux
+// capture-pane text snapshots, which is good enough for relay-mode operator
+// feedback but is not the same thing as shell command completion detection.
 func (r *Router) executeText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
 	chat := message.Chat
 	paneKey, err := r.requireCurrentPane(ctx, chat)
@@ -381,6 +385,9 @@ func (r *Router) waitForExecuteSnapshot(ctx context.Context, paneKey string, bas
 			lastErr = err
 		} else {
 			lastBody = body
+			// Known limitation: exact string inequality is a relay-mode heuristic
+			// for "something visibly changed in the pane", not a guarantee that the
+			// command produced meaningful new output.
 			if body != baseline {
 				return body, true, nil
 			}

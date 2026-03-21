@@ -580,8 +580,7 @@ func TestRouterPlainTextExecuteSendsTextAndReturnsSnapshot(t *testing.T) {
 	}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -626,8 +625,7 @@ func TestRouterPlainTextExecuteTimeoutReturnsNoVisibleOutputMessage(t *testing.T
 	}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -664,8 +662,7 @@ func TestRouterPlainTextExecuteSnapshotFailureReturnsErrorAfterSend(t *testing.T
 	service.snapshotSequence = []snapshotResult{{err: fmt.Errorf("tmux down")}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -703,8 +700,7 @@ func TestRouterPlainTextExecuteSendFailureReturnsError(t *testing.T) {
 	service.snapshotSequence = []snapshotResult{{body: "before"}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -900,8 +896,7 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 	}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
@@ -1728,8 +1723,7 @@ func TestRouterSlackPlainTextExecuteInManagedThreadReturnsSnapshot(t *testing.T)
 	}
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -1769,8 +1763,7 @@ func TestRouterDiscordDMPlainTextExecuteReturnsSnapshot(t *testing.T) {
 	}
 	messenger := &fakeMessenger{platform: "discord"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
-	router.SetPlainTextConfig(PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
