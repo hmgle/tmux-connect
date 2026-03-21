@@ -84,18 +84,7 @@ func (c *Client) Run(ctx context.Context, autoMarkRead bool, handler func(contex
 			if !ok {
 				return
 			}
-			go func() {
-				runCtx := context.Background()
-				if err := handler(runCtx, msg); err != nil {
-					fmt.Fprintf(c.stderr, "whatsapp message error: %v\n", err)
-					return
-				}
-				if autoMarkRead {
-					if err := c.markRead(runCtx, msg); err != nil {
-						fmt.Fprintf(c.stderr, "whatsapp mark read error: %v\n", err)
-					}
-				}
-			}()
+			go c.handleMessageEvent(ctx, autoMarkRead, msg, handler)
 		}
 	})
 
@@ -115,6 +104,18 @@ func (c *Client) Run(ctx context.Context, autoMarkRead bool, handler func(contex
 	<-ctx.Done()
 	c.client.Disconnect()
 	return nil
+}
+
+func (c *Client) handleMessageEvent(ctx context.Context, autoMarkRead bool, msg MessageEvent, handler func(context.Context, MessageEvent) error) {
+	if err := handler(ctx, msg); err != nil {
+		fmt.Fprintf(c.stderr, "whatsapp message error: %v\n", err)
+		return
+	}
+	if autoMarkRead {
+		if err := c.markRead(ctx, msg); err != nil {
+			fmt.Fprintf(c.stderr, "whatsapp mark read error: %v\n", err)
+		}
+	}
 }
 
 func (c *Client) SendText(ctx context.Context, chatID string, text string, replyToMessageID string, replyToSenderID string) (string, error) {
