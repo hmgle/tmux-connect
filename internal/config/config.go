@@ -28,17 +28,22 @@ type Serve struct {
 }
 
 type Daemon struct {
-	Platform          *string   `toml:"platform"`
-	DB                *string   `toml:"db"`
-	AllowChats        *[]string `toml:"allow_chats"`
-	PollTimeout       *string   `toml:"poll_timeout"`
-	SnapshotLines     *int      `toml:"snapshot_lines"`
-	FollowLines       *int      `toml:"follow_lines"`
-	FollowMinInterval *string   `toml:"follow_min_interval"`
-	FollowDebug       *bool     `toml:"follow_debug"`
-	Telegram          Telegram  `toml:"telegram"`
-	Slack             Slack     `toml:"slack"`
-	Discord           Discord   `toml:"discord"`
+	Platform             *string   `toml:"platform"`
+	DB                   *string   `toml:"db"`
+	AllowChats           *[]string `toml:"allow_chats"`
+	PollTimeout          *string   `toml:"poll_timeout"`
+	SnapshotLines        *int      `toml:"snapshot_lines"`
+	PlainTextMode        *string   `toml:"plain_text_mode"`
+	PlainTextEcho        *string   `toml:"plain_text_echo"`
+	PlainTextEchoLines   *int      `toml:"plain_text_echo_lines"`
+	PlainTextEchoDelay   *string   `toml:"plain_text_echo_delay"`
+	PlainTextEchoTimeout *string   `toml:"plain_text_echo_timeout"`
+	FollowLines          *int      `toml:"follow_lines"`
+	FollowMinInterval    *string   `toml:"follow_min_interval"`
+	FollowDebug          *bool     `toml:"follow_debug"`
+	Telegram             Telegram  `toml:"telegram"`
+	Slack                Slack     `toml:"slack"`
+	Discord              Discord   `toml:"discord"`
 }
 
 type Telegram struct {
@@ -66,11 +71,15 @@ type Loaded struct {
 }
 
 func DefaultPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user config dir: %w", err)
+	if dir := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); dir != "" {
+		return filepath.Join(dir, DefaultDirName, "config.toml"), nil
 	}
-	return filepath.Join(dir, DefaultDirName, "config.toml"), nil
+
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home == "" {
+		return "", fmt.Errorf("resolve home dir: HOME is not set")
+	}
+	return filepath.Join(home, ".config", DefaultDirName, "config.toml"), nil
 }
 
 func Load(path string) (Loaded, error) {

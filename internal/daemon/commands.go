@@ -65,7 +65,7 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 	switch {
 	case platform == "slack" && commandPrefix != "":
 		lines = append(lines, fmt.Sprintf(`In channels, mention the bot with a command such as "@bot panes". In DMs and managed threads, prefix commands with %q, for example %q.`, commandPrefix, commandPrefix+" panes"))
-		lines = append(lines, fmt.Sprintf("In DMs and managed threads, plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
+		lines = append(lines, fmt.Sprintf("In DMs and managed threads, plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
 	case platform == "discord":
 		prefix := strings.TrimSpace(discordCommandPrefix)
@@ -74,10 +74,10 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 		}
 		lines = append(lines, `Use slash commands such as "/panes" for explicit actions.`)
 		lines = append(lines, fmt.Sprintf(`In channels, you can also prefix text commands with %q, for example %q.`, prefix, prefix+" panes"))
-		lines = append(lines, fmt.Sprintf(`In DMs, plain text sends to the current pane. Use %q to force a command.`, prefix+" current"))
+		lines = append(lines, fmt.Sprintf(`In DMs, plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text or %q to force a command.`, "/send <text>", prefix+" current"))
 		lines = append(lines, `When the text itself starts with "/", use "/send <text>" to pass it through.`)
 	default:
-		lines = append(lines, fmt.Sprintf("Plain text sends to the current pane. Use %q to execute and %q for control keys.", formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
+		lines = append(lines, fmt.Sprintf("Plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
 	}
 	usagePrefix := commandPrefix

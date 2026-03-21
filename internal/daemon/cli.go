@@ -27,6 +27,11 @@ type Config struct {
 	AllowChats           []string
 	PollTimeout          time.Duration
 	SnapshotLines        int
+	PlainTextMode        plainTextMode
+	PlainTextEcho        plainTextEchoMode
+	PlainTextEchoLines   int
+	PlainTextEchoDelay   time.Duration
+	PlainTextEchoTimeout time.Duration
 	SnapshotTheme        string
 	SnapshotFontSize     float64
 	SnapshotFontFile     string
@@ -45,6 +50,28 @@ type Runtime struct {
 	follow   *FollowManager
 	adapter  platformAdapter
 	stderr   io.Writer
+}
+
+type plainTextMode string
+
+const (
+	plainTextModeType    plainTextMode = "type"
+	plainTextModeExecute plainTextMode = "execute"
+)
+
+type plainTextEchoMode string
+
+const (
+	plainTextEchoOff      plainTextEchoMode = "off"
+	plainTextEchoSnapshot plainTextEchoMode = "snapshot"
+)
+
+type PlainTextConfig struct {
+	Mode        plainTextMode
+	Echo        plainTextEchoMode
+	EchoLines   int
+	EchoDelay   time.Duration
+	EchoTimeout time.Duration
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
@@ -187,6 +214,13 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		follow.SetDebugWriter(stderr)
 	}
 	router := NewRouter(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, cfg.DiscordCommandPrefix)
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        cfg.PlainTextMode,
+		Echo:        cfg.PlainTextEcho,
+		EchoLines:   cfg.PlainTextEchoLines,
+		EchoDelay:   cfg.PlainTextEchoDelay,
+		EchoTimeout: cfg.PlainTextEchoTimeout,
+	})
 
 	return &Runtime{
 		cfg:      cfg,
@@ -260,6 +294,32 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	defaultSnapshotLines := intValue(fileCfg.SnapshotLines, 120)
+	defaultPlainTextMode := envOrDefault("TMUXCONN_PLAIN_TEXT_MODE", stringValue(fileCfg.PlainTextMode, string(plainTextModeType)))
+	defaultPlainTextEcho := envOrDefault("TMUXCONN_PLAIN_TEXT_ECHO", stringValue(fileCfg.PlainTextEcho, string(plainTextEchoSnapshot)))
+	defaultPlainTextEchoLines := intValue(fileCfg.PlainTextEchoLines, 12)
+	if value, ok, err := envIntValue("TMUXCONN_PLAIN_TEXT_ECHO_LINES"); err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	} else if ok {
+		defaultPlainTextEchoLines = value
+	}
+	defaultPlainTextEchoDelay, err := durationValue("[daemon].plain_text_echo_delay", fileCfg.PlainTextEchoDelay, 250*time.Millisecond)
+	if err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	}
+	if value, ok, err := envDurationValue("TMUXCONN_PLAIN_TEXT_ECHO_DELAY", defaultPlainTextEchoDelay); err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	} else if ok {
+		defaultPlainTextEchoDelay = value
+	}
+	defaultPlainTextEchoTimeout, err := durationValue("[daemon].plain_text_echo_timeout", fileCfg.PlainTextEchoTimeout, 2*time.Second)
+	if err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	}
+	if value, ok, err := envDurationValue("TMUXCONN_PLAIN_TEXT_ECHO_TIMEOUT", defaultPlainTextEchoTimeout); err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	} else if ok {
+		defaultPlainTextEchoTimeout = value
+	}
 	defaultSnapshotTheme := envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
 	defaultFollowLines := intValue(fileCfg.FollowLines, 80)
 	defaultFollowMinGap, err := durationValue("[daemon].follow_min_interval", fileCfg.FollowMinInterval, 700*time.Millisecond)
@@ -270,6 +330,8 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if envValue, ok := envBoolValue("TMUXCONN_FOLLOW_DEBUG"); ok {
 		defaultFollowDebug = envValue
 	}
+	plainTextModeValue := defaultPlainTextMode
+	plainTextEchoValue := defaultPlainTextEcho
 
 	fs.StringVar(&cfg.Platform, "platform", defaultPlatform, "remote platform (telegram|slack|discord)")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, "")), "telegram bot token")
@@ -281,6 +343,11 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
+	fs.StringVar(&plainTextModeValue, "plain-text-mode", defaultPlainTextMode, "plain text behavior: type|execute")
+	fs.StringVar(&plainTextEchoValue, "plain-text-echo", defaultPlainTextEcho, "plain text execute echo: off|snapshot")
+	fs.IntVar(&cfg.PlainTextEchoLines, "plain-text-echo-lines", defaultPlainTextEchoLines, "line count for execute text snapshots")
+	fs.DurationVar(&cfg.PlainTextEchoDelay, "plain-text-echo-delay", defaultPlainTextEchoDelay, "settle delay between execute snapshot polls")
+	fs.DurationVar(&cfg.PlainTextEchoTimeout, "plain-text-echo-timeout", defaultPlainTextEchoTimeout, "maximum wait for execute output before fallback")
 	fs.StringVar(&cfg.SnapshotTheme, "telegram-snapshot-theme", defaultSnapshotTheme, "theme for Telegram snapshot images (dark|light)")
 	fs.Float64Var(&cfg.SnapshotFontSize, "telegram-snapshot-font-size", snapshotFontSize, "font size for Telegram snapshot images")
 	fs.StringVar(&cfg.SnapshotFontFile, "telegram-snapshot-font-file", envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, "")), "path to a .ttf or .otf font for Telegram snapshot images")
@@ -297,6 +364,8 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if cfg.Platform == "" {
 		cfg.Platform = "telegram"
 	}
+	cfg.PlainTextMode = plainTextMode(plainTextModeValue)
+	cfg.PlainTextEcho = plainTextEchoMode(plainTextEchoValue)
 	switch {
 	case flagWasSet(fs, "allow-chat"):
 		cfg.AllowChats = append([]string(nil), allowChats.values...)
@@ -308,6 +377,21 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	}
 	if cfg.SnapshotLines <= 0 {
 		return Config{}, tmuxconn.UsageError("--snapshot-lines must be > 0")
+	}
+	if cfg.PlainTextMode, err = parsePlainTextMode(string(cfg.PlainTextMode)); err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	}
+	if cfg.PlainTextEcho, err = parsePlainTextEchoMode(string(cfg.PlainTextEcho)); err != nil {
+		return Config{}, tmuxconn.UsageError("%v", err)
+	}
+	if cfg.PlainTextEchoLines <= 0 {
+		return Config{}, tmuxconn.UsageError("--plain-text-echo-lines must be > 0")
+	}
+	if cfg.PlainTextEchoDelay <= 0 {
+		return Config{}, tmuxconn.UsageError("--plain-text-echo-delay must be > 0")
+	}
+	if cfg.PlainTextEchoTimeout <= 0 {
+		return Config{}, tmuxconn.UsageError("--plain-text-echo-timeout must be > 0")
 	}
 	if err := termrender.ValidateOptions(snapshotRenderOptions(cfg)); err != nil {
 		return Config{}, tmuxconn.UsageError("%v", err)
@@ -384,6 +468,30 @@ func envFloat64(key string, fallback float64) (float64, error) {
 	return parsed, nil
 }
 
+func envIntValue(key string) (int, bool, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return 0, false, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, true, fmt.Errorf("%s must be an integer", key)
+	}
+	return parsed, true, nil
+}
+
+func envDurationValue(key string, fallback time.Duration) (time.Duration, bool, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, false, nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, true, fmt.Errorf("%s must be a duration", key)
+	}
+	return parsed, true, nil
+}
+
 func envBoolValue(key string) (bool, bool) {
 	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
 	if value == "" {
@@ -450,6 +558,43 @@ func durationValue(fieldName string, value *string, fallback time.Duration) (tim
 	return parsed, nil
 }
 
+func parsePlainTextMode(value string) (plainTextMode, error) {
+	switch mode := plainTextMode(strings.TrimSpace(strings.ToLower(value))); mode {
+	case plainTextModeType, plainTextModeExecute:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("--plain-text-mode must be type or execute")
+	}
+}
+
+func parsePlainTextEchoMode(value string) (plainTextEchoMode, error) {
+	switch mode := plainTextEchoMode(strings.TrimSpace(strings.ToLower(value))); mode {
+	case plainTextEchoOff, plainTextEchoSnapshot:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("--plain-text-echo must be off or snapshot")
+	}
+}
+
+func normalizePlainTextConfig(cfg PlainTextConfig) PlainTextConfig {
+	if cfg.Mode == "" {
+		cfg.Mode = plainTextModeType
+	}
+	if cfg.Echo == "" {
+		cfg.Echo = plainTextEchoSnapshot
+	}
+	if cfg.EchoLines <= 0 {
+		cfg.EchoLines = 12
+	}
+	if cfg.EchoDelay <= 0 {
+		cfg.EchoDelay = 250 * time.Millisecond
+	}
+	if cfg.EchoTimeout <= 0 {
+		cfg.EchoTimeout = 2 * time.Second
+	}
+	return cfg
+}
+
 func printUsage(w io.Writer) {
 	fmt.Fprint(w, `tmux-connect daemon manages remote relay access for tmux panes.
 
@@ -472,6 +617,11 @@ Common flags:
   --allow-chat 123456
   --poll-timeout 20s
   --snapshot-lines 120
+  --plain-text-mode type
+  --plain-text-echo snapshot
+  --plain-text-echo-lines 12
+  --plain-text-echo-delay 250ms
+  --plain-text-echo-timeout 2s
   --telegram-snapshot-theme dark
   --telegram-snapshot-font-size 14
   --telegram-snapshot-font-file /path/to/font.ttf

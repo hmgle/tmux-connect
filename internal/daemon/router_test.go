@@ -142,22 +142,30 @@ func (m *fakeMessenger) snapshot() []sentMessage {
 }
 
 type fakePaneService struct {
-	records       map[string]tmuxconn.PaneRecord
-	sub           *tmux.Subscription
-	snapshotText  string
-	snapshotRich  string
-	initialOutput string
-	sendCalls     []sendCall
-	keyCalls      []keyCall
-	listCalls     int
-	attachCalls   int
-	detachCalls   int
+	records          map[string]tmuxconn.PaneRecord
+	sub              *tmux.Subscription
+	snapshotText     string
+	snapshotRich     string
+	snapshotSequence []snapshotResult
+	snapshotCalls    int
+	sendErr          error
+	initialOutput    string
+	sendCalls        []sendCall
+	keyCalls         []keyCall
+	listCalls        int
+	attachCalls      int
+	detachCalls      int
 }
 
 type sendCall struct {
 	paneKey   string
 	text      string
 	sendEnter bool
+}
+
+type snapshotResult struct {
+	body string
+	err  error
 }
 
 type keyCall struct {
@@ -286,6 +294,12 @@ func (s *fakePaneService) Inspect(_ context.Context, ref string) (tmuxconn.PaneR
 }
 
 func (s *fakePaneService) Snapshot(context.Context, string, int) (string, error) {
+	if s.snapshotCalls < len(s.snapshotSequence) {
+		result := s.snapshotSequence[s.snapshotCalls]
+		s.snapshotCalls++
+		return result.body, result.err
+	}
+	s.snapshotCalls++
 	return s.snapshotText, nil
 }
 
@@ -295,6 +309,9 @@ func (s *fakePaneService) SnapshotRich(context.Context, string, int) (string, er
 
 func (s *fakePaneService) Send(context.Context, string, string, bool) error { return nil }
 func (s *fakePaneService) SendManaged(_ context.Context, paneKey string, text string, sendEnter bool) error {
+	if s.sendErr != nil {
+		return s.sendErr
+	}
 	s.sendCalls = append(s.sendCalls, sendCall{paneKey: paneKey, text: text, sendEnter: sendEnter})
 	return nil
 }
@@ -547,6 +564,171 @@ func TestRouterPlainTextSendsToCurrentPane(t *testing.T) {
 	}
 }
 
+func TestRouterPlainTextExecuteSendsTextAndReturnsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.snapshotSequence = []snapshotResult{
+		{body: "before"},
+		{body: "before"},
+		{body: "after\nok"},
+	}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text execute) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls = %#v, want one send", service.sendCalls)
+	}
+	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" || !service.sendCalls[0].sendEnter {
+		t.Fatalf("send call = %#v, want plain text execute with Enter", service.sendCalls[0])
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "[default:%5]") || !strings.Contains(last.Text, "after\nok") {
+		t.Fatalf("last message = %q, want execute snapshot", last.Text)
+	}
+}
+
+func TestRouterPlainTextExecuteTimeoutReturnsNoVisibleOutputMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.snapshotText = "same"
+	service.snapshotSequence = []snapshotResult{
+		{body: "same"},
+		{body: "same"},
+		{body: "same"},
+	}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 3 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text execute) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "no visible output yet") {
+		t.Fatalf("last message = %q, want no visible output fallback", last.Text)
+	}
+	if !strings.Contains(last.Text, "/snapshot text") || !strings.Contains(last.Text, "/follow on") {
+		t.Fatalf("last message = %q, want snapshot and follow hints", last.Text)
+	}
+}
+
+func TestRouterPlainTextExecuteSnapshotFailureReturnsErrorAfterSend(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.snapshotSequence = []snapshotResult{{err: fmt.Errorf("tmux down")}}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text execute) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 || !service.sendCalls[0].sendEnter {
+		t.Fatalf("sendCalls = %#v, want command sent before snapshot error", service.sendCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "snapshot failed") || !strings.Contains(last.Text, "tmux down") {
+		t.Fatalf("last message = %q, want snapshot failure", last.Text)
+	}
+}
+
+func TestRouterPlainTextExecuteSendFailureReturnsError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.sendErr = fmt.Errorf("write failed")
+	service.snapshotSequence = []snapshotResult{{body: "before"}}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, telegramMessage(7, 2, "status --short")); err != nil {
+		t.Fatalf("HandleMessage(plain text execute) error = %v", err)
+	}
+	if len(service.sendCalls) != 0 {
+		t.Fatalf("sendCalls = %#v, want no recorded send on failure", service.sendCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "send failed") || !strings.Contains(last.Text, "write failed") {
+		t.Fatalf("last message = %q, want send failure", last.Text)
+	}
+}
+
 func TestRouterPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) {
 	t.Parallel()
 
@@ -712,9 +894,19 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	service := newFakePaneService()
+	service.snapshotSequence = []snapshotResult{
+		{body: "before"},
+		{body: "after\nmake test"},
+	}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -734,8 +926,8 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 
 	messages := messenger.snapshot()
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, "sent to default:%5 and pressed Enter") {
-		t.Fatalf("last message = %q, want send-and-enter confirmation", last.Text)
+	if !strings.Contains(last.Text, "[default:%5]") || !strings.Contains(last.Text, "after\nmake test") {
+		t.Fatalf("last message = %q, want execute snapshot", last.Text)
 	}
 }
 
@@ -1453,7 +1645,7 @@ func TestRouterSlackHelpUsesCommandPrefix(t *testing.T) {
 	if !strings.Contains(last.Text, `prefix commands with "tmux:"`) {
 		t.Fatalf("last message = %q, want slack hint", last.Text)
 	}
-	if !strings.Contains(last.Text, "plain text sends to the current pane") {
+	if !strings.Contains(last.Text, "plain text targets the current pane") {
 		t.Fatalf("last message = %q, want plain text hint", last.Text)
 	}
 	if !strings.Contains(last.Text, "tmux: keys C-c") {
@@ -1518,6 +1710,88 @@ func TestRouterSlackPlainTextInManagedThreadUsesCurrentPane(t *testing.T) {
 	}
 	if service.sendCalls[0].paneKey != "default:%5" || service.sendCalls[0].text != "status --short" {
 		t.Fatalf("send call = %#v, want thread plain text send", service.sendCalls[0])
+	}
+}
+
+func TestRouterSlackPlainTextExecuteInManagedThreadReturnsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.snapshotSequence = []snapshotResult{
+		{body: "before"},
+		{body: "after\nok"},
+	}
+	messenger := &fakeMessenger{platform: "slack"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, slackThreadMessage("C123", "1", "2", "status --short")); err != nil {
+		t.Fatalf("HandleMessage(thread plain text execute) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 || !service.sendCalls[0].sendEnter {
+		t.Fatalf("sendCalls = %#v, want one execute send", service.sendCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "```") || !strings.Contains(last.Text, "after\nok") {
+		t.Fatalf("last message = %#v, want slack code block snapshot", last)
+	}
+}
+
+func TestRouterDiscordDMPlainTextExecuteReturnsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.snapshotSequence = []snapshotResult{
+		{body: "before"},
+		{body: "after\nok"},
+	}
+	messenger := &fakeMessenger{platform: "discord"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router.SetPlainTextConfig(PlainTextConfig{
+		Mode:        plainTextModeExecute,
+		Echo:        plainTextEchoSnapshot,
+		EchoLines:   8,
+		EchoDelay:   time.Millisecond,
+		EchoTimeout: 20 * time.Millisecond,
+	})
+
+	if err := router.HandleMessage(ctx, discordMessage("D123", "1", "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, discordMessage("D123", "2", "status --short")); err != nil {
+		t.Fatalf("HandleMessage(discord plain text execute) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 || !service.sendCalls[0].sendEnter {
+		t.Fatalf("sendCalls = %#v, want one execute send", service.sendCalls)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if last.Embed == nil || !strings.Contains(last.Embed.Description, "after\nok") {
+		t.Fatalf("last message = %#v, want discord snapshot embed", last)
 	}
 }
 

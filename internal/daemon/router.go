@@ -41,6 +41,7 @@ type Router struct {
 	replyBus             *ReplyBus
 	follow               *FollowManager
 	snapshotLines        int
+	plainText            PlainTextConfig
 	slackCommandPrefix   string
 	discordCommandPrefix string
 	allowChats           map[string]struct{}
@@ -73,11 +74,16 @@ func NewRouter(service paneService, registry *PaneRegistry, store *Store, replyB
 		replyBus:             replyBus,
 		follow:               follow,
 		snapshotLines:        snapshotLines,
+		plainText:            normalizePlainTextConfig(PlainTextConfig{}),
 		slackCommandPrefix:   slackCommandPrefix,
 		discordCommandPrefix: discordCommandPrefix,
 		allowChats:           allowed,
 		pending:              make(map[string]pendingCommand),
 	}
+}
+
+func (r *Router) SetPlainTextConfig(cfg PlainTextConfig) {
+	r.plainText = normalizePlainTextConfig(cfg)
 }
 
 func (r *Router) commandPrefix(chat ChatRef) string {
@@ -296,6 +302,9 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 }
 
 func (r *Router) handlePlainText(ctx context.Context, message IncomingMessage, text string) error {
+	if r.plainText.Mode == plainTextModeExecute {
+		return r.executeText(ctx, message, text, "input")
+	}
 	return r.sendText(ctx, message, text, "input")
 }
 
@@ -311,6 +320,100 @@ func (r *Router) sendText(ctx context.Context, message IncomingMessage, text str
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
 	return r.replyBus.Reply(ctx, chat, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
+}
+
+// executeText keeps the execute path local to the daemon:
+//
+//	baseline snapshot -> send text + Enter -> bounded poll for visible change
+//	                 \-> timeout/no change => explicit fallback message
+func (r *Router) executeText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
+	if err != nil {
+		r.logInboundKind(ctx, message, paneKey, "", inboundKind)
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+	}
+	r.logInboundKind(ctx, message, paneKey, "", inboundKind)
+	var (
+		baseline    string
+		baselineErr error
+	)
+	if r.plainText.Echo == plainTextEchoSnapshot {
+		baseline, baselineErr = r.service.Snapshot(ctx, paneKey, r.plainText.EchoLines)
+	}
+	if err := r.service.SendManaged(ctx, paneKey, text, true); err != nil {
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
+	}
+	if r.plainText.Echo != plainTextEchoSnapshot {
+		return r.replyBus.Reply(ctx, chat, paneKey, "enter", fmt.Sprintf("sent to %s and pressed Enter", paneKey))
+	}
+	if baselineErr != nil {
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("sent to %s and pressed Enter, but snapshot failed: %v", paneKey, baselineErr))
+	}
+	body, changed, pollErr := r.waitForExecuteSnapshot(ctx, paneKey, baseline)
+	if pollErr != nil {
+		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("sent to %s and pressed Enter, but snapshot failed: %v", paneKey, pollErr))
+	}
+	if !changed {
+		return r.replyBus.Reply(ctx, chat, paneKey, "enter", r.executeNoOutputMessage(chat, paneKey))
+	}
+	return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
+}
+
+func (r *Router) waitForExecuteSnapshot(ctx context.Context, paneKey string, baseline string) (string, bool, error) {
+	deadline := time.Now().Add(r.plainText.EchoTimeout)
+	var lastBody string
+	var lastErr error
+
+	for {
+		wait := r.plainText.EchoDelay
+		if remaining := time.Until(deadline); remaining <= 0 {
+			break
+		} else if wait > remaining {
+			wait = remaining
+		}
+		if err := waitForDuration(ctx, wait); err != nil {
+			return "", false, err
+		}
+
+		body, err := r.service.Snapshot(ctx, paneKey, r.plainText.EchoLines)
+		if err != nil {
+			lastErr = err
+		} else {
+			lastBody = body
+			if body != baseline {
+				return body, true, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+	}
+
+	if lastErr != nil && strings.TrimSpace(lastBody) == "" {
+		return "", false, lastErr
+	}
+	return lastBody, false, nil
+}
+
+func waitForDuration(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (r *Router) executeNoOutputMessage(chat ChatRef, paneKey string) string {
+	snapshotUsage := formatCommandUsage(r.commandPrefix(chat), "snapshot text")
+	followUsage := formatCommandUsage(r.commandPrefix(chat), "follow on")
+	return fmt.Sprintf("sent to %s and pressed Enter; no visible output yet. Try %s or %s.", paneKey, snapshotUsage, followUsage)
 }
 
 func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args string) error {
@@ -335,6 +438,11 @@ func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args s
 }
 
 func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args string) error {
+	text := strings.TrimSpace(args)
+	if text != "" {
+		return r.executeText(ctx, message, text, "command")
+	}
+
 	chat := message.Chat
 	paneKey, err := r.requireCurrentPane(ctx, chat)
 	if err != nil {
@@ -342,13 +450,6 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args 
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 	}
 	r.logInbound(ctx, message, paneKey, "")
-	text := strings.TrimSpace(args)
-	if text != "" {
-		if err := r.service.SendManaged(ctx, paneKey, text, true); err != nil {
-			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
-		}
-		return r.replyBus.Reply(ctx, chat, paneKey, "enter", fmt.Sprintf("sent to %s and pressed Enter", paneKey))
-	}
 	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
 	}
