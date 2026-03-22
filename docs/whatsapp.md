@@ -8,6 +8,7 @@ This connector is different from the official Meta Cloud API:
 - first login happens by scanning a QR code in the terminal
 - the daemon keeps a local WhatsApp device session database
 - v1 supports private chats only, not group chats
+- self-chat with the paired account is not supported in v1
 
 ## Example Config
 
@@ -37,13 +38,23 @@ auto_mark_read = true
 
 On the first run, the daemon prints a QR code. Open WhatsApp on your phone, go to `Linked Devices`, and scan it.
 
+## Account Model
+
+The WhatsApp connector currently works like this:
+
+- pair your main WhatsApp account as the local multi-device client
+- send commands to that paired account from a different WhatsApp account in a one-to-one chat
+- do not use self-chat with the paired account; messages sent by the paired account itself are ignored in v1
+
+In practice, this means the WhatsApp operator is usually a second account. If you only have one WhatsApp account, use Telegram, Slack, or Discord for now.
+
 ## Flags
 
 - `--platform whatsapp`
 - `--whatsapp-session-db PATH`
 - `--whatsapp-device-name NAME`
 - `--whatsapp-auto-mark-read`
-- `--allow-chat whatsapp:<jid>`
+- `--allow-chat whatsapp:<jid>` for the remote operator account that will send commands
 
 ## Commands And Behavior
 
@@ -57,6 +68,7 @@ On the first run, the daemon prints a QR code. Open WhatsApp on your phone, go t
 ## Notes
 
 - only private chats are accepted; group messages are ignored
-- allowlists should use full IDs such as `whatsapp:8613800000000@s.whatsapp.net`
+- self-chat with the paired account is ignored in v1
+- allowlists should use full IDs such as `whatsapp:8613800000000@s.whatsapp.net`, and the ID should belong to the remote operator account rather than the paired account itself
 - the WhatsApp device session database is separate from the daemon SQLite state database
 - `daemon doctor` validates the session DB path and reminds you that first login prints a QR code

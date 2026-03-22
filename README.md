@@ -222,7 +222,7 @@ Start the WhatsApp daemon:
 
 For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
 For Discord prefix commands in channels or DMs, enable the Message Content intent in the developer portal.
-For WhatsApp, the first run prints a QR code and v1 accepts private chats only.
+For WhatsApp, the first run prints a QR code and v1 accepts private chats only. Current behavior does not support self-chat: commands must come from a different WhatsApp account than the paired account, and `--allow-chat` should point at that operator account's JID.
 
 Common flags:
 
@@ -317,7 +317,7 @@ WhatsApp commands:
 
 In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram, WhatsApp, and in Slack DMs or managed threads always targets the current pane. By default it stays in raw `type` mode; set `--plain-text-mode execute` or `plain_text_mode = "execute"` to send text and Enter in one step. When execute mode is combined with snapshot echo, the daemon replies with a short text snapshot after visible output changes. Use `/send <text>` or `tmux: send <text>` when you want raw text even while execute mode is enabled. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 In Discord, slash commands are the primary control surface. Prefixed forms such as `tmux: panes` also work in channels. Plain text is treated as pane input only in DMs, where it follows the same configurable `type` or `execute` behavior; channel replies should keep using slash or prefixed commands.
-In WhatsApp, slash commands such as `/panes` or `/follow on` are used for explicit actions. Plain text targets the current pane in private chats, following the same `type` or `execute` behavior. Only private chats are supported; group messages are ignored.
+In WhatsApp, slash commands such as `/panes` or `/follow on` are used for explicit actions. Plain text targets the current pane in supported private chats, following the same `type` or `execute` behavior. Only private chats are supported; group messages are ignored. Self-chat with the paired account is also ignored in the current implementation, so use a second WhatsApp account to message the paired account.
 
 ## Recovery Model
 
@@ -350,7 +350,7 @@ The remote daemon stores platform chat state in SQLite, including bindings, curr
 - the CLI's dedicated control-key commands are `enter` and `ctrl-c`; the daemon's `/keys` command supports a wider range of tmux key names (`C-c`, `PageUp`, `F1`, `M-x`, etc.)
 - follow restore does not survive daemon restart yet
 - the SQLite layer still shells out to `sqlite3` rather than using an embedded driver
-- WhatsApp v1 supports private chats only, not group chats
+- WhatsApp v1 supports only one-to-one chats from another account; self-chat and group chats are ignored
 
 ## Acknowledgements
 

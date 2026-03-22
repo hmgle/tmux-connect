@@ -136,4 +136,4 @@ This lets the daemon restore current-pane bindings and platform reply continuity
 - follow subscriptions are not restored automatically after daemon restart
 - the CLI's dedicated control-key commands are `enter` and `ctrl-c`; the daemon's `/keys` command supports a wider range of tmux key names (`C-c`, `PageUp`, `F1`, `M-x`, etc.)
 - SQLite access still shells out to `sqlite3`
-- WhatsApp v1 supports private chats only, not group chats
+- WhatsApp v1 supports only one-to-one chats from another account; self-chat and group chats are ignored

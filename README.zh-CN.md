@@ -176,7 +176,7 @@ daemon 也支持通过 `--config PATH` 或默认
 
 如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
 如果要让 Discord 在频道或私聊里识别前缀命令，需要在开发者后台启用 Message Content intent。
-WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。
+WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。当前实现也不支持“给自己发消息”的 self-chat：命令必须来自另一个 WhatsApp 账号，`--allow-chat` 也应填写那个操作者账号的 JID。
 
 常用参数：
 
@@ -275,7 +275,7 @@ WhatsApp 命令：
 
 Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram、WhatsApp 以及 Slack 私聊和受管 thread 里的纯文本始终会指向当前 pane。默认仍是原始 `type` 模式，只输入不回车；如果设置 `--plain-text-mode execute` 或 `plain_text_mode = "execute"`，裸文本就会变成"发送并回车"。当 execute 模式配合 snapshot echo 使用时，daemon 会在 pane 输出发生可见变化后返回一段文本快照。若你在 execute 模式下仍想只输入不执行，使用 `/send <text>` 或 `tmux: send <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 Discord 里建议优先使用 Slash Commands。频道中也支持 `tmux: panes` 这类前缀命令；纯文本只会在 Discord 私聊里被当作 pane 输入，并沿用同样可配置的 `type`/`execute` 行为。
-WhatsApp 里使用 `/panes`、`/follow on` 等斜杠命令。纯文本在私聊中指向当前 pane，沿用同样的 `type`/`execute` 行为。v1 仅支持私聊，群组消息会被忽略。
+WhatsApp 里使用 `/panes`、`/follow on` 等斜杠命令。纯文本在受支持的私聊中指向当前 pane，沿用同样的 `type`/`execute` 行为。v1 仅支持私聊，群组消息会被忽略；当前实现同样会忽略已配对账号自己发出的 self-chat，因此需要用第二个 WhatsApp 账号给该已配对账号发消息。
 
 ## Recovery Model
 
