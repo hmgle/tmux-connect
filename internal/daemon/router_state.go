@@ -16,21 +16,7 @@ func (r *Router) commandPrefix(chat ChatRef) string {
 
 func (r *Router) handlePendingInput(ctx context.Context, message IncomingMessage, pending pendingCommand, args string) error {
 	args = r.resolvePendingArgs(pending, args)
-	switch pending.Command {
-	case "select":
-		return r.handleSelect(ctx, message, args)
-	case "unmanage":
-		return r.handleUnmanage(ctx, message, args)
-	case "send":
-		return r.handleSend(ctx, message, args)
-	case "keys":
-		return r.handleKeys(ctx, message, args)
-	case "follow":
-		return r.handleFollow(ctx, message, args)
-	default:
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+r.helpText(message.Chat))
-	}
+	return r.dispatchCommand(ctx, message, pending.Command, args)
 }
 
 func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMessage, command string) error {

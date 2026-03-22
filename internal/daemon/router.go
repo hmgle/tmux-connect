@@ -104,37 +104,7 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 	if command != "" {
 		r.clearPending(message.pendingKey())
 	}
-
-	switch command {
-	case "start", "help":
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "help", r.helpText(message.Chat))
-	case "panes":
-		return r.handlePanes(ctx, message)
-	case "select":
-		return r.handleSelect(ctx, message, args)
-	case "clear":
-		return r.handleClear(ctx, message)
-	case "unmanage":
-		return r.handleUnmanage(ctx, message, args)
-	case "current":
-		return r.handleCurrent(ctx, message)
-	case "snapshot":
-		return r.handleSnapshot(ctx, message, args)
-	case "send":
-		return r.handleSend(ctx, message, args)
-	case "keys":
-		return r.handleKeys(ctx, message, args)
-	case "enter":
-		return r.handleEnter(ctx, message, args)
-	case "ctrlc":
-		return r.handleCtrlC(ctx, message)
-	case "follow":
-		return r.handleFollow(ctx, message, args)
-	default:
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, message.Chat, "", "unknown-command", "unknown command\n\n"+r.helpText(message.Chat))
-	}
+	return r.dispatchCommand(ctx, message, command, args)
 }
 
 func (r *Router) handlePanes(ctx context.Context, message IncomingMessage) error {
