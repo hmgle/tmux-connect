@@ -30,24 +30,6 @@ func (r *Router) currentPaneForInbound(ctx context.Context, message IncomingMess
 	return chat, paneKey, err
 }
 
-func (r *Router) enableFollow(ctx context.Context, message IncomingMessage, opts FollowOptions) error {
-	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
-	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
-	}
-	if err := r.follow.EnableWithOptions(ctx, chat, paneKey, opts); err != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
-	}
-	return r.replyFollowEnabled(ctx, chat, paneKey, r.follow.Options(chat.Key()))
-}
-
-func (r *Router) disableFollow(ctx context.Context, message IncomingMessage) error {
-	chat := message.Chat
-	paneKey := r.follow.CurrentPane(chat.Key())
-	r.logInbound(ctx, message, paneKey, "")
-	return r.replyFollowDisabled(ctx, chat, paneKey, r.follow.Disable(chat.Key()))
-}
-
 func (r *Router) replyCurrentPaneError(ctx context.Context, chat ChatRef, paneKey string, err error) error {
 	return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 }
@@ -86,24 +68,4 @@ func (r *Router) ensureManagedPaneRecord(ctx context.Context, ref string) (tmuxc
 	}
 	r.registry.MarkDirty()
 	return record, nil
-}
-
-func (r *Router) logInbound(ctx context.Context, message IncomingMessage, paneKey string, agent string) {
-	r.logInboundKind(ctx, message, paneKey, agent, "command")
-}
-
-func (r *Router) logInboundKind(ctx context.Context, message IncomingMessage, paneKey string, agent string, kind string) {
-	r.replyBus.LogInbound(ctx, message, paneKey, agent, kind)
-}
-
-func (r *Router) allowed(chat ChatRef) bool {
-	if len(r.allowChats) == 0 {
-		return true
-	}
-	_, ok := r.allowChats[chat.Key()]
-	if ok {
-		return true
-	}
-	_, ok = r.allowChats[chat.ChatID]
-	return ok
 }
