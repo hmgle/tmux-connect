@@ -57,6 +57,12 @@ The core design choice is that tmux remains the source of truth for pane identit
 - Slack Socket Mode client wrapper
 - outbound Slack message and image upload operations
 
+### `internal/discord`
+
+- Discord gateway client wrapper using `discordgo`
+- slash command registration and interaction handling
+- outbound message, embed, and file upload operations
+
 ### `internal/whatsapp`
 
 - WhatsApp multi-device client wrapper based on `whatsmeow`
@@ -80,11 +86,11 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 1. `tmux-connect daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
-3. Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
+3. The platform connector starts: Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection; Discord opens a gateway connection and registers slash commands; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
 4. Incoming platform messages are parsed into commands.
-6. Commands are routed to the current pane or an explicit pane target.
-7. Replies are sent back through the originating platform.
-8. Follow mode keeps a tmux subscription open and pushes aggregated output back to the chat.
+5. Commands are routed to the current pane or an explicit pane target.
+6. Replies are sent back through the originating platform.
+7. Follow mode keeps a tmux subscription open and pushes aggregated output back to the chat.
 
 ## Persistence And Recovery
 
@@ -128,5 +134,6 @@ This lets the daemon restore current-pane bindings and platform reply continuity
 - there is no structured Codex/Claude/Gemini event parsing yet
 - remote interaction is still command-driven
 - follow subscriptions are not restored automatically after daemon restart
-- control input is limited to text, `Enter`, and `Ctrl-C`
+- the CLI's dedicated control-key commands are `enter` and `ctrl-c`; the daemon's `/keys` command supports a wider range of tmux key names (`C-c`, `PageUp`, `F1`, `M-x`, etc.)
 - SQLite access still shells out to `sqlite3`
+- WhatsApp v1 supports private chats only, not group chats

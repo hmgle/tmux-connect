@@ -50,13 +50,13 @@ command_prefix = "tmux:"
 ```
 
 ```bash
-go run ./cmd/tmux-connect daemon run
+./tmux-connect daemon run
 ```
 
 Using explicit flags:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN" \
   --discord-command-prefix "tmux:" \
@@ -99,11 +99,11 @@ Supported environment variables:
 ## Health Checks
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor \
+./tmux-connect daemon doctor \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN"
 
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 `daemon doctor` confirms the token is present and reminds you to enable the Message Content intent for prefix commands and DMs.

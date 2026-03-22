@@ -93,9 +93,6 @@ cd tmux-connect
 
 # 构建二进制文件
 go build ./cmd/tmux-connect
-
-# 或者直接运行
-go run ./cmd/tmux-connect
 ```
 
 ### 2.3 配置方式
@@ -139,7 +136,7 @@ export TMUXCONN_PLAIN_TEXT_ECHO=snapshot
 #### 方式三：使用命令行参数
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform discord \
   --discord-token "your-discord-bot-token" \
   --discord-command-prefix "tmux:" \
@@ -163,14 +160,14 @@ mkdir -p ~/.tmux-connect
 在启动之前，先验证配置是否正确：
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor \
+./tmux-connect daemon doctor \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN"
 ```
 
 预期输出：
 ```
-tmux-connect daemon doctor
+./tmux-connect daemon doctor
 discord token: ok
 discord gateway intents: enable Message Content intent for prefix commands and DMs
 sqlite store: ok (/path/to/tmux-connect.db)
@@ -181,18 +178,18 @@ tmux panes: ok (0 managed)
 
 ```bash
 # 前台运行
-go run ./cmd/tmux-connect daemon run
+./tmux-connect daemon run
 
 # 或者后台运行
-nohup go run ./cmd/tmux-connect daemon run > /tmp/tmux-connect.log 2>&1 &
+nohup tmux-connect daemon run > /tmp/tmux-connect.log 2>&1 &
 
 # 检查状态
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 预期输出：
 ```
-tmux-connect daemon status
+./tmux-connect daemon status
 db: /home/user/.tmux-connect/tmux-connect.db
 registered chats: 0
 bindings: 0
@@ -461,7 +458,7 @@ command_prefix = "tmux:"
 
 3. **检查 Token**
    ```bash
-   go run ./cmd/tmux-connect daemon doctor --platform discord --discord-token "$TMUXCONN_DISCORD_TOKEN"
+   tmux-connect daemon doctor --platform discord --discord-token "$TMUXCONN_DISCORD_TOKEN"
    ```
 
 ### 前缀命令不工作
@@ -487,7 +484,7 @@ command_prefix = "tmux:"
 2. 确认 tmux 正在运行
 3. 尝试使用本地命令检查：
    ```bash
-   go run ./cmd/tmux-connect list
+   tmux-connect list
    ```
 
 ### 数据库错误
@@ -497,7 +494,7 @@ command_prefix = "tmux:"
 3. 尝试删除旧数据库重新创建：
    ```bash
    rm ~/.tmux-connect/tmux-connect.db
-   go run ./cmd/tmux-connect daemon run
+   tmux-connect daemon run
    ```
 
 ### 权限问题
@@ -566,8 +563,8 @@ Discord Gateway
 为每个 tmux socket 启动独立的 daemon 实例，使用 `--socket` 参数：
 
 ```bash
-go run ./cmd/tmux-connect daemon run --socket work ...
-go run ./cmd/tmux-connect daemon run --socket home ...
+./tmux-connect daemon run --socket work ...
+./tmux-connect daemon run --socket home ...
 ```
 
 ### Q: 如何在服务器重启后自动启动 daemon？

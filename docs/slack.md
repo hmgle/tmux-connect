@@ -52,11 +52,11 @@ command_prefix = "tmux:"
 ```
 
 ```bash
-go run ./cmd/tmux-connect daemon run
+./tmux-connect daemon run
 ```
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform slack \
   --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
   --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
@@ -99,12 +99,12 @@ Supported environment variables:
 ## Health Checks
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor \
+./tmux-connect daemon doctor \
   --platform slack \
   --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
   --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN"
 
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 `daemon doctor` echoes the Slack scopes the bot needs for snapshot image uploads. If `tmux: snapshot` falls back to text, check the daemon log for `reply bus send snapshot image`.

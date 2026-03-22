@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`cmd/tmux-connect` contains the CLI entrypoint for the local bridge, HTTP server, and multi-platform daemon. Core logic lives under `internal/`: `tmux-connect` exposes the service/app layer, `tmux` wraps tmux operations and stream handling, `httpapi` serves the local control plane, `daemon` manages Telegram/Slack/Discord routing and SQLite-backed state, and the platform packages (`telegram`, `slack`, `discord`) contain connector clients. Keep new code inside the closest existing package, and place design or handoff notes in `docs/`.
+`cmd/tmux-connect` contains the CLI entrypoint for the local bridge, HTTP server, and multi-platform daemon. Core logic lives under `internal/`: `tmux-connect` exposes the service/app layer, `tmux` wraps tmux operations and stream handling, `httpapi` serves the local control plane, `daemon` manages Telegram/Slack/Discord/WhatsApp routing and SQLite-backed state, and the platform packages (`telegram`, `slack`, `discord`, `whatsapp`) contain connector clients. Keep new code inside the closest existing package, and place design or handoff notes in `docs/`.
 
 ## Build, Test, and Development Commands
 Use the Go toolchain directly; there is no `Makefile`.
@@ -22,4 +22,4 @@ Keep tests beside the code they cover in `*_test.go` files. Favor table-driven t
 Recent history follows short imperative subjects, usually with Conventional Commit prefixes such as `fix:` and `feat:`. Prefer messages like `fix: preserve follow context for inline updates` over generic summaries. Pull requests should include the behavior change, the packages touched, and the exact verification command(s) run. For CLI, HTTP, or remote connector workflow changes, add a short example request, response, or transcript instead of screenshots.
 
 ## Runtime & Configuration Tips
-Local development assumes `tmux` is installed and that the target pane already exists. The daemon also requires `sqlite3` in `PATH` plus valid platform token(s) such as `TMUXCONN_TELEGRAM_TOKEN`, `TMUXCONN_SLACK_BOT_TOKEN`, or `TMUXCONN_DISCORD_TOKEN`. Avoid committing local build artifacts such as the root-level `tmux-connect` binary or cache directories.
+Local development assumes `tmux` is installed and that the target pane already exists. The daemon also requires `sqlite3` in `PATH` plus valid platform credentials or session config: `TMUXCONN_TELEGRAM_TOKEN`, `TMUXCONN_SLACK_BOT_TOKEN`, `TMUXCONN_DISCORD_TOKEN` for tokens, or `TMUXCONN_WHATSAPP_SESSION_DB` for the WhatsApp local session database path. Avoid committing local build artifacts such as the root-level `tmux-connect` binary or cache directories.

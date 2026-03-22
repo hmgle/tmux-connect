@@ -28,7 +28,7 @@ auto_mark_read = true
 ## Run
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform whatsapp \
   --whatsapp-session-db ~/.tmux-connect/whatsapp-device.db \
   --db ~/.tmux-connect/tmux-connect.db \

@@ -24,7 +24,7 @@ Current scope:
 
 - Go `1.25` or later
 - `tmux`
-- `sqlite3` in `PATH` if you want to run `tmux-connect daemon`
+- `sqlite3` in `PATH` if you want to run the daemon
 - a Telegram bot token, Slack bot/app tokens, a Discord bot token, or a paired WhatsApp device session if you want remote control
 
 ## Build
@@ -33,7 +33,9 @@ Current scope:
 go build ./cmd/tmux-connect
 ```
 
-The repository name is `tmux-connect`; the binary name is `tmux-connect`.
+This produces `./tmux-connect` in the repository root. The repository name and the binary name are both `tmux-connect`.
+
+All examples below use `./tmux-connect`. You can substitute `go run ./cmd/tmux-connect` if you prefer not to build first.
 
 ## CLI Quick Start
 
@@ -47,53 +49,53 @@ before the subcommand.
 List panes:
 
 ```bash
-go run ./cmd/tmux-connect list
+./tmux-connect list
 ```
 
 Attach an existing pane:
 
 ```bash
-go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
+./tmux-connect attach --pane %5 --agent codex --label backend
 ```
 
 Inspect bridge metadata:
 
 ```bash
-go run ./cmd/tmux-connect inspect --pane %5
+./tmux-connect inspect --pane %5
 ```
 
 Send text and press Enter:
 
 ```bash
-go run ./cmd/tmux-connect send --pane %5 --text "continue" --enter
+./tmux-connect send --pane %5 --text "continue" --enter
 ```
 
 Capture recent output:
 
 ```bash
-go run ./cmd/tmux-connect snapshot --pane %5 --lines 120
+./tmux-connect snapshot --pane %5 --lines 120
 ```
 
 Follow output:
 
 ```bash
-go run ./cmd/tmux-connect stream --pane %5
+./tmux-connect stream --pane %5
 ```
 
 The local CLI surface is:
 
 ```bash
-tmux-connect [--config PATH] [--socket NAME] [--json] list
-tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
-tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
-tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
+./tmux-connect [--config PATH] [--socket NAME] [--json] list
+./tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+./tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+./tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
+./tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+./tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
+./tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
+./tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -101,7 +103,7 @@ tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 Start the server:
 
 ```bash
-go run ./cmd/tmux-connect serve --listen 127.0.0.1:8080
+./tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 Endpoints:
@@ -181,7 +183,7 @@ daemon to reply with a short text snapshot after visible pane output changes.
 Start the Telegram daemon:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform telegram \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
   --db ~/.tmux-connect/tmux-connect.db \
@@ -191,7 +193,7 @@ go run ./cmd/tmux-connect daemon run \
 Start the Slack daemon:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform slack \
   --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
   --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
@@ -201,7 +203,7 @@ go run ./cmd/tmux-connect daemon run \
 Start the Discord daemon:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN" \
   --discord-command-prefix "tmux:" \
@@ -211,7 +213,7 @@ go run ./cmd/tmux-connect daemon run \
 Start the WhatsApp daemon:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform whatsapp \
   --whatsapp-session-db ~/.tmux-connect/whatsapp-device.db \
   --db ~/.tmux-connect/tmux-connect.db \
@@ -253,8 +255,8 @@ Common flags:
 Checks:
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 Telegram commands:
@@ -299,8 +301,23 @@ Discord commands:
 - `/ctrlc` or `/ctrl-c`
 - `/follow on [interval]|off`
 
-In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram and in Slack DMs or managed threads always targets the current pane. By default it stays in raw `type` mode; set `--plain-text-mode execute` or `plain_text_mode = "execute"` to send text and Enter in one step. When execute mode is combined with snapshot echo, the daemon replies with a short text snapshot after visible output changes. Use `/send <text>` or `tmux: send <text>` when you want raw text even while execute mode is enabled. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
+WhatsApp commands:
+
+- `/panes`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/keys <key...>`
+- `/enter [text]`
+- `/ctrlc` or `/ctrl-c`
+- `/follow on [interval]|off`
+
+In Slack channels, start with an app mention such as `@tmux-connect panes`. In Slack DMs and bot-managed threads, use the `tmux:` prefix; Slash-prefixed forms may be intercepted by Slack before they reach the bot. Plain text in Telegram, WhatsApp, and in Slack DMs or managed threads always targets the current pane. By default it stays in raw `type` mode; set `--plain-text-mode execute` or `plain_text_mode = "execute"` to send text and Enter in one step. When execute mode is combined with snapshot echo, the daemon replies with a short text snapshot after visible output changes. Use `/send <text>` or `tmux: send <text>` when you want raw text even while execute mode is enabled. `tmux: snapshot` defaults to `image`. Telegram snapshot images use the built-in `gomono` font, `14` pt, and the `dark` theme by default.
 In Discord, slash commands are the primary control surface. Prefixed forms such as `tmux: panes` also work in channels. Plain text is treated as pane input only in DMs, where it follows the same configurable `type` or `execute` behavior; channel replies should keep using slash or prefixed commands.
+In WhatsApp, slash commands such as `/panes` or `/follow on` are used for explicit actions. Plain text targets the current pane in private chats, following the same `type` or `execute` behavior. Only private chats are supported; group messages are ignored.
 
 ## Recovery Model
 
@@ -330,9 +347,10 @@ The remote daemon stores platform chat state in SQLite, including bindings, curr
 ## Current Limits
 
 - the project is relay-first; there is still no structured agent event parsing
-- control keys are limited to `Enter` and `Ctrl-C`
+- the CLI's dedicated control-key commands are `enter` and `ctrl-c`; the daemon's `/keys` command supports a wider range of tmux key names (`C-c`, `PageUp`, `F1`, `M-x`, etc.)
 - follow restore does not survive daemon restart yet
 - the SQLite layer still shells out to `sqlite3` rather than using an embedded driver
+- WhatsApp v1 supports private chats only, not group chats
 
 ## Acknowledgements
 

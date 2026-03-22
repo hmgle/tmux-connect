@@ -12,8 +12,8 @@
 You can pre-manage a pane locally, or let Telegram manage it on first `/select`.
 
 ```bash
-go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
-go run ./cmd/tmux-connect inspect --pane %5
+./tmux-connect attach --pane %5 --agent codex --label backend
+./tmux-connect inspect --pane %5
 ```
 
 ## Start the Daemon
@@ -46,7 +46,7 @@ snapshot_font_file = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 ```
 
 ```bash
-go run ./cmd/tmux-connect daemon run
+./tmux-connect daemon run
 ```
 
 Using environment variables:
@@ -57,13 +57,13 @@ export TMUXCONN_DB_PATH="$HOME/.tmux-connect/tmux-connect.db"
 export TMUXCONN_TELEGRAM_SNAPSHOT_THEME=light
 export TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE=16
 
-go run ./cmd/tmux-connect daemon run --allow-chat 123456789
+./tmux-connect daemon run --allow-chat 123456789
 ```
 
 Using explicit flags:
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --telegram-token 123456:example-token \
   --db ~/.tmux-connect/tmux-connect.db \
   --plain-text-mode execute \
@@ -123,13 +123,13 @@ Supported environment variables:
 Validate runtime prerequisites:
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+./tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 ```
 
 Inspect stored state and current managed pane count:
 
 ```bash
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 ## Telegram Commands

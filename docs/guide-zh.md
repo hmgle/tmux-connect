@@ -11,6 +11,10 @@
 如果你需要更细的说明，再看这些文档：
 
 - [telegram.md](./telegram.md) — Telegram 专项配置和命令说明
+- [slack.md](./slack.md) — Slack 专项配置和命令说明
+- [discord.md](./discord.md) — Discord 专项配置和命令说明
+- [discord-zh.md](./discord-zh.md) — Discord 接入详细指南（中文）
+- [whatsapp.md](./whatsapp.md) — WhatsApp 专项配置和命令说明
 - [architecture.md](./architecture.md) — 当前系统架构与恢复模型
 - [troubleshooting-zh.md](./troubleshooting-zh.md) — 中文故障排查
 - [roadmap.md](./roadmap.md) — 后续路线图
@@ -23,7 +27,7 @@
 
 - 本地 CLI 查看和控制 pane
 - 本地 HTTP API 暴露同样的控制面
-- Telegram 远程查看输出、发送文本、回车、中断、开启 follow
+- Telegram、Slack、Discord 或 WhatsApp 远程查看输出、发送文本、回车、中断、开启 follow
 
 ## 前置条件
 
@@ -31,7 +35,7 @@
 - `tmux`
 - `sqlite3`
 - 一个已经存在的 tmux pane
-- 一个 Telegram bot token
+- 一个 Telegram bot token、Slack bot/app token、Discord bot token 或已配对的 WhatsApp 设备（取决于你要用的平台）
 
 ## 五分钟上手
 
@@ -41,7 +45,7 @@
 go build ./cmd/tmux-connect
 ```
 
-后文中的 `tmux-connect` 也可以替换成 `go run ./cmd/tmux-connect`。
+后文中的 `./tmux-connect` 也可以替换成 `go run ./cmd/tmux-connect`。
 
 ### 2. 在 tmux 里启动你的 Agent
 
@@ -55,9 +59,9 @@ codex
 ### 3. 找到 pane 并纳入管理
 
 ```bash
-tmux-connect list
-tmux-connect attach --pane %5 --agent codex --label backend
-tmux-connect inspect --pane %5
+./tmux-connect list
+./tmux-connect attach --pane %5 --agent codex --label backend
+./tmux-connect inspect --pane %5
 ```
 
 这里的 `%5` 只是示例 pane ID。
@@ -67,7 +71,7 @@ tmux-connect inspect --pane %5
 ```bash
 export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
 
-tmux-connect daemon run \
+./tmux-connect daemon run \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
@@ -156,19 +160,19 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 ### 本地 CLI
 
 ```bash
-tmux-connect list
-tmux-connect attach --pane %5 --agent codex --label backend
-tmux-connect detach --pane %5
-tmux-connect inspect --pane %5
-tmux-connect snapshot --pane %5 --lines 120
-tmux-connect send --pane %5 --text "continue" --enter
-tmux-connect enter --pane %5
-tmux-connect ctrl-c --pane %5
-tmux-connect stream --pane %5 --lines 120
-tmux-connect serve --listen 127.0.0.1:8080
-tmux-connect daemon run --telegram-token TOKEN --db ~/.tmux-connect/tmux-connect.db
-tmux-connect daemon doctor --telegram-token TOKEN
-tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect list
+./tmux-connect attach --pane %5 --agent codex --label backend
+./tmux-connect detach --pane %5
+./tmux-connect inspect --pane %5
+./tmux-connect snapshot --pane %5 --lines 120
+./tmux-connect send --pane %5 --text "continue" --enter
+./tmux-connect enter --pane %5
+./tmux-connect ctrl-c --pane %5
+./tmux-connect stream --pane %5 --lines 120
+./tmux-connect serve --listen 127.0.0.1:8080
+./tmux-connect daemon run --telegram-token TOKEN --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon doctor --telegram-token TOKEN
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 ### HTTP API
@@ -176,7 +180,7 @@ tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 启动：
 
 ```bash
-tmux-connect serve --listen 127.0.0.1:8080
+./tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 常用端点：
@@ -205,7 +209,7 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 ## 常用 daemon 参数
 
 ```bash
-tmux-connect daemon run \
+./tmux-connect daemon run \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789 \

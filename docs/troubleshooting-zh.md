@@ -3,9 +3,9 @@
 ## 先做这三个检查
 
 ```bash
-tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
-tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
-tmux-connect list
+./tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect list
 ```
 
 这三个命令通常足够先判断问题在：
@@ -28,7 +28,7 @@ tmux-connect list
 建议先执行：
 
 ```bash
-tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+./tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 ```
 
 ### Telegram 命令无响应
@@ -57,8 +57,8 @@ tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 建议：
 
 ```bash
-tmux-connect list
-tmux-connect inspect --pane %5
+./tmux-connect list
+./tmux-connect inspect --pane %5
 ```
 
 ### `/snapshot` 失败
@@ -127,4 +127,7 @@ tmux-connect inspect --pane %5
 
 - [guide-zh.md](./guide-zh.md) — 中文快速开始
 - [telegram.md](./telegram.md) — Telegram 配置和命令说明
+- [slack.md](./slack.md) — Slack 配置和命令说明
+- [discord.md](./discord.md) — Discord 配置和命令说明
+- [whatsapp.md](./whatsapp.md) — WhatsApp 配置和命令说明
 - [architecture.md](./architecture.md) — 当前架构与恢复模型

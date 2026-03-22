@@ -5,26 +5,27 @@
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
 [![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
+[![WhatsApp](https://img.shields.io/badge/WhatsApp-whatsmeow-25D366?style=flat-square&logo=whatsapp)](https://pkg.go.dev/go.mau.fi/whatsmeow)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README](https://img.shields.io/badge/README-English-1F2937?style=flat-square)](./README.md)
 
 [English](./README.md) | 简体中文
 
-`tmux-connect` 是一个面向现有 tmux pane 的 tmux-first 中继工具。它允许你查看输出、发送输入、暴露本地 HTTP API，并通过 Telegram、Slack 或 Discord 控制选定的 pane，而不接管 pane 生命周期。
+`tmux-connect` 是一个面向现有 tmux pane 的 tmux-first 中继工具。它允许你查看输出、发送输入、暴露本地 HTTP API，并通过 Telegram、Slack、Discord 或 WhatsApp 控制选定的 pane，而不接管 pane 生命周期。
 
 当前范围：
 
 - 面向 attach、inspect、snapshot、stream 和 input 的本地 CLI
 - 基于同一桥接服务的本地 HTTP 控制面
-- 同一个 daemon 支持 Telegram 长轮询、Slack Socket Mode 和 Discord gateway 事件
+- 同一个 daemon 支持 Telegram 长轮询、Slack Socket Mode、Discord gateway 事件和 WhatsApp 多设备登录
 - 当前仍以 relay-first 为主；尚未提供结构化的 Codex/Claude/Gemini 协议
 
 ## Requirements
 
 - Go `1.25` 或更高版本
 - `tmux`
-- 如果要运行 `tmux-connect daemon`，需要 `PATH` 中可用的 `sqlite3`
-- 如果要远程控制，需要 Telegram bot token、Slack bot/app token 或 Discord bot token
+- 如果要运行 daemon，需要 `PATH` 中可用的 `sqlite3`
+- 如果要远程控制，需要 Telegram bot token、Slack bot/app token、Discord bot token 或已配对的 WhatsApp 设备会话
 
 ## Build
 
@@ -32,7 +33,9 @@
 go build ./cmd/tmux-connect
 ```
 
-仓库名是 `tmux-connect`，生成的二进制名是 `tmux-connect`。
+构建后会在仓库根目录生成 `./tmux-connect`。仓库名和二进制名都是 `tmux-connect`。
+
+以下示例使用 `./tmux-connect`。如果不想先编译，可以将 `./tmux-connect` 替换为 `go run ./cmd/tmux-connect`。
 
 ## CLI Quick Start
 
@@ -45,53 +48,53 @@ go build ./cmd/tmux-connect
 列出 pane：
 
 ```bash
-go run ./cmd/tmux-connect list
+./tmux-connect list
 ```
 
 接入一个已存在的 pane：
 
 ```bash
-go run ./cmd/tmux-connect attach --pane %5 --agent codex --label backend
+./tmux-connect attach --pane %5 --agent codex --label backend
 ```
 
 查看 bridge metadata：
 
 ```bash
-go run ./cmd/tmux-connect inspect --pane %5
+./tmux-connect inspect --pane %5
 ```
 
 发送文本并附带回车：
 
 ```bash
-go run ./cmd/tmux-connect send --pane %5 --text "continue" --enter
+./tmux-connect send --pane %5 --text "continue" --enter
 ```
 
 抓取最近输出：
 
 ```bash
-go run ./cmd/tmux-connect snapshot --pane %5 --lines 120
+./tmux-connect snapshot --pane %5 --lines 120
 ```
 
 持续跟随输出：
 
 ```bash
-go run ./cmd/tmux-connect stream --pane %5
+./tmux-connect stream --pane %5
 ```
 
 本地 CLI 入口如下：
 
 ```bash
-tmux-connect [--config PATH] [--socket NAME] [--json] list
-tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
-tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
-tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
-tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
-tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
-tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
-tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
-tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
+./tmux-connect [--config PATH] [--socket NAME] [--json] list
+./tmux-connect [--config PATH] [--socket NAME] [--json] attach --pane %5 [--agent unknown] [--label NAME]
+./tmux-connect [--config PATH] [--socket NAME] [--json] detach --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] inspect --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] snapshot --pane %5 [--lines 120]
+./tmux-connect [--config PATH] [--socket NAME] [--json] stream --pane %5 [--lines 120]
+./tmux-connect [--config PATH] [--socket NAME] [--json] send --pane %5 --text "hello" [--enter]
+./tmux-connect [--config PATH] [--socket NAME] [--json] enter --pane %5
+./tmux-connect [--config PATH] [--socket NAME] [--json] ctrl-c --pane %5
+./tmux-connect [--config PATH] [--socket NAME] serve [--listen 127.0.0.1:8080]
+./tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 ```
 
 ## HTTP API
@@ -99,7 +102,7 @@ tmux-connect [--config PATH] [--socket NAME] daemon <run|doctor|status> [flags]
 启动服务：
 
 ```bash
-go run ./cmd/tmux-connect serve --listen 127.0.0.1:8080
+./tmux-connect serve --listen 127.0.0.1:8080
 ```
 
 端点：
@@ -134,7 +137,7 @@ daemon 也支持通过 `--config PATH` 或默认
 启动 Telegram daemon：
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform telegram \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
   --db ~/.tmux-connect/tmux-connect.db \
@@ -144,7 +147,7 @@ go run ./cmd/tmux-connect daemon run \
 启动 Slack daemon：
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform slack \
   --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" \
   --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" \
@@ -154,24 +157,38 @@ go run ./cmd/tmux-connect daemon run \
 启动 Discord daemon：
 
 ```bash
-go run ./cmd/tmux-connect daemon run \
+./tmux-connect daemon run \
   --platform discord \
   --discord-token "$TMUXCONN_DISCORD_TOKEN" \
   --discord-command-prefix "tmux:" \
   --db ~/.tmux-connect/tmux-connect.db
 ```
 
+启动 WhatsApp daemon：
+
+```bash
+./tmux-connect daemon run \
+  --platform whatsapp \
+  --whatsapp-session-db ~/.tmux-connect/whatsapp-device.db \
+  --db ~/.tmux-connect/tmux-connect.db \
+  --allow-chat whatsapp:8613800000000@s.whatsapp.net
+```
+
 如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
 如果要让 Discord 在频道或私聊里识别前缀命令，需要在开发者后台启用 Message Content intent。
+WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。
 
 常用参数：
 
-- `--platform telegram|slack|discord`
+- `--platform telegram|slack|discord|whatsapp`
 - `--telegram-token TOKEN`
 - `--slack-bot-token TOKEN`
 - `--slack-app-token TOKEN`
 - `--discord-token TOKEN`
 - `--discord-command-prefix PREFIX`
+- `--whatsapp-session-db PATH`
+- `--whatsapp-device-name NAME`
+- `--whatsapp-auto-mark-read`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`
@@ -196,8 +213,8 @@ go run ./cmd/tmux-connect daemon run \
 检查命令：
 
 ```bash
-go run ./cmd/tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
-go run ./cmd/tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
+./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
 
 Telegram 命令：
@@ -242,8 +259,23 @@ Discord 命令：
 - `/ctrlc` 或 `/ctrl-c`
 - `/follow on [interval]|off`
 
-Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram 以及 Slack 私聊和受管 thread 里的纯文本始终会指向当前 pane。默认仍是原始 `type` 模式，只输入不回车；如果设置 `--plain-text-mode execute` 或 `plain_text_mode = "execute"`，裸文本就会变成“发送并回车”。当 execute 模式配合 snapshot echo 使用时，daemon 会在 pane 输出发生可见变化后返回一段文本快照。若你在 execute 模式下仍想只输入不执行，使用 `/send <text>` 或 `tmux: send <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
+WhatsApp 命令：
+
+- `/panes`
+- `/select <pane>`
+- `/clear`
+- `/unmanage <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/keys <key...>`
+- `/enter [text]`
+- `/ctrlc` 或 `/ctrl-c`
+- `/follow on [interval]|off`
+
+Slack 频道里建议用 app mention 起命令，例如 `@tmux-connect panes`；Slack 私聊和 bot thread 里用 `tmux:` 作为命令前缀。带 `/` 的写法可能会先被 Slack 当成真正的 Slash Command 拦截，发不到 bot。Telegram、WhatsApp 以及 Slack 私聊和受管 thread 里的纯文本始终会指向当前 pane。默认仍是原始 `type` 模式，只输入不回车；如果设置 `--plain-text-mode execute` 或 `plain_text_mode = "execute"`，裸文本就会变成"发送并回车"。当 execute 模式配合 snapshot echo 使用时，daemon 会在 pane 输出发生可见变化后返回一段文本快照。若你在 execute 模式下仍想只输入不执行，使用 `/send <text>` 或 `tmux: send <text>`。发送 tmux 特殊键时，使用 `/keys` 或 `tmux: keys`，例如 `C-c`、`PageUp`、`F1`、`M-x`。`tmux: snapshot` 默认使用 `image`。Telegram snapshot 图片默认使用内置 `gomono` 字体、`14` pt 字号和 `dark` 主题。
 Discord 里建议优先使用 Slash Commands。频道中也支持 `tmux: panes` 这类前缀命令；纯文本只会在 Discord 私聊里被当作 pane 输入，并沿用同样可配置的 `type`/`execute` 行为。
+WhatsApp 里使用 `/panes`、`/follow on` 等斜杠命令。纯文本在私聊中指向当前 pane，沿用同样的 `type`/`execute` 行为。v1 仅支持私聊，群组消息会被忽略。
 
 ## Recovery Model
 
@@ -266,15 +298,18 @@ remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系�
 - [docs/telegram.md](./docs/telegram.md) Telegram 配置与操作
 - [docs/slack.md](./docs/slack.md) Slack 配置与操作
 - [docs/discord.md](./docs/discord.md) Discord 配置与操作
+- [docs/whatsapp.md](./docs/whatsapp.md) WhatsApp 配置与操作
+- [docs/discord-zh.md](./docs/discord-zh.md) Discord 接入指南（中文）
 - [docs/architecture.md](./docs/architecture.md) 当前系统架构
 - [docs/roadmap.md](./docs/roadmap.md) 近期路线图
 
 ## Current Limits
 
 - 项目目前仍以 relay-first 为主，还没有结构化 agent 事件解析
-- 控制键目前仅支持 `Enter` 和 `Ctrl-C`
+- CLI 的专用控制键命令仅有 `enter` 和 `ctrl-c`；daemon 的 `/keys` 命令支持更多 tmux 按键名（`C-c`、`PageUp`、`F1`、`M-x` 等）
 - follow 恢复状态尚不能跨 daemon 重启保留
 - SQLite 层仍然通过调用 `sqlite3` 命令，而不是内嵌 driver
+- WhatsApp v1 仅支持私聊，不支持群组
 
 ## Acknowledgements
 

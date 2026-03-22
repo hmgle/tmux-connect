@@ -5,9 +5,10 @@
 The current repository ships:
 
 - local tmux bridge via CLI and HTTP API
-- remote relay daemon for Telegram and Slack
+- remote relay daemon for Telegram, Slack, Discord, and WhatsApp
 - SQLite-backed chat bindings, sessions, and message links
 - reply continuity for pane-scoped remote interactions
+- `/keys` command for sending arbitrary tmux key names from all platforms
 
 ## Near-Term Priorities
 
@@ -15,7 +16,7 @@ The current repository ships:
 - start with `codex` as the first structured target
 - support Telegram inline actions for continue, stop, and approval-style interactions
 - improve follow output handling for repaint-heavy terminal streams
-- add richer control input beyond `Enter` and `Ctrl-C`
+- add richer control input beyond the current `/keys` surface
 
 ## Data And Runtime Follow-Up
 
@@ -32,5 +33,6 @@ The current repository ships:
 
 ## Longer-Term Ideas
 
-- support additional remote connectors beyond Telegram and Slack
 - optionally add bridge-managed pane creation for users who want managed startup flows
+- WhatsApp group chat support
+- explore richer platform-specific features (Discord threads, Slack canvas, etc.)
