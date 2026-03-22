@@ -8,8 +8,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hmgle/tmux-connect/internal/buildinfo"
 	"github.com/hmgle/tmux-connect/internal/tmux"
 )
+
+func TestAppRunVersionText(t *testing.T) {
+	restore := setBuildInfoForTest(t, "v0.1.0", "abc1234", "2026-03-22T12:00:00Z")
+	defer restore()
+
+	app, stdout, stderr := newTestApp(t, nil)
+
+	if err := app.Run(context.Background(), []string{"version"}); err != nil {
+		t.Fatalf("Run(version) error = %v", err)
+	}
+	if got := stdout.String(); got != "tmux-connect v0.1.0\ncommit: abc1234\nbuilt: 2026-03-22T12:00:00Z\n" {
+		t.Fatalf("stdout = %q, want formatted version output", got)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestAppRunVersionJSON(t *testing.T) {
+	restore := setBuildInfoForTest(t, "v0.1.0", "abc1234", "2026-03-22T12:00:00Z")
+	defer restore()
+
+	app, stdout, _ := newTestApp(t, nil)
+
+	if err := app.Run(context.Background(), []string{"version", "--json"}); err != nil {
+		t.Fatalf("Run(version --json) error = %v", err)
+	}
+
+	var payload struct {
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Date    string `json:"date"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal(stdout) error = %v\nstdout=%s", err, stdout.String())
+	}
+	if payload.Version != "v0.1.0" || payload.Commit != "abc1234" || payload.Date != "2026-03-22T12:00:00Z" {
+		t.Fatalf("payload = %#v, want version metadata", payload)
+	}
+}
 
 func TestAppRunListJSON(t *testing.T) {
 	t.Parallel()
@@ -240,5 +281,20 @@ func TestFormatLastActivityZero(t *testing.T) {
 	}
 	if got := formatLastActivity(1710000000); got != time.Unix(1710000000, 0).Format(time.RFC3339) {
 		t.Fatalf("formatLastActivity(1710000000) = %q, want RFC3339 timestamp", got)
+	}
+}
+
+func setBuildInfoForTest(t *testing.T, version string, commit string, date string) func() {
+	t.Helper()
+
+	previous := buildinfo.Current()
+	buildinfo.Version = version
+	buildinfo.Commit = commit
+	buildinfo.Date = date
+
+	return func() {
+		buildinfo.Version = previous.Version
+		buildinfo.Commit = previous.Commit
+		buildinfo.Date = previous.Date
 	}
 }

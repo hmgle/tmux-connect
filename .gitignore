@@ -1,4 +1,5 @@
 /tmux-connect
+/.gocache/
 *.db
 *.db-shm
 *.db-wal

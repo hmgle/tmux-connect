@@ -1,5 +1,6 @@
 # tmux-connect
 
+[![CI](https://github.com/hmgle/tmux-connect/actions/workflows/ci.yml/badge.svg)](https://github.com/hmgle/tmux-connect/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![tmux](https://img.shields.io/badge/tmux-required-1BB91F?style=flat-square&logo=tmux)](https://github.com/tmux/tmux)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot%20API-26A5E4?style=flat-square&logo=telegram)](https://core.telegram.org/bots/api)

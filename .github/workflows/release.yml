@@ -1,0 +1,90 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: darwin
+            goarch: amd64
+            runner: macos-13
+          - goos: darwin
+            goarch: arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          commit="${GITHUB_SHA}"
+          date="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          archive="tmux-connect_${version#v}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
+          staging="dist/${{ matrix.goos }}-${{ matrix.goarch }}"
+
+          mkdir -p "${staging}"
+          CGO_ENABLED=1 GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" \
+            go build \
+              -trimpath \
+              -ldflags="-s -w -X github.com/hmgle/tmux-connect/internal/buildinfo.Version=${version} -X github.com/hmgle/tmux-connect/internal/buildinfo.Commit=${commit} -X github.com/hmgle/tmux-connect/internal/buildinfo.Date=${date}" \
+              -o "${staging}/tmux-connect" \
+              ./cmd/tmux-connect
+
+          cp README.md LICENSE "${staging}/"
+          tar -C "${staging}" -czf "dist/${archive}" tmux-connect README.md LICENSE
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum ./*.tar.gz > checksums.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt

@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/hmgle/tmux-connect/internal/buildinfo"
 	"github.com/hmgle/tmux-connect/internal/config"
 )
 
@@ -30,6 +31,8 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	case "help", "-h", "--help":
 		a.printUsage()
 		return nil
+	case "version":
+		return a.runVersion(args[1:])
 	case "list":
 		return a.runList(ctx, args[1:])
 	case "attach":
@@ -68,6 +71,7 @@ Global flags:
   note: global flags must appear before the command
 
 Commands:
+  version  [--json]
   list [--json]
   attach   --pane %%5 [--agent unknown] [--label api] [--json]
   detach   --pane %%5 [--json]
@@ -100,4 +104,24 @@ func formatLastActivity(unix int64) string {
 		return "-"
 	}
 	return time.Unix(unix, 0).Format(time.RFC3339)
+}
+
+func (a *App) runVersion(args []string) error {
+	command := a.newCommandFlags("version")
+	jsonOut, err := command.parse(args)
+	if err != nil {
+		return err
+	}
+
+	info := buildinfo.Current()
+	return a.writeOutput(jsonOut, info, func() error {
+		_, err := fmt.Fprintf(
+			a.stdout,
+			"tmux-connect %s\ncommit: %s\nbuilt: %s\n",
+			info.Version,
+			info.Commit,
+			info.Date,
+		)
+		return err
+	})
 }
