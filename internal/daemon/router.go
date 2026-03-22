@@ -383,36 +383,16 @@ func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error
 }
 
 func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args string) error {
-	chat := message.Chat
 	mode, opts, err := parseFollowArgs(args)
 	if err != nil {
-		if strings.TrimSpace(args) == "" {
-			r.logInbound(ctx, message, "", "")
-			return r.promptForCommandInput(ctx, message, "follow")
-		}
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "follow on [interval]|off"))
+		return r.replyFollowParseError(ctx, message, args)
 	}
 	switch mode {
 	case "on":
-		_, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
-		if err != nil {
-			return r.replyCurrentPaneError(ctx, chat, paneKey, err)
-		}
-		if err := r.follow.EnableWithOptions(ctx, chat, paneKey, opts); err != nil {
-			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
-		}
-		resolved := r.follow.Options(chat.Key())
-		return r.replyBus.Reply(ctx, chat, paneKey, "follow", fmt.Sprintf("follow enabled for %s (min interval %s)", paneKey, resolved.MinInterval))
+		return r.enableFollow(ctx, message, opts)
 	case "off":
-		paneKey := r.follow.CurrentPane(chat.Key())
-		r.logInbound(ctx, message, paneKey, "")
-		if !r.follow.Disable(chat.Key()) {
-			return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow is already off")
-		}
-		return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow disabled")
+		return r.disableFollow(ctx, message)
 	default:
-		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chat, "", "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "follow on [interval]|off"))
+		return r.replyFollowUsage(ctx, message)
 	}
 }

@@ -56,3 +56,27 @@ func (r *Router) executeNoOutputMessage(chat ChatRef, paneKey string) string {
 	followUsage := formatCommandUsage(r.commandPrefix(chat), "follow on")
 	return fmt.Sprintf("sent to %s and pressed Enter; no visible output yet. Try %s or %s.", paneKey, snapshotUsage, followUsage)
 }
+
+func (r *Router) replyFollowUsage(ctx context.Context, message IncomingMessage) error {
+	r.logInbound(ctx, message, "", "")
+	return r.replyBus.Reply(ctx, message.Chat, "", "usage", "usage: "+formatCommandUsage(r.commandPrefix(message.Chat), "follow on [interval]|off"))
+}
+
+func (r *Router) replyFollowParseError(ctx context.Context, message IncomingMessage, args string) error {
+	if strings.TrimSpace(args) == "" {
+		r.logInbound(ctx, message, "", "")
+		return r.promptForCommandInput(ctx, message, "follow")
+	}
+	return r.replyFollowUsage(ctx, message)
+}
+
+func (r *Router) replyFollowEnabled(ctx context.Context, chat ChatRef, paneKey string, opts FollowOptions) error {
+	return r.replyBus.Reply(ctx, chat, paneKey, "follow", fmt.Sprintf("follow enabled for %s (min interval %s)", paneKey, opts.MinInterval))
+}
+
+func (r *Router) replyFollowDisabled(ctx context.Context, chat ChatRef, paneKey string, disabled bool) error {
+	if !disabled {
+		return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow is already off")
+	}
+	return r.replyBus.Reply(ctx, chat, paneKey, "follow", "follow disabled")
+}
