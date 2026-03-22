@@ -1,18 +1,28 @@
 # Documentation Index
 
-## Start Here
+## Reference
 
-- [../README.md](../README.md) — repository overview, build, CLI, HTTP API, and daemon quick start
-- [guide-zh.md](./guide-zh.md) — Chinese quick start
-- [troubleshooting-zh.md](./troubleshooting-zh.md) — Chinese troubleshooting
-- [telegram.md](./telegram.md) — Telegram setup, flags, commands, and operations
-- [slack.md](./slack.md) — Slack setup, flags, commands, and operations
-- [discord.md](./discord.md) — Discord setup, flags, slash commands, and channel/DM behavior
+- [cli.md](./cli.md) — CLI commands, flags, and exit codes
+- [cli-zh.md](./cli-zh.md) — CLI 命令参考（中文）
+- [api.md](./api.md) — HTTP API endpoints and examples
+- [api-zh.md](./api-zh.md) — HTTP API 参考（中文）
+- [daemon.md](./daemon.md) — daemon configuration, flags, and recovery model
+- [daemon-zh.md](./daemon-zh.md) — daemon 配置参考（中文）
+
+## Platform Guides
+
+- [telegram.md](./telegram.md) — Telegram setup, commands, and operations
+- [slack.md](./slack.md) — Slack setup, commands, and operations
+- [discord.md](./discord.md) — Discord setup, slash commands, and channel/DM behavior
 - [whatsapp.md](./whatsapp.md) — WhatsApp multi-device setup, QR login, and private-chat behavior
-- [discord-zh.md](./discord-zh.md) — Discord 接入详细指南（中文）
-- [architecture.md](./architecture.md) — current architecture, persistence model, and design principles
-- [roadmap.md](./roadmap.md) — public roadmap for upcoming work
 
-## Notes
+## 中文指南
 
-The repository intentionally keeps a small public docs set. Older phase-by-phase planning and handoff notes were removed to keep the open-source documentation focused on current behavior.
+- [guide-zh.md](./guide-zh.md) — 中文快速开始
+- [troubleshooting-zh.md](./troubleshooting-zh.md) — 中文故障排查
+- [discord-zh.md](./discord-zh.md) — Discord 接入指南
+
+## Design
+
+- [architecture.md](./architecture.md) — system architecture, persistence, and design principles
+- [roadmap.md](./roadmap.md) — upcoming work
