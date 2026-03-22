@@ -24,7 +24,7 @@
 
 - Go `1.25` 或更高版本
 - `tmux`
-- 如果要运行 daemon，需要 `PATH` 中可用的 `sqlite3`
+- daemon 使用内嵌 SQLite，不再要求系统额外安装 `sqlite3` 命令行
 - 如果要远程控制，需要 Telegram bot token、Slack bot/app token、Discord bot token 或已配对的 WhatsApp 设备会话
 
 ## Build
@@ -321,7 +321,6 @@ remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系�
 - 项目目前仍以 relay-first 为主，还没有结构化 agent 事件解析
 - CLI 的专用控制键命令仅有 `enter` 和 `ctrl-c`；daemon 的 `/keys` 命令支持更多 tmux 按键名（`C-c`、`PageUp`、`F1`、`M-x` 等）
 - follow 恢复状态尚不能跨 daemon 重启保留
-- SQLite 层仍然通过调用 `sqlite3` 命令，而不是内嵌 driver
 - WhatsApp v1 仅支持私聊，不支持群组
 
 ## Acknowledgements

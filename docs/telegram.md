@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - `tmux` is installed and the target pane already exists
-- `sqlite3` is installed and available in `PATH`
+- no external `sqlite3` CLI is required; the daemon uses embedded SQLite
 - you have a Telegram bot token from BotFather
 - you know the Telegram `chat_id` you want to allow if you plan to use `--allow-chat`
 

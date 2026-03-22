@@ -24,7 +24,7 @@ Current scope:
 
 - Go `1.25` or later
 - `tmux`
-- `sqlite3` in `PATH` if you want to run the daemon
+- SQLite support is embedded in the Go binary; no external `sqlite3` CLI is required for the daemon
 - a Telegram bot token, Slack bot/app tokens, a Discord bot token, or a paired WhatsApp device session if you want remote control
 
 ## Build
@@ -362,7 +362,6 @@ The remote daemon stores platform chat state in SQLite, including bindings, curr
 - the project is relay-first; there is still no structured agent event parsing
 - the CLI's dedicated control-key commands are `enter` and `ctrl-c`; the daemon's `/keys` command supports a wider range of tmux key names (`C-c`, `PageUp`, `F1`, `M-x`, etc.)
 - follow restore does not survive daemon restart yet
-- the SQLite layer still shells out to `sqlite3` rather than using an embedded driver
 - WhatsApp v1 supports only one-to-one chats from another account; self-chat and group chats are ignored
 
 ## Acknowledgements

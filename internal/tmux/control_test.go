@@ -46,6 +46,31 @@ func TestParseNotificationReportsMalformedTargetPayload(t *testing.T) {
 	}
 }
 
+func TestParseNotificationExtendedOutput(t *testing.T) {
+	t.Parallel()
+
+	target := Target{Socket: "default", PaneID: "%5"}
+	chunk, ok, err := parseNotification(target, `%extended-output %5 0 : hello\012world`)
+	if err != nil {
+		t.Fatalf("parseNotification() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("expected extended output notification")
+	}
+	if chunk.Text != "hello\nworld" {
+		t.Fatalf("chunk text = %q, want %q", chunk.Text, "hello\nworld")
+	}
+}
+
+func TestCleanControlLineStripsDCSWrapper(t *testing.T) {
+	t.Parallel()
+
+	line := "\x1bP1000p%output %5 hello\\012\x1b\\\r\n"
+	if got := cleanControlLine(line); got != `%output %5 hello\012` {
+		t.Fatalf("cleanControlLine() = %q", got)
+	}
+}
+
 func TestCutoverSubscriptionTrimsBufferedPrefixPresentInInitialSnapshot(t *testing.T) {
 	t.Parallel()
 

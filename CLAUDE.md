@@ -35,7 +35,7 @@ Remote daemon ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.
 
 **`internal/httpapi/`** — RESTful HTTP server. Endpoints under `/v1/panes/*` plus `/healthz`. Streaming is SSE-based.
 
-**`internal/daemon/`** — Multi-connector relay daemon. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence (shells out to `sqlite3` CLI, not an embedded driver). `ReplyBus`/`Messenger` handle reply continuity across Telegram, Slack, Discord, and WhatsApp. Schema is versioned via `PRAGMA user_version`.
+**`internal/daemon/`** — Multi-connector relay daemon. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence via the embedded Go SQLite driver. `ReplyBus`/`Messenger` handle reply continuity across Telegram, Slack, Discord, and WhatsApp. Schema is versioned via `PRAGMA user_version`.
 
 **`internal/telegram/`** — Thin long-polling Telegram Bot API client.
 
@@ -56,7 +56,7 @@ Remote daemon ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.
 ## Runtime Requirements
 
 - `tmux` installed with an existing target pane
-- the daemon additionally needs `sqlite3` in PATH and valid platform credentials or session config: `TMUXCONN_TELEGRAM_TOKEN`, `TMUXCONN_SLACK_BOT_TOKEN`, `TMUXCONN_DISCORD_TOKEN` for tokens, or `TMUXCONN_WHATSAPP_SESSION_DB` for the WhatsApp local session database path
+- the daemon needs valid platform credentials or session config: `TMUXCONN_TELEGRAM_TOKEN`, `TMUXCONN_SLACK_BOT_TOKEN`, `TMUXCONN_DISCORD_TOKEN` for tokens, or `TMUXCONN_WHATSAPP_SESSION_DB` for the WhatsApp local session database path
 - `TMUXCONN_TMUX_SOCKET` env var overrides the default tmux socket
 - Don't commit the root-level `tmux-connect` binary or `.cache/` directory
 

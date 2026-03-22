@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - `tmux` is installed and the target pane already exists
-- `sqlite3` is installed and available in `PATH`
+- no external `sqlite3` CLI is required; the daemon uses embedded SQLite
 - you have a Slack app with:
   - a bot token (`xoxb-...`)
   - an app-level token (`xapp-...`) with Socket Mode enabled
