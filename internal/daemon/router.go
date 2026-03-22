@@ -217,18 +217,7 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 	if err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "snapshot [lines] [image|text]"))
 	}
-	body, err := r.service.Snapshot(ctx, paneKey, lines)
-	if err != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
-	}
-	if mode == snapshotModeText {
-		return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
-	}
-	richBody, richErr := r.service.SnapshotRich(ctx, paneKey, lines)
-	if richErr == nil && strings.TrimSpace(richBody) != "" {
-		return r.replyBus.ReplySnapshot(ctx, chat, paneKey, body, richBody)
-	}
-	return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
+	return r.replySnapshotForMode(ctx, chat, paneKey, lines, mode)
 }
 
 func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
@@ -289,19 +278,16 @@ func (r *Router) executeText(ctx context.Context, message IncomingMessage, text 
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
 	if r.plainText.Echo != plainTextEchoSnapshot {
-		return r.replyBus.Reply(ctx, chat, paneKey, "enter", fmt.Sprintf("sent to %s and pressed Enter", paneKey))
+		return r.replyEnterSent(ctx, chat, paneKey)
 	}
 	if baselineErr != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("sent to %s and pressed Enter, but snapshot failed: %v", paneKey, baselineErr))
+		return r.replyExecuteSnapshotError(ctx, chat, paneKey, baselineErr)
 	}
 	body, changed, pollErr := r.waitForExecuteSnapshot(ctx, paneKey, baseline)
 	if pollErr != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("sent to %s and pressed Enter, but snapshot failed: %v", paneKey, pollErr))
+		return r.replyExecuteSnapshotError(ctx, chat, paneKey, pollErr)
 	}
-	if !changed {
-		return r.replyBus.Reply(ctx, chat, paneKey, "enter", r.executeNoOutputMessage(chat, paneKey))
-	}
-	return r.replyBus.Reply(ctx, chat, paneKey, "snapshot", formatFollowMessage(paneKey, body, 3500))
+	return r.replyExecuteResult(ctx, chat, paneKey, body, changed)
 }
 
 func (r *Router) waitForExecuteSnapshot(ctx context.Context, paneKey string, baseline string) (string, bool, error) {
@@ -355,12 +341,6 @@ func waitForDuration(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-func (r *Router) executeNoOutputMessage(chat ChatRef, paneKey string) string {
-	snapshotUsage := formatCommandUsage(r.commandPrefix(chat), "snapshot text")
-	followUsage := formatCommandUsage(r.commandPrefix(chat), "follow on")
-	return fmt.Sprintf("sent to %s and pressed Enter; no visible output yet. Try %s or %s.", paneKey, snapshotUsage, followUsage)
 }
 
 func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args string) error {
