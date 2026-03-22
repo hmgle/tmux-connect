@@ -26,3 +26,4 @@
 
 - [architecture.md](./architecture.md) — system architecture, persistence, and design principles
 - [roadmap.md](./roadmap.md) — upcoming work
+- [releasing.md](./releasing.md) — release workflow, notes template, and rerun process
