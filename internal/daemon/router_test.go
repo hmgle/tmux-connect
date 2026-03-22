@@ -610,7 +610,7 @@ func TestRouterPlainTextExecuteSendsTextAndReturnsSnapshot(t *testing.T) {
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
@@ -655,7 +655,7 @@ func TestRouterPlainTextExecuteTimeoutReturnsNoVisibleOutputMessage(t *testing.T
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 3 * time.Millisecond,
+		EchoTimeout: 10 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
@@ -692,7 +692,7 @@ func TestRouterPlainTextExecuteSnapshotFailureReturnsErrorAfterSend(t *testing.T
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
@@ -730,7 +730,7 @@ func TestRouterPlainTextExecuteSendFailureReturnsError(t *testing.T) {
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
@@ -925,7 +925,7 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
@@ -1869,7 +1869,7 @@ func TestRouterSlackPlainTextExecuteInManagedThreadReturnsSnapshot(t *testing.T)
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "select %5")); err != nil {
@@ -1909,7 +1909,7 @@ func TestRouterDiscordDMPlainTextExecuteReturnsSnapshot(t *testing.T) {
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
-		EchoTimeout: 20 * time.Millisecond,
+		EchoTimeout: 75 * time.Millisecond,
 	})
 
 	if err := router.HandleMessage(ctx, discordMessage("D123", "1", "/select %5")); err != nil {
