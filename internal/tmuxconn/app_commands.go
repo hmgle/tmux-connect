@@ -2,64 +2,9 @@ package tmuxconn
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"strings"
 	"text/tabwriter"
 )
-
-type commandFlags struct {
-	fs      *flag.FlagSet
-	jsonOut *bool
-}
-
-func (a *App) newCommandFlags(name string) commandFlags {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-	return commandFlags{
-		fs:      fs,
-		jsonOut: fs.Bool("json", false, "print machine-readable JSON"),
-	}
-}
-
-func (c commandFlags) parse(args []string) (bool, error) {
-	if err := c.fs.Parse(args); err != nil {
-		return false, UsageError("%v", err)
-	}
-	return *c.jsonOut, nil
-}
-
-type paneCommandFlags struct {
-	commandFlags
-	pane *string
-}
-
-func (a *App) newPaneCommandFlags(name string) paneCommandFlags {
-	command := a.newCommandFlags(name)
-	return paneCommandFlags{
-		commandFlags: command,
-		pane:         command.fs.String("pane", "", "pane id or pane key (required)"),
-	}
-}
-
-func (p paneCommandFlags) parse(args []string) (string, bool, error) {
-	jsonOut, err := p.commandFlags.parse(args)
-	if err != nil {
-		return "", false, err
-	}
-	pane := strings.TrimSpace(*p.pane)
-	if pane == "" {
-		return "", false, UsageError("%s requires --pane", p.fs.Name())
-	}
-	return pane, jsonOut, nil
-}
-
-func (a *App) writeOutput(jsonOut bool, payload any, writeText func() error) error {
-	if jsonOut {
-		return writeJSON(a.stdout, payload)
-	}
-	return writeText()
-}
 
 func (a *App) runList(ctx context.Context, args []string) error {
 	command := a.newCommandFlags("list")
@@ -235,70 +180,4 @@ func (a *App) runCtrlC(ctx context.Context, args []string) error {
 		_, err := fmt.Fprintf(a.stdout, "sent Ctrl-C to %s\n", pane)
 		return err
 	})
-}
-
-func (a *App) runStream(ctx context.Context, args []string) error {
-	command := a.newPaneCommandFlags("stream")
-	lines := command.fs.Int("lines", 120, "number of recent lines to print before following output")
-	pane, jsonOut, err := command.parse(args)
-	if err != nil {
-		return err
-	}
-	stream, err := a.service.OpenStream(ctx, pane, *lines)
-	if err != nil {
-		return err
-	}
-	defer stream.Subscription.Close()
-
-	if err := a.writeOutput(jsonOut, map[string]any{
-		"event":   "initial",
-		"pane":    stream.Pane.Target.PaneKey(),
-		"lines":   *lines,
-		"content": stream.Initial,
-	}, func() error {
-		if stream.Initial == "" {
-			return nil
-		}
-		_, err := fmt.Fprint(a.stdout, stream.Initial)
-		return err
-	}); err != nil {
-		return err
-	}
-
-	chunks := stream.Subscription.Chunks()
-	errs := stream.Subscription.Errs()
-	for {
-		if chunks == nil && errs == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case err, ok := <-errs:
-			if !ok {
-				errs = nil
-				continue
-			}
-			if err == nil {
-				continue
-			}
-			return TmuxError("stream %s: %v", stream.Pane.Target.PaneKey(), err)
-		case chunk, ok := <-chunks:
-			if !ok {
-				chunks = nil
-				continue
-			}
-			if err := a.writeOutput(jsonOut, map[string]any{
-				"event":   "output",
-				"pane":    stream.Pane.Target.PaneKey(),
-				"content": chunk.Text,
-				"at":      chunk.ReceivedAt,
-			}, func() error {
-				_, err := fmt.Fprint(a.stdout, chunk.Text)
-				return err
-			}); err != nil {
-				return err
-			}
-		}
-	}
 }
