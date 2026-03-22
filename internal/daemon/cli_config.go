@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hmgle/tmux-connect/internal/config"
-	"github.com/hmgle/tmux-connect/internal/termrender"
 	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
@@ -33,98 +32,11 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if err := fs.Parse(args); err != nil {
 		return Config{}, tmuxconn.UsageError("%v", err)
 	}
-	cfg.Platform = strings.TrimSpace(strings.ToLower(cfg.Platform))
-	if cfg.Platform == "" {
-		cfg.Platform = "telegram"
+	if err := applyConfigValues(fs, &cfg, values, fileCfg); err != nil {
+		return Config{}, err
 	}
-	cfg.PlainTextMode = plainTextMode(values.plainTextMode)
-	cfg.PlainTextEcho = plainTextEchoMode(values.plainTextEcho)
-	switch {
-	case flagWasSet(fs, "allow-chat"):
-		cfg.AllowChats = append([]string(nil), values.allowChats.values...)
-	case fileCfg.AllowChats != nil:
-		cfg.AllowChats = append([]string(nil), (*fileCfg.AllowChats)...)
-	}
-	if cfg.PollTimeout <= 0 {
-		return Config{}, tmuxconn.UsageError("--poll-timeout must be > 0")
-	}
-	if cfg.SnapshotLines <= 0 {
-		return Config{}, tmuxconn.UsageError("--snapshot-lines must be > 0")
-	}
-	if cfg.PlainTextMode, err = parsePlainTextMode(string(cfg.PlainTextMode)); err != nil {
-		return Config{}, tmuxconn.UsageError("%v", err)
-	}
-	if cfg.PlainTextEcho, err = parsePlainTextEchoMode(string(cfg.PlainTextEcho)); err != nil {
-		return Config{}, tmuxconn.UsageError("%v", err)
-	}
-	if cfg.PlainTextEchoLines <= 0 {
-		return Config{}, tmuxconn.UsageError("--plain-text-echo-lines must be > 0")
-	}
-	if cfg.PlainTextEchoDelay <= 0 {
-		return Config{}, tmuxconn.UsageError("--plain-text-echo-delay must be > 0")
-	}
-	if cfg.PlainTextEchoTimeout <= 0 {
-		return Config{}, tmuxconn.UsageError("--plain-text-echo-timeout must be > 0")
-	}
-	if err := termrender.ValidateOptions(snapshotRenderOptions(cfg)); err != nil {
-		return Config{}, tmuxconn.UsageError("%v", err)
-	}
-	if cfg.FollowLines <= 0 {
-		return Config{}, tmuxconn.UsageError("--follow-lines must be > 0")
-	}
-	if cfg.FollowMinGap <= 0 {
-		return Config{}, tmuxconn.UsageError("--follow-min-interval must be > 0")
-	}
-	if shouldUseWhatsAppFollowMinGap(fs, fileCfg, cfg.Platform) {
-		cfg.FollowMinGap = 2 * time.Second
-	}
-	if cfg.Platform == "slack" {
-		if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
-			return Config{}, tmuxconn.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
-		}
-	} else {
-		cfg.SlackCommandPrefix = ""
-	}
-	if cfg.Platform == "discord" {
-		if strings.TrimSpace(cfg.DiscordCommandPrefix) == "" || strings.ContainsAny(cfg.DiscordCommandPrefix, " \t\n") {
-			return Config{}, tmuxconn.UsageError("--discord-command-prefix must be non-empty and contain no whitespace")
-		}
-	} else {
-		cfg.DiscordCommandPrefix = ""
-	}
-	if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
-		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
-	}
-	if !flagWasSet(fs, "whatsapp-session-db") && fileCfg.WhatsApp.SessionDB == nil && strings.TrimSpace(os.Getenv("TMUXCONN_WHATSAPP_SESSION_DB")) == "" {
-		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
-	}
-	if strings.TrimSpace(cfg.WhatsAppDeviceName) == "" {
-		cfg.WhatsAppDeviceName = "tmux-connect"
-	}
-	if requireRun {
-		switch cfg.Platform {
-		case "telegram":
-			if strings.TrimSpace(cfg.TelegramToken) == "" {
-				return Config{}, tmuxconn.UsageError("daemon run requires --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
-			}
-		case "slack":
-			if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
-				return Config{}, tmuxconn.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TMUXCONN_SLACK_BOT_TOKEN/TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
-			}
-		case "discord":
-			if strings.TrimSpace(cfg.DiscordToken) == "" {
-				return Config{}, tmuxconn.UsageError("daemon run requires --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
-			}
-		case "whatsapp":
-			if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
-				return Config{}, tmuxconn.UsageError("daemon run requires --whatsapp-session-db, TMUXCONN_WHATSAPP_SESSION_DB, or [daemon.whatsapp].session_db in config")
-			}
-		default:
-			return Config{}, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
-		}
-	}
-	if strings.TrimSpace(cfg.DBPath) == "" {
-		return Config{}, tmuxconn.UsageError("--db is required")
+	if err := validateConfig(&cfg, fs, fileCfg, requireRun); err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }
@@ -245,24 +157,6 @@ func durationValue(fieldName string, value *string, fallback time.Duration) (tim
 		return 0, fmt.Errorf("%s must be a duration: %w", fieldName, err)
 	}
 	return parsed, nil
-}
-
-func parsePlainTextMode(value string) (plainTextMode, error) {
-	switch mode := plainTextMode(strings.TrimSpace(strings.ToLower(value))); mode {
-	case plainTextModeType, plainTextModeExecute:
-		return mode, nil
-	default:
-		return "", fmt.Errorf("--plain-text-mode must be type or execute")
-	}
-}
-
-func parsePlainTextEchoMode(value string) (plainTextEchoMode, error) {
-	switch mode := plainTextEchoMode(strings.TrimSpace(strings.ToLower(value))); mode {
-	case plainTextEchoOff, plainTextEchoSnapshot:
-		return mode, nil
-	default:
-		return "", fmt.Errorf("--plain-text-echo must be off or snapshot")
-	}
 }
 
 func normalizePlainTextConfig(cfg PlainTextConfig) PlainTextConfig {
