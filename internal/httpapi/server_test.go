@@ -63,7 +63,9 @@ func TestHandleList(t *testing.T) {
 				Metadata: tmux.BridgeMetadata{Managed: true, Mode: tmux.ModeRelay, Agent: tmux.AgentClaude},
 			}}, nil
 		},
-		attachFn:     func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
+		attachFn: func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) {
+			return tmuxconn.PaneRecord{}, nil
+		},
 		detachFn:     func(context.Context, string) error { return nil },
 		inspectFn:    func(context.Context, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
 		snapshotFn:   func(context.Context, string, int) (string, error) { return "", nil },
@@ -91,8 +93,10 @@ func TestHandleSend(t *testing.T) {
 	var gotPane, gotText string
 	var gotEnter bool
 	srv := NewServer("127.0.0.1:0", stubService{
-		listFn:     func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
-		attachFn:   func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
+		listFn: func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
+		attachFn: func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) {
+			return tmuxconn.PaneRecord{}, nil
+		},
 		detachFn:   func(context.Context, string) error { return nil },
 		inspectFn:  func(context.Context, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
 		snapshotFn: func(context.Context, string, int) (string, error) { return "", nil },
@@ -130,8 +134,10 @@ func TestHandleStream(t *testing.T) {
 	sub.CloseChannels()
 
 	srv := NewServer("127.0.0.1:0", stubService{
-		listFn:     func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
-		attachFn:   func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
+		listFn: func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
+		attachFn: func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) {
+			return tmuxconn.PaneRecord{}, nil
+		},
 		detachFn:   func(context.Context, string) error { return nil },
 		inspectFn:  func(context.Context, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
 		snapshotFn: func(context.Context, string, int) (string, error) { return "", nil },
@@ -167,8 +173,10 @@ func TestHandleStreamHeartbeat(t *testing.T) {
 
 	sub := tmux.NewSubscriptionForTest()
 	srv := NewServer("127.0.0.1:0", stubService{
-		listFn:     func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
-		attachFn:   func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
+		listFn: func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
+		attachFn: func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) {
+			return tmuxconn.PaneRecord{}, nil
+		},
 		detachFn:   func(context.Context, string) error { return nil },
 		inspectFn:  func(context.Context, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
 		snapshotFn: func(context.Context, string, int) (string, error) { return "", nil },
@@ -202,8 +210,10 @@ func TestHandleSendRejectsOversizedBody(t *testing.T) {
 	t.Parallel()
 
 	srv := NewServer("127.0.0.1:0", stubService{
-		listFn:       func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
-		attachFn:     func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
+		listFn: func(context.Context) ([]tmuxconn.PaneRecord, error) { return nil, nil },
+		attachFn: func(context.Context, string, string, string) (tmuxconn.PaneRecord, error) {
+			return tmuxconn.PaneRecord{}, nil
+		},
 		detachFn:     func(context.Context, string) error { return nil },
 		inspectFn:    func(context.Context, string) (tmuxconn.PaneRecord, error) { return tmuxconn.PaneRecord{}, nil },
 		snapshotFn:   func(context.Context, string, int) (string, error) { return "", nil },
