@@ -34,6 +34,12 @@ type followSession struct {
 	paneKey     string
 	minInterval time.Duration
 	cancel      context.CancelFunc
+	started     chan struct{}
+	done        chan struct{}
+
+	stopMu        sync.Mutex
+	stopRequested bool
+	flushOnCancel bool
 }
 
 func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int) *FollowManager {
@@ -45,6 +51,56 @@ func NewFollowManager(service paneService, replyBus *ReplyBus, initialLines int)
 		maxMessageLen: 3500,
 		sessions:      make(map[string]*followSession),
 	}
+}
+
+func newFollowSession(chat ChatRef, paneKey string, minInterval time.Duration, cancel context.CancelFunc) *followSession {
+	return &followSession{
+		chat:          chat,
+		paneKey:       paneKey,
+		minInterval:   minInterval,
+		cancel:        cancel,
+		started:       make(chan struct{}),
+		done:          make(chan struct{}),
+		flushOnCancel: true,
+	}
+}
+
+func (s *followSession) markStarted() {
+	close(s.started)
+}
+
+func (s *followSession) markDone() {
+	close(s.done)
+}
+
+func (s *followSession) waitUntilStarted() {
+	<-s.started
+}
+
+func (s *followSession) wait() {
+	<-s.done
+}
+
+func (s *followSession) stop(flush bool) {
+	s.stopMu.Lock()
+	if !s.stopRequested {
+		s.flushOnCancel = flush
+		s.stopRequested = true
+		cancel := s.cancel
+		s.stopMu.Unlock()
+		cancel()
+		return
+	}
+	if flush {
+		s.flushOnCancel = true
+	}
+	s.stopMu.Unlock()
+}
+
+func (s *followSession) shouldFlushOnCancel() bool {
+	s.stopMu.Lock()
+	defer s.stopMu.Unlock()
+	return s.flushOnCancel
 }
 
 func (m *FollowManager) Enable(ctx context.Context, chat ChatRef, paneKey string) error {
@@ -71,22 +127,16 @@ func (m *FollowManager) EnableWithOptions(ctx context.Context, chat ChatRef, pan
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	session := &followSession{
-		chat:        chat,
-		paneKey:     stream.Pane.Target.PaneKey(),
-		minInterval: opts.MinInterval,
-		cancel:      cancel,
-	}
+	session := newFollowSession(chat, stream.Pane.Target.PaneKey(), opts.MinInterval, cancel)
 	chatKey := chat.Key()
 
-	m.mu.Lock()
-	if existing := m.sessions[chatKey]; existing != nil {
-		existing.cancel()
-	}
-	m.sessions[chatKey] = session
-	m.mu.Unlock()
+	go m.runSession(runCtx, session, stream)
+	session.waitUntilStarted()
 
-	go m.run(runCtx, session, stream)
+	if existing := m.swapSession(chatKey, session); existing != nil {
+		existing.stop(false)
+		existing.wait()
+	}
 	return nil
 }
 
@@ -102,27 +152,21 @@ func (m *FollowManager) Options(chatKey string) FollowOptions {
 }
 
 func (m *FollowManager) Disable(chatKey string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	session := m.sessions[chatKey]
+	session := m.detachSession(chatKey)
 	if session == nil {
 		return false
 	}
-	delete(m.sessions, chatKey)
-	session.cancel()
+	session.stop(true)
+	session.wait()
 	return true
 }
 
 func (m *FollowManager) StopPane(paneKey string) {
 	paneKey = strings.TrimSpace(paneKey)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for chatKey, session := range m.sessions {
-		if session.paneKey != paneKey {
-			continue
-		}
-		delete(m.sessions, chatKey)
-		session.cancel()
+	sessions := m.detachPaneSessions(paneKey)
+	for _, session := range sessions {
+		session.stop(true)
+		session.wait()
 	}
 }
 
@@ -142,17 +186,21 @@ func (m *FollowManager) CurrentPane(chatKey string) string {
 }
 
 func (m *FollowManager) Close() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for chatKey, session := range m.sessions {
-		delete(m.sessions, chatKey)
-		session.cancel()
+	for _, session := range m.detachAllSessions() {
+		session.stop(true)
+		session.wait()
 	}
+}
+
+func (m *FollowManager) runSession(ctx context.Context, session *followSession, stream tmuxconn.PaneStream) {
+	session.markStarted()
+	defer session.markDone()
+	m.run(ctx, session, stream)
 }
 
 func (m *FollowManager) run(ctx context.Context, session *followSession, stream tmuxconn.PaneStream) {
 	defer stream.Subscription.Close()
-	defer m.removeSession(session.chat.Key(), session.paneKey)
+	defer m.removeSession(session.chat.Key(), session)
 
 	transcript := stream.Initial
 	lastSentTranscript := ""
@@ -255,6 +303,9 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 	for {
 		select {
 		case <-ctx.Done():
+			if !session.shouldFlushOnCancel() {
+				return
+			}
 			drainPendingChunks()
 			flushCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_ = flush(flushCtx)
@@ -309,6 +360,51 @@ func (m *FollowManager) normalizeOptions(opts FollowOptions) FollowOptions {
 		opts.MinInterval = m.minInterval
 	}
 	return opts
+}
+
+func (m *FollowManager) swapSession(chatKey string, session *followSession) *followSession {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	previous := m.sessions[chatKey]
+	m.sessions[chatKey] = session
+	return previous
+}
+
+func (m *FollowManager) detachSession(chatKey string) *followSession {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	session := m.sessions[chatKey]
+	if session != nil {
+		delete(m.sessions, chatKey)
+	}
+	return session
+}
+
+func (m *FollowManager) detachPaneSessions(paneKey string) []*followSession {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var sessions []*followSession
+	for chatKey, session := range m.sessions {
+		if session.paneKey != paneKey {
+			continue
+		}
+		delete(m.sessions, chatKey)
+		sessions = append(sessions, session)
+	}
+	return sessions
+}
+
+func (m *FollowManager) detachAllSessions() []*followSession {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sessions := make([]*followSession, 0, len(m.sessions))
+	for chatKey, session := range m.sessions {
+		delete(m.sessions, chatKey)
+		sessions = append(sessions, session)
+	}
+	return sessions
 }
 
 func (m *FollowManager) debugf(session *followSession, format string, args ...any) {
@@ -558,14 +654,14 @@ func commonPrefixLines(left []string, right []string) int {
 	return limit
 }
 
-func (m *FollowManager) removeSession(chatKey string, paneKey string) {
+func (m *FollowManager) removeSession(chatKey string, session *followSession) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	session := m.sessions[chatKey]
-	if session == nil {
+	current := m.sessions[chatKey]
+	if current == nil {
 		return
 	}
-	if session.paneKey != paneKey {
+	if current != session {
 		return
 	}
 	delete(m.sessions, chatKey)

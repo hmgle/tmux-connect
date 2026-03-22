@@ -1,8 +1,16 @@
 package daemon
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/hmgle/tmux-connect/internal/termrender"
+	"github.com/hmgle/tmux-connect/internal/tmux"
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 func TestFormatFollowMessageKeepsTailWhenTruncated(t *testing.T) {
@@ -155,4 +163,113 @@ func TestBuildFollowUpdatePrefersContextOverHugeRedrawDelta(t *testing.T) {
 	if !strings.Contains(got, "13") {
 		t.Fatalf("buildFollowUpdate() = %q, want latest result line", got)
 	}
+}
+
+func TestFollowManagerDisableFlushesBufferedOutputBeforeReturning(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	follow := NewFollowManager(service, replyBus, 20)
+	follow.minInterval = 5 * time.Second
+
+	if err := follow.Enable(ctx, telegramChat(7), "default:%5"); err != nil {
+		t.Fatalf("Enable() error = %v", err)
+	}
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: "buffered before disable", ReceivedAt: time.Now()})
+	if !follow.Disable(telegramChat(7).Key()) {
+		t.Fatal("Disable() = false, want true")
+	}
+
+	joined := joinSentTexts(messenger.snapshot())
+	if !strings.Contains(joined, "buffered before disable") {
+		t.Fatalf("messages = %q, want flushed buffered output", joined)
+	}
+}
+
+func TestFollowManagerReplacingSessionKeepsNewestSessionAndDropsStaleBuffer(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+
+	base := newFakePaneService()
+	info := base.records["default:%5"].Info
+	sub1 := tmux.NewSubscriptionForTest()
+	sub2 := tmux.NewSubscriptionForTest()
+	service := &queuedFollowPaneService{
+		fakePaneService: base,
+		streams: []tmuxconn.PaneStream{
+			{Pane: info, Subscription: sub1},
+			{Pane: info, Subscription: sub2},
+		},
+	}
+	messenger := &fakeMessenger{}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	follow := NewFollowManager(service, replyBus, 20)
+	follow.minInterval = 5 * time.Second
+
+	chat := telegramChat(7)
+	if err := follow.Enable(ctx, chat, "default:%5"); err != nil {
+		t.Fatalf("first Enable() error = %v", err)
+	}
+	sub1.PushChunk(tmux.OutputChunk{Text: "stale buffered output", ReceivedAt: time.Now()})
+
+	if err := follow.Enable(ctx, chat, "default:%5"); err != nil {
+		t.Fatalf("second Enable() error = %v", err)
+	}
+	if !follow.IsEnabled(chat.Key()) {
+		t.Fatal("follow session disappeared after replacement")
+	}
+
+	sub2.PushChunk(tmux.OutputChunk{Text: "fresh buffered output", ReceivedAt: time.Now()})
+	if !follow.Disable(chat.Key()) {
+		t.Fatal("Disable() = false, want true")
+	}
+
+	joined := joinSentTexts(messenger.snapshot())
+	if strings.Contains(joined, "stale buffered output") {
+		t.Fatalf("messages = %q, want stale buffered output dropped on replacement", joined)
+	}
+	if !strings.Contains(joined, "fresh buffered output") {
+		t.Fatalf("messages = %q, want fresh buffered output from replacement session", joined)
+	}
+}
+
+type queuedFollowPaneService struct {
+	*fakePaneService
+	mu      sync.Mutex
+	streams []tmuxconn.PaneStream
+}
+
+func (s *queuedFollowPaneService) OpenStream(ctx context.Context, paneKey string, lines int) (tmuxconn.PaneStream, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.streams) == 0 {
+		return s.fakePaneService.OpenStream(ctx, paneKey, lines)
+	}
+	stream := s.streams[0]
+	s.streams = s.streams[1:]
+	return stream, nil
+}
+
+func joinSentTexts(messages []sentMessage) string {
+	parts := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		if msg.Text == "" {
+			continue
+		}
+		parts = append(parts, msg.Text)
+	}
+	return strings.Join(parts, "\n---\n")
 }
