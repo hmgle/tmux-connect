@@ -267,17 +267,11 @@ func (r *Router) executeText(ctx context.Context, message IncomingMessage, text 
 	if err != nil {
 		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	var (
-		baseline    string
-		baselineErr error
-	)
-	if r.plainText.Echo == plainTextEchoSnapshot {
-		baseline, baselineErr = r.service.Snapshot(ctx, paneKey, r.plainText.EchoLines)
-	}
+	baseline, baselineErr := r.executeBaselineSnapshot(ctx, paneKey)
 	if err := r.service.SendManaged(ctx, paneKey, text, true); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
-	if r.plainText.Echo != plainTextEchoSnapshot {
+	if !r.shouldEchoExecuteSnapshot() {
 		return r.replyEnterSent(ctx, chat, paneKey)
 	}
 	if baselineErr != nil {

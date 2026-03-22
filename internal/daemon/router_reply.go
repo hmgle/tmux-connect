@@ -40,6 +40,17 @@ func (r *Router) replyExecuteResult(ctx context.Context, chat ChatRef, paneKey s
 	return r.replySnapshotText(ctx, chat, paneKey, body)
 }
 
+func (r *Router) shouldEchoExecuteSnapshot() bool {
+	return r.plainText.Echo == plainTextEchoSnapshot
+}
+
+func (r *Router) executeBaselineSnapshot(ctx context.Context, paneKey string) (string, error) {
+	if !r.shouldEchoExecuteSnapshot() {
+		return "", nil
+	}
+	return r.service.Snapshot(ctx, paneKey, r.plainText.EchoLines)
+}
+
 func (r *Router) executeNoOutputMessage(chat ChatRef, paneKey string) string {
 	snapshotUsage := formatCommandUsage(r.commandPrefix(chat), "snapshot text")
 	followUsage := formatCommandUsage(r.commandPrefix(chat), "follow on")
