@@ -222,7 +222,19 @@ Start the WhatsApp daemon:
 
 For Slack snapshot images, give the bot `files:write` in addition to the message scopes and reinstall the app after changing scopes.
 For Discord prefix commands in channels or DMs, enable the Message Content intent in the developer portal.
-For WhatsApp, the first run prints a QR code and v1 accepts private chats only. Current behavior does not support self-chat: commands must come from a different WhatsApp account than the paired account, and `--allow-chat` should point at that operator account's JID.
+For WhatsApp, the first run prints a QR code and v1 accepts private chats only. By default, commands must come from a different WhatsApp account than the paired account, and `--allow-chat` should point at that operator account's JID. Experimental self-chat mode is available with `--whatsapp-allow-self-chat`; in that mode, `--allow-chat` should point at the paired account's own JID, only self-chat messages sent from another linked device are accepted, and plain text is disabled so you must use explicit slash commands such as `/send <text>` or `/enter <text>`.
+
+Two WhatsApp pitfalls are worth calling out explicitly:
+
+- `--allow-chat` must exactly match the actual incoming WhatsApp chat ID. In self-chat mode this is often a `@lid` ID, not your phone-number `@s.whatsapp.net` ID.
+- if you don't pass `--allow-chat`, an existing `allow_chats` entry in `config.toml` may still be active because the effective precedence is CLI flags > environment variables > TOML config.
+
+If you get `chat is not allowed to use this bot`, inspect the most recent WhatsApp rows in SQLite and copy the exact `chat_id`:
+
+```bash
+sqlite3 ~/.tmux-connect/tmux-connect.db \
+  'select platform, chat_id, kind, body_preview, created_at from message_log order by id desc limit 10;'
+```
 
 Common flags:
 
@@ -235,6 +247,7 @@ Common flags:
 - `--whatsapp-session-db PATH`
 - `--whatsapp-device-name NAME`
 - `--whatsapp-auto-mark-read`
+- `--whatsapp-allow-self-chat`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`

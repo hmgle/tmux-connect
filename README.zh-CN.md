@@ -176,7 +176,19 @@ daemon 也支持通过 `--config PATH` 或默认
 
 如果要让 Slack 的 snapshot 发图片，除了消息相关 scope 之外，还要给 bot `files:write`，并且在变更 scope 后重新安装应用。
 如果要让 Discord 在频道或私聊里识别前缀命令，需要在开发者后台启用 Message Content intent。
-WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。当前实现也不支持“给自己发消息”的 self-chat：命令必须来自另一个 WhatsApp 账号，`--allow-chat` 也应填写那个操作者账号的 JID。
+WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。默认情况下，命令必须来自另一个 WhatsApp 账号，`--allow-chat` 也应填写那个操作者账号的 JID。现在也支持实验性的 self-chat 模式：加上 `--whatsapp-allow-self-chat` 后，`--allow-chat` 应填写已配对账号自己的 JID，只接受来自另一个已关联设备发出的 self-chat 消息；为了避免回环，self-chat 模式会禁用裸文本，必须使用 `/send <text>`、`/enter <text>` 这类显式 slash 命令。
+
+这里有两个特别容易踩坑的点：
+
+- `--allow-chat` 必须和 daemon 实际收到的 WhatsApp chat ID 完全一致。self-chat 模式下，这个值经常是 `@lid`，而不是手机号形式的 `@s.whatsapp.net`。
+- 如果这次启动没传 `--allow-chat`，以前 `config.toml` 里的 `allow_chats` 仍然会生效。实际优先级是：命令行参数 > 环境变量 > TOML 配置文件。
+
+如果出现 `chat is not allowed to use this bot`，可以直接查 SQLite 里最近收到的 WhatsApp `chat_id`，原样填回 `--allow-chat`：
+
+```bash
+sqlite3 ~/.tmux-connect/tmux-connect.db \
+  'select platform, chat_id, kind, body_preview, created_at from message_log order by id desc limit 10;'
+```
 
 常用参数：
 
@@ -189,6 +201,7 @@ WhatsApp 首次运行会打印 QR 码，v1 仅支持私聊，不支持群组。�
 - `--whatsapp-session-db PATH`
 - `--whatsapp-device-name NAME`
 - `--whatsapp-auto-mark-read`
+- `--whatsapp-allow-self-chat`
 - `--db PATH`
 - `--allow-chat CHAT_ID`
 - `--poll-timeout 20s`

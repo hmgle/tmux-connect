@@ -123,6 +123,9 @@ func TestWhatsAppAdapterRunMapsInboundMessage(t *testing.T) {
 	if got.Chat.Platform != "whatsapp" || got.Chat.ChatID != "8613800000000@s.whatsapp.net" {
 		t.Fatalf("chat = %#v, want whatsapp DM", got.Chat)
 	}
+	if got.UserID != "8613800000000@s.whatsapp.net" || got.IsFromSelf {
+		t.Fatalf("incoming message = %#v, want inbound sender and non-self flag", got)
+	}
 	if got.QuotedMessageID != "wamid.prompt.1" || got.QuotedSenderID != "12345@s.whatsapp.net" {
 		t.Fatalf("incoming message = %#v, want quoted metadata", got)
 	}

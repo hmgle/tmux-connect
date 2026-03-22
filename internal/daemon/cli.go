@@ -17,32 +17,33 @@ import (
 )
 
 type Config struct {
-	Platform             string
-	TelegramToken        string
-	SlackBotToken        string
-	SlackAppToken        string
-	SlackCommandPrefix   string
-	DiscordToken         string
-	DiscordCommandPrefix string
-	WhatsAppSessionDB    string
-	WhatsAppDeviceName   string
-	WhatsAppAutoMarkRead bool
-	DBPath               string
-	AllowChats           []string
-	PollTimeout          time.Duration
-	SnapshotLines        int
-	PlainTextMode        plainTextMode
-	PlainTextEcho        plainTextEchoMode
-	PlainTextEchoLines   int
-	PlainTextEchoDelay   time.Duration
-	PlainTextEchoTimeout time.Duration
-	SnapshotTheme        string
-	SnapshotFontSize     float64
-	SnapshotFontFile     string
-	FollowLines          int
-	FollowMinGap         time.Duration
-	FollowDebug          bool
-	APIBaseURL           string
+	Platform              string
+	TelegramToken         string
+	SlackBotToken         string
+	SlackAppToken         string
+	SlackCommandPrefix    string
+	DiscordToken          string
+	DiscordCommandPrefix  string
+	WhatsAppSessionDB     string
+	WhatsAppDeviceName    string
+	WhatsAppAutoMarkRead  bool
+	WhatsAppAllowSelfChat bool
+	DBPath                string
+	AllowChats            []string
+	PollTimeout           time.Duration
+	SnapshotLines         int
+	PlainTextMode         plainTextMode
+	PlainTextEcho         plainTextEchoMode
+	PlainTextEchoLines    int
+	PlainTextEchoDelay    time.Duration
+	PlainTextEchoTimeout  time.Duration
+	SnapshotTheme         string
+	SnapshotFontSize      float64
+	SnapshotFontFile      string
+	FollowLines           int
+	FollowMinGap          time.Duration
+	FollowDebug           bool
+	APIBaseURL            string
 }
 
 type Runtime struct {
@@ -71,11 +72,12 @@ const (
 )
 
 type PlainTextConfig struct {
-	Mode        plainTextMode
-	Echo        plainTextEchoMode
-	EchoLines   int
-	EchoDelay   time.Duration
-	EchoTimeout time.Duration
+	Mode                        plainTextMode
+	Echo                        plainTextEchoMode
+	EchoLines                   int
+	EchoDelay                   time.Duration
+	EchoTimeout                 time.Duration
+	WhatsAppSelfChatCommandOnly bool
 }
 
 func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, args []string) error {
@@ -159,6 +161,9 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 		}
 		fmt.Fprintf(stdout, "whatsapp session db: ok (%s)\n", cfg.WhatsAppSessionDB)
 		fmt.Fprintln(stdout, "whatsapp login: first run will print a pairing QR code if no device session exists")
+		if cfg.WhatsAppAllowSelfChat {
+			fmt.Fprintln(stdout, "whatsapp self-chat: enabled (plain text is disabled; use explicit slash commands in self-chat)")
+		}
 	default:
 		return tmuxconn.UsageError("unsupported platform %q", cfg.Platform)
 	}
@@ -227,11 +232,12 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 		follow.SetDebugWriter(stderr)
 	}
 	router := NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, cfg.DiscordCommandPrefix, PlainTextConfig{
-		Mode:        cfg.PlainTextMode,
-		Echo:        cfg.PlainTextEcho,
-		EchoLines:   cfg.PlainTextEchoLines,
-		EchoDelay:   cfg.PlainTextEchoDelay,
-		EchoTimeout: cfg.PlainTextEchoTimeout,
+		Mode:                        cfg.PlainTextMode,
+		Echo:                        cfg.PlainTextEcho,
+		EchoLines:                   cfg.PlainTextEchoLines,
+		EchoDelay:                   cfg.PlainTextEchoDelay,
+		EchoTimeout:                 cfg.PlainTextEchoTimeout,
+		WhatsAppSelfChatCommandOnly: cfg.WhatsAppAllowSelfChat,
 	})
 
 	return &Runtime{
@@ -348,6 +354,10 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	if envValue, ok := envBoolValue("TMUXCONN_WHATSAPP_AUTO_MARK_READ"); ok {
 		defaultWhatsAppAutoMarkRead = envValue
 	}
+	defaultWhatsAppAllowSelfChat := boolValue(fileCfg.WhatsApp.AllowSelfChat, false)
+	if envValue, ok := envBoolValue("TMUXCONN_WHATSAPP_ALLOW_SELF_CHAT"); ok {
+		defaultWhatsAppAllowSelfChat = envValue
+	}
 	plainTextModeValue := defaultPlainTextMode
 	plainTextEchoValue := defaultPlainTextEcho
 
@@ -361,6 +371,7 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	fs.StringVar(&cfg.WhatsAppSessionDB, "whatsapp-session-db", defaultWhatsAppSessionDB, "path to the WhatsApp multi-device session sqlite db")
 	fs.StringVar(&cfg.WhatsAppDeviceName, "whatsapp-device-name", defaultWhatsAppDeviceName, "device name shown for WhatsApp multi-device login")
 	fs.BoolVar(&cfg.WhatsAppAutoMarkRead, "whatsapp-auto-mark-read", defaultWhatsAppAutoMarkRead, "mark WhatsApp messages as read after successful handling")
+	fs.BoolVar(&cfg.WhatsAppAllowSelfChat, "whatsapp-allow-self-chat", defaultWhatsAppAllowSelfChat, "allow WhatsApp self-chat commands from another linked device; plain text is disabled in this mode")
 	fs.StringVar(&cfg.DBPath, "db", envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath), "sqlite db path")
 	fs.DurationVar(&cfg.PollTimeout, "poll-timeout", defaultPollTimeout, "telegram long polling timeout")
 	fs.IntVar(&cfg.SnapshotLines, "snapshot-lines", defaultSnapshotLines, "default line count for /snapshot")
@@ -661,6 +672,7 @@ Common flags:
   --whatsapp-session-db PATH
   --whatsapp-device-name NAME
   --whatsapp-auto-mark-read
+  --whatsapp-allow-self-chat
   --db PATH
   --allow-chat 123456
   --poll-timeout 20s

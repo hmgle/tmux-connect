@@ -249,8 +249,9 @@ func TestParseConfigReadsWhatsAppDefaults(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "tmuxconn.db")
 	cfg, err := parseConfigWithFile([]string{"--platform", "whatsapp", "--db", dbPath}, &bytes.Buffer{}, true, config.Daemon{
 		WhatsApp: config.WhatsApp{
-			DeviceName:   stringPtr("ops-phone"),
-			AutoMarkRead: boolPtr(false),
+			DeviceName:    stringPtr("ops-phone"),
+			AutoMarkRead:  boolPtr(false),
+			AllowSelfChat: boolPtr(true),
 		},
 	})
 	if err != nil {
@@ -265,6 +266,9 @@ func TestParseConfigReadsWhatsAppDefaults(t *testing.T) {
 	if cfg.WhatsAppAutoMarkRead {
 		t.Fatal("WhatsAppAutoMarkRead = true, want false")
 	}
+	if !cfg.WhatsAppAllowSelfChat {
+		t.Fatal("WhatsAppAllowSelfChat = false, want true")
+	}
 	if cfg.FollowMinGap != 2*time.Second {
 		t.Fatalf("FollowMinGap = %s, want 2s default for whatsapp", cfg.FollowMinGap)
 	}
@@ -274,12 +278,14 @@ func TestParseConfigWhatsAppEnvOverridesFile(t *testing.T) {
 	t.Setenv("TMUXCONN_WHATSAPP_SESSION_DB", filepath.Join(t.TempDir(), "custom-wa.db"))
 	t.Setenv("TMUXCONN_WHATSAPP_DEVICE_NAME", "field-phone")
 	t.Setenv("TMUXCONN_WHATSAPP_AUTO_MARK_READ", "false")
+	t.Setenv("TMUXCONN_WHATSAPP_ALLOW_SELF_CHAT", "true")
 
 	cfg, err := parseConfigWithFile([]string{"--platform", "whatsapp", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
 		WhatsApp: config.WhatsApp{
-			SessionDB:    stringPtr("file-wa.db"),
-			DeviceName:   stringPtr("file-phone"),
-			AutoMarkRead: boolPtr(true),
+			SessionDB:     stringPtr("file-wa.db"),
+			DeviceName:    stringPtr("file-phone"),
+			AutoMarkRead:  boolPtr(true),
+			AllowSelfChat: boolPtr(false),
 		},
 	})
 	if err != nil {
@@ -293,6 +299,9 @@ func TestParseConfigWhatsAppEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.WhatsAppAutoMarkRead {
 		t.Fatal("WhatsAppAutoMarkRead = true, want false")
+	}
+	if !cfg.WhatsAppAllowSelfChat {
+		t.Fatal("WhatsAppAllowSelfChat = false, want env override true")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -35,12 +36,17 @@ type MessageEvent struct {
 }
 
 type Client struct {
-	client     *whatsmeow.Client
-	stderr     io.Writer
-	deviceName string
+	client             *whatsmeow.Client
+	stderr             io.Writer
+	deviceName         string
+	allowSelfChat      bool
+	recentOutboundMu   sync.Mutex
+	recentOutboundByID map[string]time.Time
 }
 
-func NewClient(ctx context.Context, sessionDBPath string, deviceName string, stderr io.Writer) (*Client, error) {
+const outboundSuppressionTTL = 10 * time.Minute
+
+func NewClient(ctx context.Context, sessionDBPath string, deviceName string, allowSelfChat bool, stderr io.Writer) (*Client, error) {
 	sessionDBPath = strings.TrimSpace(sessionDBPath)
 	if sessionDBPath == "" {
 		return nil, fmt.Errorf("whatsapp session db path is required")
@@ -66,9 +72,11 @@ func NewClient(ctx context.Context, sessionDBPath string, deviceName string, std
 	cli.SetForceActiveDeliveryReceipts(true)
 
 	return &Client{
-		client:     cli,
-		stderr:     stderr,
-		deviceName: deviceName,
+		client:             cli,
+		stderr:             stderr,
+		deviceName:         deviceName,
+		allowSelfChat:      allowSelfChat,
+		recentOutboundByID: make(map[string]time.Time),
 	}, nil
 }
 
@@ -80,7 +88,7 @@ func (c *Client) Run(ctx context.Context, autoMarkRead bool, handler func(contex
 	c.client.AddEventHandler(func(evt interface{}) {
 		switch event := evt.(type) {
 		case *events.Message:
-			msg, ok := parseMessageEvent(event)
+			msg, ok := c.parseMessageEvent(event)
 			if !ok {
 				return
 			}
@@ -137,6 +145,7 @@ func (c *Client) SendText(ctx context.Context, chatID string, text string, reply
 	if err != nil {
 		return "", fmt.Errorf("send whatsapp text: %w", err)
 	}
+	c.trackOutboundMessage(resp.ID)
 	return resp.ID, nil
 }
 
@@ -170,6 +179,7 @@ func (c *Client) SendImage(ctx context.Context, chatID string, fileName string, 
 	if err != nil {
 		return "", fmt.Errorf("send whatsapp image: %w", err)
 	}
+	c.trackOutboundMessage(sendResp.ID)
 	return sendResp.ID, nil
 }
 
@@ -211,11 +221,17 @@ func (c *Client) markRead(ctx context.Context, msg MessageEvent) error {
 	return c.client.MarkRead(ctx, []waTypes.MessageID{waTypes.MessageID(msg.MessageID)}, msg.Timestamp, chatJID, sender)
 }
 
-func parseMessageEvent(evt *events.Message) (MessageEvent, bool) {
+func (c *Client) parseMessageEvent(evt *events.Message) (MessageEvent, bool) {
 	if evt == nil || evt.Message == nil {
 		return MessageEvent{}, false
 	}
-	if evt.Info.IsFromMe || evt.Info.IsGroup {
+	if evt.Info.IsGroup {
+		return MessageEvent{}, false
+	}
+	if c.isTrackedOutboundMessage(evt.Info.ID) {
+		return MessageEvent{}, false
+	}
+	if evt.Info.IsFromMe && !c.allowSelfChatMessage(evt) {
 		return MessageEvent{}, false
 	}
 	text, quotedMessageID, quotedSenderID := extractText(evt.Message)
@@ -233,6 +249,54 @@ func parseMessageEvent(evt *events.Message) (MessageEvent, bool) {
 		IsFromMe:        evt.Info.IsFromMe,
 		IsGroup:         evt.Info.IsGroup,
 	}, true
+}
+
+func (c *Client) allowSelfChatMessage(evt *events.Message) bool {
+	if !c.allowSelfChat || evt == nil {
+		return false
+	}
+	if evt.Info.DeviceSentMeta == nil {
+		return false
+	}
+	chatID := strings.TrimSpace(evt.Info.Chat.String())
+	senderID := strings.TrimSpace(evt.Info.Sender.String())
+	return chatID != "" && chatID == senderID
+}
+
+func (c *Client) trackOutboundMessage(messageID string) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return
+	}
+	now := time.Now()
+	c.recentOutboundMu.Lock()
+	defer c.recentOutboundMu.Unlock()
+	if c.recentOutboundByID == nil {
+		c.recentOutboundByID = make(map[string]time.Time)
+	}
+	c.pruneOutboundLocked(now)
+	c.recentOutboundByID[messageID] = now.Add(outboundSuppressionTTL)
+}
+
+func (c *Client) isTrackedOutboundMessage(messageID string) bool {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return false
+	}
+	now := time.Now()
+	c.recentOutboundMu.Lock()
+	defer c.recentOutboundMu.Unlock()
+	c.pruneOutboundLocked(now)
+	expiresAt, ok := c.recentOutboundByID[messageID]
+	return ok && expiresAt.After(now)
+}
+
+func (c *Client) pruneOutboundLocked(now time.Time) {
+	for messageID, expiresAt := range c.recentOutboundByID {
+		if !expiresAt.After(now) {
+			delete(c.recentOutboundByID, messageID)
+		}
+	}
 }
 
 func extractText(msg *waE2E.Message) (text string, quotedMessageID string, quotedSenderID string) {

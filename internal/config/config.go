@@ -67,9 +67,10 @@ type Discord struct {
 }
 
 type WhatsApp struct {
-	SessionDB    *string `toml:"session_db"`
-	DeviceName   *string `toml:"device_name"`
-	AutoMarkRead *bool   `toml:"auto_mark_read"`
+	SessionDB     *string `toml:"session_db"`
+	DeviceName    *string `toml:"device_name"`
+	AutoMarkRead  *bool   `toml:"auto_mark_read"`
+	AllowSelfChat *bool   `toml:"allow_self_chat"`
 }
 
 type Loaded struct {

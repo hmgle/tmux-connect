@@ -424,6 +424,12 @@ func whatsappMessage(chatID string, messageID string, text string) IncomingMessa
 	}
 }
 
+func whatsappSelfMessage(chatID string, messageID string, text string) IncomingMessage {
+	message := whatsappMessage(chatID, messageID, text)
+	message.IsFromSelf = true
+	return message
+}
+
 func TestRouterSelectAndSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -1512,10 +1518,75 @@ func TestHelpTextUsesWhatsAppReplyGuidance(t *testing.T) {
 	t.Parallel()
 
 	text := helpTextForPlatform("whatsapp", "", "tmux:")
-	for _, want := range []string{`"/panes"`, `"/follow on"`, `replying with "1" or "2"`} {
+	for _, want := range []string{`"/panes"`, `"/follow on"`, `replying with "1" or "2"`, `plain text is disabled to avoid reply loops`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("helpTextForPlatform(whatsapp) missing %q in %q", want, text)
 		}
+	}
+}
+
+func TestRouterWhatsAppSelfChatRejectsPlainText(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "whatsapp"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+		WhatsAppSelfChatCommandOnly: true,
+	})
+
+	if err := router.HandleMessage(ctx, whatsappMessage("8613800000000@s.whatsapp.net", "wamid-1", "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, whatsappSelfMessage("8613800000000@s.whatsapp.net", "wamid-2", "pwd")); err != nil {
+		t.Fatalf("HandleMessage(self plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 0 {
+		t.Fatalf("sendCalls = %#v, want no tmux input for self-chat plain text", service.sendCalls)
+	}
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if !strings.Contains(last.Text, "WhatsApp self-chat disables plain text") {
+		t.Fatalf("last message = %q, want self-chat guidance", last.Text)
+	}
+}
+
+func TestRouterWhatsAppSelfChatPromptReplyStillWorks(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record2 := record
+	record2.Info.Target.PaneID = "%7"
+	service.records[record2.Info.Target.PaneKey()] = record2
+	messenger := &fakeMessenger{platform: "whatsapp"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+		WhatsAppSelfChatCommandOnly: true,
+	})
+
+	if err := router.HandleMessage(ctx, whatsappSelfMessage("8613800000000@s.whatsapp.net", "wamid-1", "/select")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, whatsappSelfMessage("8613800000000@s.whatsapp.net", "wamid-2", "2")); err != nil {
+		t.Fatalf("HandleMessage(select reply) error = %v", err)
+	}
+	current, err := store.CurrentPane(ctx, whatsappChat("8613800000000@s.whatsapp.net"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%7" {
+		t.Fatalf("current = %q, want default:%%7", current)
 	}
 }
 

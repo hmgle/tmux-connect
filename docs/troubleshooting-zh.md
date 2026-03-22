@@ -31,6 +31,56 @@
 ./tmux-connect daemon doctor --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 ```
 
+### WhatsApp 返回 `chat is not allowed to use this bot`
+
+优先检查：
+
+- 当前聊天的实际 `chat_id` 是否在 `--allow-chat` 或 `[daemon].allow_chats` 白名单中
+- 这次启动是否没有传 `--allow-chat`，从而继续沿用了 `config.toml` 里的旧白名单
+- self-chat 模式下是否误把手机号形式的 `@s.whatsapp.net` 写进了白名单，而真实 chat ID 实际上是 `@lid`
+
+建议直接查询最近的 WhatsApp 入站记录：
+
+```bash
+sqlite3 ~/.tmux-connect/tmux-connect.db \
+  'select platform, chat_id, kind, body_preview, created_at from message_log order by id desc limit 10;'
+```
+
+处理规则：
+
+- 默认双账号模式：`--allow-chat` 填操作者账号的实际 JID
+- self-chat 模式：`--whatsapp-allow-self-chat` 打开后，`--allow-chat` 填已配对账号自己的实际 JID
+- 不要猜 JID；以 SQLite 中实际收到的 `chat_id` 为准
+
+补充说明：
+
+- `@lid` 和 `@s.whatsapp.net` 不是可以随便互换的
+- 配置优先级是：命令行参数 > 环境变量 > TOML 配置文件
+- 如果你没有显式覆盖，旧配置仍然会继续生效
+
+### WhatsApp self-chat 模式下裸文本不执行
+
+这是当前设计行为，不是 bug。
+
+self-chat 模式为了避免 bot 把自己的回包再当成新输入，只允许显式 slash 命令，不允许裸文本直接发到 tmux。
+
+请使用：
+
+```text
+/panes
+/select %5
+/send ls
+/enter pwd
+/keys C-c
+```
+
+不要直接发送：
+
+```text
+ls
+pwd
+```
+
 ### Telegram 命令无响应
 
 优先检查：

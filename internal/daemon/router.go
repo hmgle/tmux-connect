@@ -19,6 +19,7 @@ type IncomingMessage struct {
 	Chat            ChatRef
 	MessageID       string
 	UserID          string
+	IsFromSelf      bool
 	Text            string
 	ChatType        string
 	ThreadID        string
@@ -311,6 +312,10 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 }
 
 func (r *Router) handlePlainText(ctx context.Context, message IncomingMessage, text string) error {
+	if isWhatsAppChat(message.Chat) && message.IsFromSelf && r.plainText.WhatsAppSelfChatCommandOnly {
+		r.logInboundKind(ctx, message, "", "", "input")
+		return r.replyBus.Reply(ctx, message.Chat, "", "usage", "WhatsApp self-chat disables plain text to avoid reply loops. Use /send <text>, /enter <text>, /keys <key...>, or reply to a prompt.")
+	}
 	if r.plainText.Mode == plainTextModeExecute {
 		return r.executeText(ctx, message, text, "input")
 	}

@@ -23,7 +23,7 @@ type whatsappAdapter struct {
 }
 
 func newWhatsAppAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
-	client, err := wa.NewClient(context.Background(), cfg.WhatsAppSessionDB, cfg.WhatsAppDeviceName, stderr)
+	client, err := wa.NewClient(context.Background(), cfg.WhatsAppSessionDB, cfg.WhatsAppDeviceName, cfg.WhatsAppAllowSelfChat, stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +76,7 @@ func (a *whatsappAdapter) Run(ctx context.Context, handler func(context.Context,
 			},
 			MessageID:       strings.TrimSpace(event.MessageID),
 			UserID:          strings.TrimSpace(event.SenderID),
+			IsFromSelf:      event.IsFromMe,
 			Text:            strings.TrimSpace(event.Text),
 			ChatType:        "private",
 			QuotedMessageID: strings.TrimSpace(event.QuotedMessageID),
