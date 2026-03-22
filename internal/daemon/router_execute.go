@@ -29,6 +29,18 @@ func (r *Router) sendText(ctx context.Context, message IncomingMessage, text str
 	return r.replyBus.Reply(ctx, chat, paneKey, "send", fmt.Sprintf("sent to %s", paneKey))
 }
 
+func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
+	text := strings.TrimSpace(args)
+	if text == "" {
+		chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
+		if err != nil {
+			return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		}
+		return r.promptForCommandInput(ctx, message, "send")
+	}
+	return r.sendText(ctx, message, text, "command")
+}
+
 // executeText keeps the execute path local to the daemon:
 //
 //	baseline snapshot -> send text + Enter -> bounded poll for visible change
