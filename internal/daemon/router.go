@@ -209,13 +209,10 @@ func (r *Router) handleCurrent(ctx context.Context, message IncomingMessage) err
 }
 
 func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, args string) error {
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInbound(ctx, message, paneKey, "")
 	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "snapshot [lines] [image|text]"))
@@ -237,13 +234,10 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
 	text := strings.TrimSpace(args)
 	if text == "" {
-		chat := message.Chat
-		paneKey, err := r.requireCurrentPane(ctx, chat)
+		chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 		if err != nil {
-			r.logInbound(ctx, message, paneKey, "")
-			return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+			return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 		}
-		r.logInbound(ctx, message, paneKey, "")
 		return r.promptForCommandInput(ctx, message, "send")
 	}
 	return r.sendText(ctx, message, text, "command")
@@ -261,13 +255,10 @@ func (r *Router) handlePlainText(ctx context.Context, message IncomingMessage, t
 }
 
 func (r *Router) sendText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, inboundKind)
 	if err != nil {
-		r.logInboundKind(ctx, message, paneKey, "", inboundKind)
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInboundKind(ctx, message, paneKey, "", inboundKind)
 	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
 	}
@@ -283,13 +274,10 @@ func (r *Router) sendText(ctx context.Context, message IncomingMessage, text str
 // capture-pane text snapshots, which is good enough for relay-mode operator
 // feedback but is not the same thing as shell command completion detection.
 func (r *Router) executeText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, inboundKind)
 	if err != nil {
-		r.logInboundKind(ctx, message, paneKey, "", inboundKind)
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInboundKind(ctx, message, paneKey, "", inboundKind)
 	var (
 		baseline    string
 		baselineErr error
@@ -376,13 +364,10 @@ func (r *Router) executeNoOutputMessage(chat ChatRef, paneKey string) string {
 }
 
 func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args string) error {
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInbound(ctx, message, paneKey, "")
 	keys, err := parseKeysArgs(args)
 	if err != nil {
 		if strings.TrimSpace(args) == "" {
@@ -402,13 +387,10 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args 
 		return r.executeText(ctx, message, text, "command")
 	}
 
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInbound(ctx, message, paneKey, "")
 	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
 	}
@@ -416,13 +398,10 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args 
 }
 
 func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error {
-	chat := message.Chat
-	paneKey, err := r.requireCurrentPane(ctx, chat)
+	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		r.logInbound(ctx, message, paneKey, "")
-		return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 	}
-	r.logInbound(ctx, message, paneKey, "")
 	if err := r.service.CtrlCManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("ctrl-c failed: %v", err))
 	}
@@ -442,12 +421,10 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 	}
 	switch mode {
 	case "on":
-		paneKey, err := r.requireCurrentPane(ctx, chat)
+		_, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 		if err != nil {
-			r.logInbound(ctx, message, paneKey, "")
-			return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+			return r.replyCurrentPaneError(ctx, chat, paneKey, err)
 		}
-		r.logInbound(ctx, message, paneKey, "")
 		if err := r.follow.EnableWithOptions(ctx, chat, paneKey, opts); err != nil {
 			return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow failed: %v", err))
 		}

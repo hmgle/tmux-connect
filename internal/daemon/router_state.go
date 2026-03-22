@@ -128,6 +128,17 @@ func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, 
 	return record.Info.Target.PaneKey(), nil
 }
 
+func (r *Router) currentPaneForInbound(ctx context.Context, message IncomingMessage, inboundKind string) (ChatRef, string, error) {
+	chat := message.Chat
+	paneKey, err := r.requireCurrentPane(ctx, chat)
+	r.logInboundKind(ctx, message, paneKey, "", inboundKind)
+	return chat, paneKey, err
+}
+
+func (r *Router) replyCurrentPaneError(ctx context.Context, chat ChatRef, paneKey string, err error) error {
+	return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
+}
+
 func (r *Router) loadCurrentPaneRecord(ctx context.Context, chat ChatRef) (string, tmuxconn.PaneRecord, error) {
 	current, err := r.store.CurrentPane(ctx, chat)
 	if err != nil {
