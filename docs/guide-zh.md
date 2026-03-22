@@ -33,7 +33,7 @@
 
 - Go `1.25` 或更新版本
 - `tmux`
-- `sqlite3`
+- 无需额外安装 `sqlite3` 命令行；daemon 使用内嵌 SQLite
 - 一个已经存在的 tmux pane
 - 一个 Telegram bot token、Slack bot/app token、Discord bot token 或已配对的 WhatsApp 设备（取决于你要用的平台）
 

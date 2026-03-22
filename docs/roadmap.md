@@ -22,7 +22,6 @@ The current repository ships:
 
 - start storing real `agent_session_id` and `agent_thread_id` values once the first adapter exists
 - extend `message_links` only where inline callbacks or edit targets need it
-- replace shelling out to `sqlite3` with an embedded driver when it becomes worthwhile
 - evaluate follow restore after restart without breaking the tmux-first model
 
 ## Quality Work

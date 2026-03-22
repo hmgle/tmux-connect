@@ -20,7 +20,7 @@
 
 常见原因：
 
-- `sqlite3` 不在 `PATH`
+- 数据库目录不可写，或已有数据库文件状态异常
 - Telegram token 无效
 - 无法访问 `api.telegram.org`
 - `--db` 路径不可写

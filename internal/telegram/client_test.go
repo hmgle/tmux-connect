@@ -7,24 +7,54 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func newTestClient(t *testing.T, handler func(*http.Request) any) *Client {
+	t.Helper()
+
+	return NewClient(
+		"token",
+		WithBaseURL("https://telegram.test"),
+		WithHTTPClient(&http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				t.Helper()
+
+				body, err := json.Marshal(handler(r))
+				if err != nil {
+					t.Fatalf("marshal response: %v", err)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(string(body))),
+				}, nil
+			}),
+		}),
+	)
+}
 
 func TestGetUpdates(t *testing.T) {
 	t.Parallel()
 
 	var gotPath string
 	var gotTimeout int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		gotPath = r.URL.Path
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
 		gotTimeout = int(payload["timeout"].(float64))
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": []map[string]any{
 				{
@@ -39,11 +69,8 @@ func TestGetUpdates(t *testing.T) {
 					},
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	updates, err := client.GetUpdates(context.Background(), 10, 5*time.Second)
 	if err != nil {
 		t.Fatalf("GetUpdates() error = %v", err)
@@ -63,20 +90,17 @@ func TestDrainPendingUpdates(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		calls++
 		result := []map[string]any{}
 		if calls == 1 {
 			result = []map[string]any{{"update_id": 100}, {"update_id": 101}}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok":     true,
 			"result": result,
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	offset, err := client.DrainPendingUpdates(context.Background())
 	if err != nil {
 		t.Fatalf("DrainPendingUpdates() error = %v", err)
@@ -89,7 +113,7 @@ func TestDrainPendingUpdates(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
@@ -103,7 +127,7 @@ func TestSendMessage(t *testing.T) {
 		if _, ok := payload["reply_parameters"]; ok {
 			t.Fatalf("unexpected reply_parameters in %#v", payload)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": map[string]any{
 				"message_id": 99,
@@ -113,11 +137,8 @@ func TestSendMessage(t *testing.T) {
 					"type": "private",
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	message, err := client.SendMessage(context.Background(), 1, "hello", SendOptions{})
 	if err != nil {
 		t.Fatalf("SendMessage() error = %v", err)
@@ -130,7 +151,7 @@ func TestSendMessage(t *testing.T) {
 func TestSendMessageWithReplyTarget(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
@@ -142,7 +163,7 @@ func TestSendMessageWithReplyTarget(t *testing.T) {
 		if replyParameters["message_id"] != float64(42) {
 			t.Fatalf("reply_parameters.message_id = %#v, want 42", replyParameters["message_id"])
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": map[string]any{
 				"message_id": 100,
@@ -152,11 +173,8 @@ func TestSendMessageWithReplyTarget(t *testing.T) {
 					"type": "private",
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	message, err := client.SendMessage(context.Background(), 1, "hello", SendOptions{ReplyToMessageID: 42})
 	if err != nil {
 		t.Fatalf("SendMessage() error = %v", err)
@@ -169,7 +187,7 @@ func TestSendMessageWithReplyTarget(t *testing.T) {
 func TestSendMessageWithParseMode(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
@@ -177,7 +195,7 @@ func TestSendMessageWithParseMode(t *testing.T) {
 		if payload["parse_mode"] != "HTML" {
 			t.Fatalf("parse_mode = %#v, want %q", payload["parse_mode"], "HTML")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": map[string]any{
 				"message_id": 101,
@@ -187,11 +205,8 @@ func TestSendMessageWithParseMode(t *testing.T) {
 					"type": "private",
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	message, err := client.SendMessage(context.Background(), 1, "<b>hello</b>", SendOptions{ParseMode: ParseModeHTML})
 	if err != nil {
 		t.Fatalf("SendMessage() error = %v", err)
@@ -204,7 +219,7 @@ func TestSendMessageWithParseMode(t *testing.T) {
 func TestSendMessageWithForceReplyMarkup(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
@@ -219,7 +234,7 @@ func TestSendMessageWithForceReplyMarkup(t *testing.T) {
 		if replyMarkup["input_field_placeholder"] != "status" {
 			t.Fatalf("placeholder = %#v, want %q", replyMarkup["input_field_placeholder"], "status")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": map[string]any{
 				"message_id": 102,
@@ -229,11 +244,8 @@ func TestSendMessageWithForceReplyMarkup(t *testing.T) {
 					"type": "private",
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	message, err := client.SendMessage(context.Background(), 1, "reply now", SendOptions{
 		ReplyMarkup: ForceReply{
 			ForceReply:            true,
@@ -253,7 +265,7 @@ func TestSetMyCommands(t *testing.T) {
 
 	var gotPath string
 	var gotCommands []map[string]any
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		gotPath = r.URL.Path
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -275,14 +287,11 @@ func TestSetMyCommands(t *testing.T) {
 				gotCommands = append(gotCommands, command)
 			}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok":     true,
 			"result": true,
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	err := client.SetMyCommands(context.Background(), []BotCommand{
 		{Command: "start", Description: "Show quick start and commands"},
 		{Command: "panes", Description: "List managed panes"},
@@ -310,7 +319,7 @@ func TestSetMyCommands(t *testing.T) {
 func TestSendPhoto(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(r *http.Request) any {
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
 			t.Fatalf("ParseMediaType() error = %v", err)
@@ -359,7 +368,7 @@ func TestSendPhoto(t *testing.T) {
 			t.Fatalf("file body = %q, want pngbytes", string(fileBody))
 		}
 
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		return map[string]any{
 			"ok": true,
 			"result": map[string]any{
 				"message_id": 102,
@@ -368,11 +377,8 @@ func TestSendPhoto(t *testing.T) {
 					"type": "private",
 				},
 			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewClient("token", WithBaseURL(server.URL))
+		}
+	})
 	message, err := client.SendPhoto(context.Background(), 1, "snapshot.png", []byte("pngbytes"), "pane snapshot", SendOptions{ReplyToMessageID: 42})
 	if err != nil {
 		t.Fatalf("SendPhoto() error = %v", err)

@@ -82,7 +82,7 @@ Bot 需要特定的 intents 才能正常工作：
 
 - Go 1.25 或更高版本
 - tmux 已安装
-- sqlite3 在 PATH 中（用于守护进程）
+- 守护进程使用内嵌 SQLite，不要求系统安装 sqlite3 命令行
 
 ### 2.2 构建项目
 
@@ -489,8 +489,8 @@ command_prefix = "tmux:"
 
 ### 数据库错误
 
-1. 确保 sqlite3 已安装且在 PATH 中
-2. 检查数据库目录是否有写入权限
+1. 检查数据库目录是否有写入权限
+2. 确认数据库文件没有被损坏或被其他工具异常占用
 3. 尝试删除旧数据库重新创建：
    ```bash
    rm ~/.tmux-connect/tmux-connect.db

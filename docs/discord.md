@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - `tmux` is installed and the target pane already exists
-- `sqlite3` is installed and available in `PATH`
+- no external `sqlite3` CLI is required; the daemon uses embedded SQLite
 - you have a Discord application with a bot token
 - the bot is invited to the target server or DM
 - the bot has the Message Content intent enabled if you want prefixed commands in channels or DMs

@@ -1,21 +1,22 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Store struct {
-	path      string
-	sqliteBin string
-	mu        sync.Mutex
+	path string
+	db   *sql.DB
 }
 
 type MessageRecord struct {
@@ -68,18 +69,25 @@ func OpenStore(ctx context.Context, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("db path is required")
 	}
-	sqliteBin, err := exec.LookPath("sqlite3")
-	if err != nil {
-		return nil, fmt.Errorf("sqlite3 not found in PATH: %w", err)
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite db: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	store := &Store{
-		path:      path,
-		sqliteBin: sqliteBin,
+		path: path,
+		db:   db,
+	}
+	if err := store.configure(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	if err := store.init(ctx); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -87,6 +95,19 @@ func OpenStore(ctx context.Context, path string) (*Store, error) {
 
 func (s *Store) Path() string {
 	return s.path
+}
+
+func (s *Store) configure(ctx context.Context) error {
+	if err := s.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping sqlite db: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `
+PRAGMA busy_timeout = 5000;
+PRAGMA foreign_keys = ON;
+`); err != nil {
+		return fmt.Errorf("configure sqlite db: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) init(ctx context.Context) error {
@@ -846,35 +867,64 @@ func (s *Store) setSchemaVersion(ctx context.Context, version int) error {
 }
 
 func (s *Store) exec(ctx context.Context, query string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cmd := exec.CommandContext(ctx, s.sqliteBin, s.path, query)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("sqlite3 exec failed: %w: %s", err, strings.TrimSpace(string(output)))
+	if _, err := s.db.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("sqlite exec failed: %w", err)
 	}
 	return nil
 }
 
 func (s *Store) queryJSON(ctx context.Context, query string, dest any) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cmd := exec.CommandContext(ctx, s.sqliteBin, "-json", s.path, query)
-	output, err := cmd.CombinedOutput()
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("sqlite3 query failed: %w: %s", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("sqlite query failed: %w", err)
 	}
-	if len(strings.TrimSpace(string(output))) == 0 {
-		output = []byte("[]")
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return fmt.Errorf("sqlite columns: %w", err)
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(output)))
+
+	records := make([]map[string]any, 0)
+	for rows.Next() {
+		values := make([]any, len(columns))
+		scanTargets := make([]any, len(columns))
+		for i := range values {
+			scanTargets[i] = &values[i]
+		}
+		if err := rows.Scan(scanTargets...); err != nil {
+			return fmt.Errorf("sqlite scan: %w", err)
+		}
+
+		record := make(map[string]any, len(columns))
+		for i, column := range columns {
+			record[column] = normalizeSQLiteValue(values[i])
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite rows: %w", err)
+	}
+
+	output, err := json.Marshal(records)
+	if err != nil {
+		return fmt.Errorf("marshal sqlite rows: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(output))
 	decoder.UseNumber()
 	if err := decoder.Decode(dest); err != nil {
 		return fmt.Errorf("decode sqlite json: %w", err)
 	}
 	return nil
+}
+
+func normalizeSQLiteValue(value any) any {
+	switch typed := value.(type) {
+	case []byte:
+		return string(typed)
+	default:
+		return typed
+	}
 }
 
 func (s *Store) tableHasColumn(ctx context.Context, table string, column string) (bool, error) {
