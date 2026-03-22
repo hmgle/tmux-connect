@@ -125,12 +125,9 @@ func (r *Router) handleUnmanage(ctx context.Context, message IncomingMessage, ar
 	r.logInbound(ctx, message, "", "")
 	ref := strings.TrimSpace(args)
 	if ref == "" {
-		if isWhatsAppChat(chat) {
-			return r.promptForWhatsAppPaneChoice(ctx, message, "unmanage")
-		}
-		return r.promptForCommandInput(ctx, message, "unmanage")
+		return r.promptForPaneCommand(ctx, message, "unmanage")
 	}
-	record, err := r.service.Inspect(ctx, ref)
+	record, err := r.inspectPaneRecord(ctx, ref)
 	if err != nil {
 		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("inspect failed: %v", err))
 	}
@@ -155,23 +152,12 @@ func (r *Router) handleSelect(ctx context.Context, message IncomingMessage, args
 	ref := strings.TrimSpace(args)
 	if ref == "" {
 		r.logInbound(ctx, message, "", "")
-		if isWhatsAppChat(chat) {
-			return r.promptForWhatsAppPaneChoice(ctx, message, "select")
-		}
-		return r.promptForCommandInput(ctx, message, "select")
+		return r.promptForPaneCommand(ctx, message, "select")
 	}
-	record, err := r.service.Inspect(ctx, ref)
+	record, err := r.ensureManagedPaneRecord(ctx, ref)
 	if err != nil {
 		r.logInbound(ctx, message, "", "")
-		return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("inspect failed: %v", err))
-	}
-	if !record.Metadata.Managed {
-		record, err = r.service.Attach(ctx, ref, "unknown", "")
-		if err != nil {
-			r.logInbound(ctx, message, "", "")
-			return r.replyBus.Reply(ctx, chat, "", "error", fmt.Sprintf("select failed: %v", err))
-		}
-		r.registry.MarkDirty()
+		return r.replyBus.Reply(ctx, chat, "", "error", err.Error())
 	}
 	paneKey := record.Info.Target.PaneKey()
 	if err := r.store.BindPane(ctx, chat, paneKey); err != nil {
@@ -209,20 +195,16 @@ func (r *Router) handleClear(ctx context.Context, message IncomingMessage) error
 
 func (r *Router) handleCurrent(ctx context.Context, message IncomingMessage) error {
 	chat := message.Chat
-	current, err := r.store.CurrentPane(ctx, chat)
+	current, record, err := r.loadCurrentPaneRecord(ctx, chat)
 	if err != nil {
-		return err
+		r.logInbound(ctx, message, current, "")
+		return r.replyBus.Reply(ctx, chat, current, "error", err.Error())
 	}
 	if current == "" {
 		r.logInbound(ctx, message, "", "")
 		return r.replyBus.Reply(ctx, chat, "", "current", "no pane is currently selected")
 	}
 	r.logInbound(ctx, message, current, "")
-	record, err := r.service.Inspect(ctx, current)
-	if err != nil {
-		_ = r.store.SetCurrentPane(ctx, chat, "")
-		return r.replyBus.Reply(ctx, chat, current, "error", fmt.Sprintf("current pane is unavailable: %v", err))
-	}
 	return r.replyBus.Reply(ctx, chat, current, "current", formatCurrent(record, r.follow.IsEnabled(chat.Key())))
 }
 

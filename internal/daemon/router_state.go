@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
 func (r *Router) commandPrefix(chat ChatRef) string {
@@ -32,6 +34,13 @@ func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMess
 		promptText += "\n\nIn Discord channels, reply with " + strconv.Quote(r.discordCommandPrefix+" <value>") + "."
 	}
 	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", promptText, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
+}
+
+func (r *Router) promptForPaneCommand(ctx context.Context, message IncomingMessage, command string) error {
+	if isWhatsAppChat(message.Chat) {
+		return r.promptForWhatsAppPaneChoice(ctx, message, command)
+	}
+	return r.promptForCommandInput(ctx, message, command)
 }
 
 func (r *Router) promptForWhatsAppPaneChoice(ctx context.Context, message IncomingMessage, command string) error {
@@ -105,23 +114,54 @@ func (r *Router) resolvePendingArgs(pending pendingCommand, args string) string 
 }
 
 func (r *Router) requireCurrentPane(ctx context.Context, chat ChatRef) (string, error) {
-	current, err := r.store.CurrentPane(ctx, chat)
+	current, record, err := r.loadCurrentPaneRecord(ctx, chat)
 	if err != nil {
-		return "", err
+		return current, err
 	}
 	if strings.TrimSpace(current) == "" {
 		return "", fmt.Errorf("no current pane; run %s first", formatCommandUsage(r.commandPrefix(chat), "select <pane>"))
-	}
-	record, err := r.service.Inspect(ctx, current)
-	if err != nil {
-		_ = r.store.SetCurrentPane(ctx, chat, "")
-		return current, fmt.Errorf("current pane is unavailable: %w", err)
 	}
 	if !record.Metadata.Managed {
 		_ = r.store.SetCurrentPane(ctx, chat, "")
 		return current, fmt.Errorf("current pane is no longer managed")
 	}
 	return record.Info.Target.PaneKey(), nil
+}
+
+func (r *Router) loadCurrentPaneRecord(ctx context.Context, chat ChatRef) (string, tmuxconn.PaneRecord, error) {
+	current, err := r.store.CurrentPane(ctx, chat)
+	if err != nil {
+		return "", tmuxconn.PaneRecord{}, err
+	}
+	if strings.TrimSpace(current) == "" {
+		return "", tmuxconn.PaneRecord{}, nil
+	}
+	record, err := r.service.Inspect(ctx, current)
+	if err != nil {
+		_ = r.store.SetCurrentPane(ctx, chat, "")
+		return current, tmuxconn.PaneRecord{}, fmt.Errorf("current pane is unavailable: %v", err)
+	}
+	return current, record, nil
+}
+
+func (r *Router) inspectPaneRecord(ctx context.Context, ref string) (tmuxconn.PaneRecord, error) {
+	return r.service.Inspect(ctx, ref)
+}
+
+func (r *Router) ensureManagedPaneRecord(ctx context.Context, ref string) (tmuxconn.PaneRecord, error) {
+	record, err := r.inspectPaneRecord(ctx, ref)
+	if err != nil {
+		return tmuxconn.PaneRecord{}, fmt.Errorf("inspect failed: %v", err)
+	}
+	if record.Metadata.Managed {
+		return record, nil
+	}
+	record, err = r.service.Attach(ctx, ref, "unknown", "")
+	if err != nil {
+		return tmuxconn.PaneRecord{}, fmt.Errorf("select failed: %v", err)
+	}
+	r.registry.MarkDirty()
+	return record, nil
 }
 
 func (r *Router) logInbound(ctx context.Context, message IncomingMessage, paneKey string, agent string) {
