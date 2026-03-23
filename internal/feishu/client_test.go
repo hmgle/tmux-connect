@@ -23,7 +23,7 @@ func TestParseMessageEventStripsMentionsInGroups(t *testing.T) {
 				ChatId:      stringPtr("oc_group_1"),
 				ChatType:    stringPtr("group"),
 				MessageType: stringPtr("text"),
-				Content:     stringPtr(`{"text":"<at user_id=\"ou_bot\">tmux-connect</at> /panes"}`),
+				Content:     stringPtr(`{"text":"@_user_1 /panes"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
 					Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
@@ -58,7 +58,7 @@ func TestParseMessageEventMentionOnlyDefaultsToHelp(t *testing.T) {
 				ChatId:      stringPtr("oc_group_1"),
 				ChatType:    stringPtr("group"),
 				MessageType: stringPtr("text"),
-				Content:     stringPtr(`{"text":"<at user_id=\"ou_bot\">tmux-connect</at>"}`),
+				Content:     stringPtr(`{"text":"@_user_1"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
 					Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
@@ -90,7 +90,7 @@ func TestParseMessageEventIgnoresOtherMentionsWhenBotIdentityConfigured(t *testi
 				ChatId:      stringPtr("oc_group_1"),
 				ChatType:    stringPtr("group"),
 				MessageType: stringPtr("text"),
-				Content:     stringPtr(`{"text":"<at user_id=\"ou_coworker\">teammate</at> panes"}`),
+				Content:     stringPtr(`{"text":"@_user_1 panes"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
 					Id:  &larkim.UserId{OpenId: stringPtr("ou_coworker")},
@@ -109,8 +109,8 @@ func TestParseMessageEventIgnoresOtherMentionsWhenBotIdentityConfigured(t *testi
 	if message.IsAppMention {
 		t.Fatal("IsAppMention = true, want false")
 	}
-	if message.Text != "panes" {
-		t.Fatalf("text = %q, want panes", message.Text)
+	if message.Text != "@_user_1 panes" {
+		t.Fatalf("text = %q, want @_user_1 panes", message.Text)
 	}
 }
 
@@ -151,7 +151,7 @@ func TestParseMessageEventMatchesBotIdentityAcrossIDTypes(t *testing.T) {
 						ChatId:      stringPtr("oc_group_1"),
 						ChatType:    stringPtr("group"),
 						MessageType: stringPtr("text"),
-						Content:     stringPtr(`{"text":"<at user_id=\"mention\">tmux-connect</at> panes"}`),
+						Content:     stringPtr(`{"text":"@_user_1 panes"}`),
 						Mentions: []*larkim.MentionEvent{{
 							Key: stringPtr("@_user_1"),
 							Id:  tc.mention,
@@ -185,7 +185,7 @@ func TestParseMessageEventFallsBackToAnyMentionWithoutBotIdentity(t *testing.T) 
 				ChatId:      stringPtr("oc_group_1"),
 				ChatType:    stringPtr("group"),
 				MessageType: stringPtr("text"),
-				Content:     stringPtr(`{"text":"<at user_id=\"ou_any\">somebody</at> panes"}`),
+				Content:     stringPtr(`{"text":"@_user_1 panes"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
 					Id:  &larkim.UserId{OpenId: stringPtr("ou_any")},
@@ -203,6 +203,88 @@ func TestParseMessageEventFallsBackToAnyMentionWithoutBotIdentity(t *testing.T) 
 	}
 	if !message.IsAppMention {
 		t.Fatal("IsAppMention = false, want true fallback")
+	}
+}
+
+func TestParseMessageEventStripsLeadingMentionPrefixWhenPrefixAddressesBot(t *testing.T) {
+	t.Parallel()
+
+	event := &larkim.P2MessageReceiveV1{
+		EventV2Base: &larkevent.EventV2Base{},
+		Event: &larkim.P2MessageReceiveV1Data{
+			Message: &larkim.EventMessage{
+				MessageId:   stringPtr("om_1"),
+				ChatId:      stringPtr("oc_group_1"),
+				ChatType:    stringPtr("group"),
+				MessageType: stringPtr("text"),
+				Content:     stringPtr(`{"text":"@_user_2 @_user_1 panes @_user_2"}`),
+				Mentions: []*larkim.MentionEvent{
+					{
+						Key: stringPtr("@_user_2"),
+						Id:  &larkim.UserId{OpenId: stringPtr("ou_coworker")},
+					},
+					{
+						Key: stringPtr("@_user_1"),
+						Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
+					},
+				},
+			},
+		},
+	}
+
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
+	if err != nil {
+		t.Fatalf("parseMessageEvent() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if !message.IsAppMention {
+		t.Fatal("IsAppMention = false, want true")
+	}
+	if message.Text != "panes @_user_2" {
+		t.Fatalf("text = %q, want panes @_user_2", message.Text)
+	}
+}
+
+func TestParseMessageEventLeavesLeadingNonBotMentionWhenBotMentionIsNotInPrefix(t *testing.T) {
+	t.Parallel()
+
+	event := &larkim.P2MessageReceiveV1{
+		EventV2Base: &larkevent.EventV2Base{},
+		Event: &larkim.P2MessageReceiveV1Data{
+			Message: &larkim.EventMessage{
+				MessageId:   stringPtr("om_1"),
+				ChatId:      stringPtr("oc_group_1"),
+				ChatType:    stringPtr("group"),
+				MessageType: stringPtr("text"),
+				Content:     stringPtr(`{"text":"@_user_2 panes @_user_1"}`),
+				Mentions: []*larkim.MentionEvent{
+					{
+						Key: stringPtr("@_user_2"),
+						Id:  &larkim.UserId{OpenId: stringPtr("ou_coworker")},
+					},
+					{
+						Key: stringPtr("@_user_1"),
+						Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
+					},
+				},
+			},
+		},
+	}
+
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
+	if err != nil {
+		t.Fatalf("parseMessageEvent() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if !message.IsAppMention {
+		t.Fatal("IsAppMention = false, want true")
+	}
+	if message.Text != "@_user_2 panes @_user_1" {
+		t.Fatalf("text = %q, want @_user_2 panes @_user_1", message.Text)
 	}
 }
 

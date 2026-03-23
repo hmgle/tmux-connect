@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,8 +24,6 @@ const (
 	imageTypeMessage    = "message"
 	chatTypeP2P         = "p2p"
 )
-
-var mentionTagPattern = regexp.MustCompile(`(?s)<at [^>]*>.*?</at>`)
 
 type MessageEvent struct {
 	ChatID       string
@@ -214,7 +211,7 @@ func parseMessageEvent(event *larkim.P2MessageReceiveV1, botMentionIDs map[strin
 	isAppMention := hasBotMention(message.Mentions, botMentionIDs)
 	text := normalizeIncomingText(content.Text)
 	if strings.TrimSpace(larkcore.StringValue(message.ChatType)) != chatTypeP2P {
-		text = normalizeMentionCommandText(text)
+		text = normalizeGroupCommandText(text, message.Mentions, botMentionIDs)
 	}
 	if text == "" && isAppMention {
 		text = "help"
@@ -248,9 +245,40 @@ func normalizeIncomingText(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func normalizeMentionCommandText(text string) string {
-	text = mentionTagPattern.ReplaceAllString(text, " ")
-	return strings.TrimSpace(strings.Join(strings.Fields(text), " "))
+func normalizeGroupCommandText(text string, mentions []*larkim.MentionEvent, botMentionIDs map[string]struct{}) string {
+	// Feishu text receive events encode mentions as @_user_N placeholders in content.text.
+	// If the leading mention prefix addresses the bot, strip that entire prefix so the
+	// first non-mention token becomes the command. Mentions elsewhere are preserved.
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return ""
+	}
+	mentionKeys := mentionKeySet(mentions)
+	if len(mentionKeys) == 0 {
+		return strings.Join(fields, " ")
+	}
+
+	prefixEnd := 0
+	for prefixEnd < len(fields) {
+		if _, ok := mentionKeys[fields[prefixEnd]]; !ok {
+			break
+		}
+		prefixEnd++
+	}
+	if prefixEnd == 0 {
+		return strings.Join(fields, " ")
+	}
+
+	botKeys := botMentionKeySet(mentions, botMentionIDs)
+	if len(botKeys) == 0 {
+		return strings.Join(fields, " ")
+	}
+	for _, field := range fields[:prefixEnd] {
+		if _, ok := botKeys[field]; ok {
+			return strings.Join(fields[prefixEnd:], " ")
+		}
+	}
+	return strings.Join(fields, " ")
 }
 
 func eventSenderID(sender *larkim.EventSender) string {
@@ -297,6 +325,38 @@ func hasBotMention(mentions []*larkim.MentionEvent, botMentionIDs map[string]str
 		}
 	}
 	return false
+}
+
+func mentionKeySet(mentions []*larkim.MentionEvent) map[string]struct{} {
+	keys := make(map[string]struct{}, len(mentions))
+	for _, mention := range mentions {
+		if mention == nil {
+			continue
+		}
+		key := strings.TrimSpace(larkcore.StringValue(mention.Key))
+		if key == "" {
+			continue
+		}
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
+func botMentionKeySet(mentions []*larkim.MentionEvent, botMentionIDs map[string]struct{}) map[string]struct{} {
+	keys := make(map[string]struct{}, len(mentions))
+	for _, mention := range mentions {
+		if mention == nil {
+			continue
+		}
+		key := strings.TrimSpace(larkcore.StringValue(mention.Key))
+		if key == "" {
+			continue
+		}
+		if len(botMentionIDs) == 0 || mentionMatchesBotIdentity(mention, botMentionIDs) {
+			keys[key] = struct{}{}
+		}
+	}
+	return keys
 }
 
 func mentionMatchesBotIdentity(mention *larkim.MentionEvent, botMentionIDs map[string]struct{}) bool {
