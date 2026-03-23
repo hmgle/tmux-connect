@@ -11,6 +11,7 @@
 如果你需要更细的说明，再看这些文档：
 
 - [telegram.md](./telegram.md) — Telegram 专项配置和命令说明
+- [feishu.md](./feishu.md) — 飞书专项配置和命令说明
 - [slack.md](./slack.md) — Slack 专项配置和命令说明
 - [discord.md](./discord.md) — Discord 专项配置和命令说明
 - [discord-zh.md](./discord-zh.md) — Discord 接入详细指南（中文）
@@ -27,7 +28,7 @@
 
 - 本地 CLI 查看和控制 pane
 - 本地 HTTP API 暴露同样的控制面
-- Telegram、Slack、Discord 或 WhatsApp 远程查看输出、发送文本、回车、中断、开启 follow
+- Telegram、飞书、Slack、Discord 或 WhatsApp 远程查看输出、发送文本、回车、中断、开启 follow
 
 ## 前置条件
 
@@ -35,7 +36,7 @@
 - `tmux`
 - 无需额外安装 `sqlite3` 命令行；daemon 使用内嵌 SQLite
 - 一个已经存在的 tmux pane
-- 一个 Telegram bot token、Slack bot/app token、Discord bot token 或已配对的 WhatsApp 设备（取决于你要用的平台）
+- 对应平台的凭据或会话，例如 Telegram bot token、飞书 app ID/app secret、Slack bot/app token、Discord bot token，或已配对的 WhatsApp 设备
 
 ## 五分钟上手
 
@@ -50,8 +51,15 @@ make build
 如果你不需要全部远程平台，也可以选择性构建：
 
 ```bash
-# 只保留 Telegram 和 Slack
-make build PLATFORMS_INCLUDE=telegram,slack
+make platforms
+```
+
+上面的命令会直接列出可用平台名；也可以配合 `PLATFORMS_INCLUDE` 或
+`EXCLUDE` 预览本次构建会保留的平台。
+
+```bash
+# 只保留 Telegram 和 Discord
+make build PLATFORMS_INCLUDE=telegram,discord
 
 # 排除飞书和 WhatsApp
 make build EXCLUDE=feishu,whatsapp

@@ -5,6 +5,7 @@ ALL_PLATFORMS := telegram feishu slack discord whatsapp
 COMMA := ,
 
 _EXCLUDE_TAGS :=
+EFFECTIVE_PLATFORMS := $(ALL_PLATFORMS)
 
 ifneq ($(strip $(PLATFORMS_INCLUDE)),)
 ifneq ($(strip $(EXCLUDE)),)
@@ -20,6 +21,7 @@ $(error unknown platform(s) in PLATFORMS_INCLUDE: $(_UNKNOWN_INCLUDE_PLATFORMS))
 endif
   _EXCLUDE_PLATFORMS := $(filter-out $(_WANTED_PLATFORMS),$(ALL_PLATFORMS))
   _EXCLUDE_TAGS += $(addprefix no_,$(_EXCLUDE_PLATFORMS))
+  EFFECTIVE_PLATFORMS := $(_WANTED_PLATFORMS)
 endif
 
 ifdef EXCLUDE
@@ -29,12 +31,14 @@ ifneq ($(_UNKNOWN_EXCLUDE_PLATFORMS),)
 $(error unknown platform(s) in EXCLUDE: $(_UNKNOWN_EXCLUDE_PLATFORMS))
 endif
   _EXCLUDE_TAGS += $(addprefix no_,$(_EXCLUDE_PLATFORMS_DIRECT))
+  EFFECTIVE_PLATFORMS := $(filter-out $(_EXCLUDE_PLATFORMS_DIRECT),$(ALL_PLATFORMS))
 endif
 
 BUILD_TAGS := $(strip $(_EXCLUDE_TAGS))
 TAGS_FLAG := $(if $(BUILD_TAGS),-tags '$(BUILD_TAGS)',)
+EFFECTIVE_PLATFORMS_DISPLAY := $(if $(strip $(EFFECTIVE_PLATFORMS)),$(EFFECTIVE_PLATFORMS),<none>)
 
-.PHONY: build test clean print-tags help
+.PHONY: build test clean print-tags help platforms
 
 help:
 	@printf '%s\n' \
@@ -43,6 +47,7 @@ help:
 		'  make build EXCLUDE=feishu,whatsapp         Exclude specific platforms via negative build tags' \
 		'  make build PLATFORMS_INCLUDE=telegram      Keep only specific platforms' \
 		'                                             EXCLUDE and PLATFORMS_INCLUDE are mutually exclusive' \
+		'  make platforms                             List supported platforms without building' \
 		'  make test                                  Run the default test suite' \
 		'  make clean                                 Remove the built binary' \
 		'  make print-tags                            Show the effective Go build tags'
@@ -55,6 +60,12 @@ test:
 
 clean:
 	rm -f $(APP)
+
+platforms:
+	@printf '%s\n' \
+		'Supported remote platforms:' \
+		$(foreach platform,$(ALL_PLATFORMS),'  - $(platform)')
+	@printf 'Selected for this invocation: %s\n' "$(EFFECTIVE_PLATFORMS_DISPLAY)"
 
 print-tags:
 	@printf 'BUILD_TAGS=%s\n' "$(BUILD_TAGS)"

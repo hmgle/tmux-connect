@@ -12,13 +12,13 @@
 
 English | [简体中文](./README.zh-CN.md)
 
-Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Telegram, Slack, Discord, and WhatsApp.
+Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Telegram, Feishu, Slack, Discord, and WhatsApp.
 
 ## Features
 
 - **Local CLI** — list, attach, inspect, snapshot, stream, and send input to any tmux pane
 - **HTTP API** — RESTful endpoints with SSE streaming for programmatic control
-- **Chat relay** — monitor and control panes from Telegram, Slack, Discord, or WhatsApp
+- **Chat relay** — monitor and control panes from Telegram, Feishu, Slack, Discord, or WhatsApp
 - **Tmux-first** — tmux stays the source of truth; bridge metadata survives restarts via tmux user options
 - **Embedded SQLite** — no external database required for the daemon
 
@@ -56,18 +56,36 @@ Then send `/panes` and `/select %5` from Telegram to start interacting.
 ## Selective Builds
 
 By default `make build` compiles all supported remote platforms into the binary.
+Run `make platforms` first to see the platform names accepted by
+`PLATFORMS_INCLUDE` and `EXCLUDE`:
+
+```bash
+make platforms
+```
+
+Supported platform names:
+
+| Platform | Build name | Credentials / session | Guide |
+|----------|------------|-----------------------|-------|
+| Telegram | `telegram` | Bot token | [docs/telegram.md](./docs/telegram.md) |
+| Feishu | `feishu` | App ID + App Secret | [docs/feishu.md](./docs/feishu.md) |
+| Slack | `slack` | Bot token + App token | [docs/slack.md](./docs/slack.md) |
+| Discord | `discord` | Bot token | [docs/discord.md](./docs/discord.md) |
+| WhatsApp | `whatsapp` | Paired device session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
+
 If you only need a subset, use negative build tags through the `Makefile`:
 
 ```bash
-# Keep only Telegram and Slack
-make build PLATFORMS_INCLUDE=telegram,slack
+# Keep only Telegram and Discord
+make build PLATFORMS_INCLUDE=telegram,discord
 
 # Or exclude heavy integrations you do not need
 make build EXCLUDE=feishu,whatsapp
 ```
 
 `EXCLUDE` and `PLATFORMS_INCLUDE` are mutually exclusive, and unknown platform
-names fail fast instead of being ignored.
+names fail fast instead of being ignored. `make platforms` accepts the same
+arguments, so you can preview the effective selection before building.
 
 After building, `./tmux-connect daemon help` prints the platforms compiled into
 that binary, and the `--platform` flag help matches the current build.
@@ -86,6 +104,7 @@ that binary, and the `--platform` flag help matches the current build.
 | HTTP API Reference | [docs/api.md](./docs/api.md) |
 | Daemon Configuration | [docs/daemon.md](./docs/daemon.md) |
 | Telegram Setup | [docs/telegram.md](./docs/telegram.md) |
+| Feishu Setup | [docs/feishu.md](./docs/feishu.md) |
 | Slack Setup | [docs/slack.md](./docs/slack.md) |
 | Discord Setup | [docs/discord.md](./docs/discord.md) |
 | WhatsApp Setup | [docs/whatsapp.md](./docs/whatsapp.md) |

@@ -11,13 +11,13 @@
 
 [English](./README.md) | 简体中文
 
-随时随地控制你的 tmux pane——CLI、HTTP API，或通过 Telegram、Slack、Discord、WhatsApp 在手机上操作。
+随时随地控制你的 tmux pane——CLI、HTTP API，或通过 Telegram、飞书、Slack、Discord、WhatsApp 在手机上操作。
 
 ## 特性
 
 - **本地 CLI** — 对任意 tmux pane 执行 list、attach、inspect、snapshot、stream 和 send
 - **HTTP API** — RESTful 端点 + SSE 流式输出，适合程序化控制
-- **聊天中继** — 从 Telegram、Slack、Discord 或 WhatsApp 监控和控制 pane
+- **聊天中继** — 从 Telegram、飞书、Slack、Discord 或 WhatsApp 监控和控制 pane
 - **Tmux 优先** — tmux 始终是事实来源；bridge 元数据通过 tmux user options 跨重启保留
 - **内嵌 SQLite** — daemon 无需外部数据库
 
@@ -55,18 +55,36 @@ make build
 ## 选择性构建
 
 默认情况下，`make build` 会把所有支持的远程平台一起编进二进制。
+构建前可以先运行 `make platforms`，查看 `PLATFORMS_INCLUDE` 和 `EXCLUDE`
+可用的平台名：
+
+```bash
+make platforms
+```
+
+当前支持的平台名：
+
+| 平台 | 构建名 | 常见凭据 / 会话 | 指南 |
+|------|--------|-----------------|------|
+| Telegram | `telegram` | Bot Token | [docs/telegram.md](./docs/telegram.md) |
+| 飞书 | `feishu` | App ID + App Secret | [docs/feishu.md](./docs/feishu.md) |
+| Slack | `slack` | Bot Token + App Token | [docs/slack.md](./docs/slack.md) |
+| Discord | `discord` | Bot Token | [docs/discord.md](./docs/discord.md) |
+| WhatsApp | `whatsapp` | 已配对设备的 session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
+
 如果你只需要其中一部分平台，可以通过 `Makefile` 使用负向排除式 build tags：
 
 ```bash
-# 只保留 Telegram 和 Slack
-make build PLATFORMS_INCLUDE=telegram,slack
+# 只保留 Telegram 和 Discord
+make build PLATFORMS_INCLUDE=telegram,discord
 
 # 或者排除不需要的重依赖平台
 make build EXCLUDE=feishu,whatsapp
 ```
 
 `EXCLUDE` 和 `PLATFORMS_INCLUDE` 不能同时使用；未知平台名也会直接报错，
-不再静默忽略。
+不再静默忽略。`make platforms` 也支持同样的参数，因此可以先预览本次构建
+实际会保留哪些平台。
 
 构建完成后，`./tmux-connect daemon help` 会显示当前二进制实际编入的平台；
 `daemon run --help` 中 `--platform` 的说明也会随之变化。
@@ -85,6 +103,7 @@ make build EXCLUDE=feishu,whatsapp
 | HTTP API 参考 | [docs/api-zh.md](./docs/api-zh.md) |
 | Daemon 配置参考 | [docs/daemon-zh.md](./docs/daemon-zh.md) |
 | Telegram 配置 | [docs/telegram.md](./docs/telegram.md) |
+| 飞书配置 | [docs/feishu.md](./docs/feishu.md) |
 | Slack 配置 | [docs/slack.md](./docs/slack.md) |
 | Discord 配置 | [docs/discord.md](./docs/discord.md) |
 | Discord 接入指南（中文） | [docs/discord-zh.md](./docs/discord-zh.md) |
