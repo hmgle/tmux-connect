@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -47,15 +48,18 @@ type Client struct {
 	appID     string
 	appSecret string
 	api       *lark.Client
+	logger    larkcore.Logger
 }
 
-func NewClient(appID string, appSecret string) *Client {
+func NewClient(appID string, appSecret string, logWriter io.Writer) *Client {
 	appID = strings.TrimSpace(appID)
 	appSecret = strings.TrimSpace(appSecret)
+	logger := newSDKLogger(logWriter)
 	return &Client{
 		appID:     appID,
 		appSecret: appSecret,
-		api:       lark.NewClient(appID, appSecret),
+		api:       lark.NewClient(appID, appSecret, lark.WithLogger(logger)),
+		logger:    logger,
 	}
 }
 
@@ -69,7 +73,10 @@ func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageE
 			return handler(runCtx, message)
 		})
 
-	wsClient := larkws.NewClient(c.appID, c.appSecret, larkws.WithEventHandler(dispatcher))
+	wsClient := larkws.NewClient(c.appID, c.appSecret,
+		larkws.WithEventHandler(dispatcher),
+		larkws.WithLogger(c.logger),
+	)
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- wsClient.Start(ctx)
@@ -82,7 +89,7 @@ func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageE
 		if ctx.Err() != nil {
 			return nil
 		}
-		return err
+		return wrapFeishuError("start websocket client", err)
 	}
 }
 
@@ -119,10 +126,10 @@ func (c *Client) uploadImage(ctx context.Context, data []byte) (string, error) {
 		Build()
 	resp, err := c.api.Im.V1.Image.Create(ctx, req)
 	if err != nil {
-		return "", err
+		return "", wrapFeishuError("upload image", err)
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.ImageKey == nil || strings.TrimSpace(*resp.Data.ImageKey) == "" {
-		return "", fmt.Errorf("upload feishu image failed: code=%d msg=%s", resp.Code, resp.Msg)
+		return "", feishuAPIError("upload image", resp.Code, resp.Msg)
 	}
 	return strings.TrimSpace(*resp.Data.ImageKey), nil
 }
@@ -140,10 +147,10 @@ func (c *Client) sendMessage(ctx context.Context, chatID string, msgType string,
 				Build()).
 			Build())
 		if err != nil {
-			return "", err
+			return "", wrapFeishuError("reply message", err)
 		}
 		if !resp.Success() || resp.Data == nil || resp.Data.MessageId == nil || strings.TrimSpace(*resp.Data.MessageId) == "" {
-			return "", fmt.Errorf("reply feishu message failed: code=%d msg=%s", resp.Code, resp.Msg)
+			return "", feishuAPIError("reply message", resp.Code, resp.Msg)
 		}
 		return strings.TrimSpace(*resp.Data.MessageId), nil
 	}
@@ -158,10 +165,10 @@ func (c *Client) sendMessage(ctx context.Context, chatID string, msgType string,
 		}).
 		Build())
 	if err != nil {
-		return "", err
+		return "", wrapFeishuError("send message", err)
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.MessageId == nil || strings.TrimSpace(*resp.Data.MessageId) == "" {
-		return "", fmt.Errorf("send feishu message failed: code=%d msg=%s", resp.Code, resp.Msg)
+		return "", feishuAPIError("send message", resp.Code, resp.Msg)
 	}
 	return strings.TrimSpace(*resp.Data.MessageId), nil
 }
@@ -252,4 +259,44 @@ func eventSenderID(sender *larkim.EventSender) string {
 		}
 	}
 	return ""
+}
+
+func feishuAPIError(action string, code int, msg string) error {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		msg = "unknown error"
+	}
+	hint := feishuErrorHint(msg)
+	if hint == "" {
+		return fmt.Errorf("feishu %s failed: code=%d msg=%s", strings.TrimSpace(action), code, msg)
+	}
+	return fmt.Errorf("feishu %s failed: code=%d msg=%s; %s", strings.TrimSpace(action), code, msg, hint)
+}
+
+func wrapFeishuError(action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	hint := feishuErrorHint(err.Error())
+	if hint == "" {
+		return fmt.Errorf("feishu %s: %w", strings.TrimSpace(action), err)
+	}
+	return fmt.Errorf("feishu %s: %w; %s", strings.TrimSpace(action), err, hint)
+}
+
+func feishuErrorHint(text string) string {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	switch {
+	case lower == "":
+		return ""
+	case strings.Contains(lower, "app_access_token"),
+		strings.Contains(lower, "tenant_access_token"),
+		strings.Contains(lower, "app_secret"),
+		strings.Contains(lower, "app_id"),
+		strings.Contains(lower, "unauthorized"),
+		strings.Contains(lower, "permission"):
+		return "check TMUXCONN_FEISHU_APP_ID/TMUXCONN_FEISHU_APP_SECRET and the Feishu app permissions"
+	default:
+		return ""
+	}
 }

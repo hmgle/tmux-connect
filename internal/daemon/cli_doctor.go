@@ -26,6 +26,16 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 			return tmuxconn.UsageError("telegram token is required; pass --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 		}
 		fmt.Fprintln(stdout, "telegram token: ok")
+	case "feishu":
+		if strings.TrimSpace(cfg.FeishuAppID) == "" {
+			return tmuxconn.UsageError("feishu app id is required; pass --feishu-app-id, TMUXCONN_FEISHU_APP_ID, or [daemon.feishu].app_id in config")
+		}
+		if strings.TrimSpace(cfg.FeishuAppSecret) == "" {
+			return tmuxconn.UsageError("feishu app secret is required; pass --feishu-app-secret, TMUXCONN_FEISHU_APP_SECRET, or [daemon.feishu].app_secret in config")
+		}
+		fmt.Fprintln(stdout, "feishu app credentials: ok")
+		fmt.Fprintln(stdout, "feishu bot capability: enable bot ability and subscribe to im.message.receive_v1")
+		fmt.Fprintln(stdout, "feishu group behavior: the bot only handles @mentions in group chats")
 	case "slack":
 		if strings.TrimSpace(cfg.SlackBotToken) == "" {
 			return tmuxconn.UsageError("slack bot token is required; pass --slack-bot-token, TMUXCONN_SLACK_BOT_TOKEN, or [daemon.slack].bot_token in config")

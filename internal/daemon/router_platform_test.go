@@ -326,6 +326,31 @@ func TestRouterFeishuGroupMentionAcceptsCommand(t *testing.T) {
 	}
 }
 
+func TestRouterFeishuGroupMentionOnlyShowsHelpCard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "help")); err != nil {
+		t.Fatalf("HandleMessage(group mention help) error = %v", err)
+	}
+	messages := messenger.snapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(messages))
+	}
+	if messages[0].Card == nil {
+		t.Fatal("card = nil, want help card")
+	}
+}
+
 func TestRouterFeishuHelpUsesCard(t *testing.T) {
 	t.Parallel()
 

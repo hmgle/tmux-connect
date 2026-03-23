@@ -26,9 +26,6 @@ func (r *Router) parseCommand(message IncomingMessage, text string) (string, str
 		if !isFeishuDirectMessage(message) && !message.IsAppMention {
 			return "", ""
 		}
-		if strings.TrimSpace(text) == "" && message.IsAppMention {
-			return "help", ""
-		}
 		if message.IsAppMention {
 			return parseExplicitCommand(text)
 		}

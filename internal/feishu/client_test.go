@@ -1,6 +1,8 @@
 package feishu
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	larkevent "github.com/larksuite/oapi-sdk-go/v3/event"
@@ -72,6 +74,30 @@ func TestParseMessageEventMentionOnlyDefaultsToHelp(t *testing.T) {
 	}
 	if message.Text != "help" {
 		t.Fatalf("text = %q, want help", message.Text)
+	}
+}
+
+func TestFeishuAPIErrorIncludesCredentialHintForAuthFailures(t *testing.T) {
+	t.Parallel()
+
+	err := feishuAPIError("send message", 99991663, "invalid app_access_token")
+	if err == nil {
+		t.Fatal("feishuAPIError() = nil, want error")
+	}
+	if got := err.Error(); !strings.Contains(got, "TMUXCONN_FEISHU_APP_ID") || !strings.Contains(got, "permissions") {
+		t.Fatalf("error = %q, want credential hint", got)
+	}
+}
+
+func TestWrapFeishuErrorIncludesCredentialHintForSDKFailures(t *testing.T) {
+	t.Parallel()
+
+	err := wrapFeishuError("start websocket client", errors.New("permission denied"))
+	if err == nil {
+		t.Fatal("wrapFeishuError() = nil, want error")
+	}
+	if got := err.Error(); !strings.Contains(got, "Feishu app permissions") && !strings.Contains(got, "permissions") {
+		t.Fatalf("error = %q, want permission hint", got)
 	}
 }
 

@@ -29,7 +29,7 @@ func newFeishuAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
 		return nil, fmt.Errorf("feishu app secret is required")
 	}
 	return &feishuAdapter{
-		client: feishu.NewClient(cfg.FeishuAppID, cfg.FeishuAppSecret),
+		client: feishu.NewClient(cfg.FeishuAppID, cfg.FeishuAppSecret, stderr),
 		stderr: stderr,
 	}, nil
 }

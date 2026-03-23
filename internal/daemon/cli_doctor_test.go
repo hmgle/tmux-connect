@@ -36,6 +36,32 @@ func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 	}
 }
 
+func TestRunDoctorFeishuPrintsSetupHints(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
+		"--platform", "feishu",
+		"--feishu-app-id", "cli_test",
+		"--feishu-app-secret", "secret_test",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"feishu app credentials: ok",
+		"im.message.receive_v1",
+		"@mentions",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("runDoctor() output = %q, want %q", output, want)
+		}
+	}
+}
+
 func TestRunDoctorDiscordPrintsIntentHint(t *testing.T) {
 	t.Parallel()
 
