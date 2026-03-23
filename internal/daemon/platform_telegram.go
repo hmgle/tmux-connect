@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -25,8 +24,7 @@ func init() {
 			if strings.TrimSpace(cfg.TelegramToken) == "" {
 				return tmuxconn.UsageError("telegram token is required; pass --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 			}
-			_, err := fmt.Fprintln(stdout, "telegram token: ok")
-			return err
+			return writeDoctorLines(stdout, "telegram token: ok")
 		},
 	})
 }

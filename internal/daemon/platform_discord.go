@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -25,11 +24,11 @@ func init() {
 			if strings.TrimSpace(cfg.DiscordToken) == "" {
 				return tmuxconn.UsageError("discord token is required; pass --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
 			}
-			if _, err := fmt.Fprintln(stdout, "discord token: ok"); err != nil {
-				return err
-			}
-			_, err := fmt.Fprintln(stdout, "discord gateway intents: enable Message Content intent for prefix commands and DMs")
-			return err
+			return writeDoctorLines(
+				stdout,
+				"discord token: ok",
+				"discord gateway intents: enable Message Content intent for prefix commands and DMs",
+			)
 		},
 	})
 }

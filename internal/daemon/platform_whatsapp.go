@@ -33,14 +33,11 @@ func init() {
 			if _, err := fmt.Fprintf(stdout, "whatsapp session db: ok (%s)\n", cfg.WhatsAppSessionDB); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintln(stdout, "whatsapp login: first run will print a pairing QR code if no device session exists"); err != nil {
-				return err
-			}
+			lines := []string{"whatsapp login: first run will print a pairing QR code if no device session exists"}
 			if cfg.WhatsAppAllowSelfChat {
-				_, err := fmt.Fprintln(stdout, "whatsapp self-chat: enabled (plain text is disabled; use explicit slash commands in self-chat)")
-				return err
+				lines = append(lines, "whatsapp self-chat: enabled (plain text is disabled; use explicit slash commands in self-chat)")
 			}
-			return nil
+			return writeDoctorLines(stdout, lines...)
 		},
 	})
 }

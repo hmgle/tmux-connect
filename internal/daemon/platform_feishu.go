@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -28,21 +27,18 @@ func init() {
 			if strings.TrimSpace(cfg.FeishuAppSecret) == "" {
 				return tmuxconn.UsageError("feishu app secret is required; pass --feishu-app-secret, TMUXCONN_FEISHU_APP_SECRET, or [daemon.feishu].app_secret in config")
 			}
-			if _, err := fmt.Fprintln(stdout, "feishu app credentials: ok"); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintln(stdout, "feishu bot capability: enable bot ability and subscribe to im.message.receive_v1"); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintln(stdout, "feishu group behavior: the bot only handles @mentions in group chats"); err != nil {
+			if err := writeDoctorLines(
+				stdout,
+				"feishu app credentials: ok",
+				"feishu bot capability: enable bot ability and subscribe to im.message.receive_v1",
+				"feishu group behavior: the bot only handles @mentions in group chats",
+			); err != nil {
 				return err
 			}
 			if strings.TrimSpace(cfg.FeishuBotOpenID) != "" || strings.TrimSpace(cfg.FeishuBotUserID) != "" || strings.TrimSpace(cfg.FeishuBotUnionID) != "" {
-				_, err := fmt.Fprintln(stdout, "feishu bot identity: ok (precise group @mention matching enabled)")
-				return err
+				return writeDoctorLines(stdout, "feishu bot identity: ok (precise group @mention matching enabled)")
 			}
-			_, err := fmt.Fprintln(stdout, "feishu bot identity: optional; set --feishu-bot-open-id/--feishu-bot-user-id/--feishu-bot-union-id to avoid mistaking @other-user as a bot command")
-			return err
+			return writeDoctorLines(stdout, "feishu bot identity: optional; set --feishu-bot-open-id/--feishu-bot-user-id/--feishu-bot-union-id to avoid mistaking @other-user as a bot command")
 		},
 	})
 }

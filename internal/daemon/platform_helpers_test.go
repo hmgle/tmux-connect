@@ -2,14 +2,6 @@ package daemon
 
 import "testing"
 
-var allPlatformNames = []string{
-	"telegram",
-	"feishu",
-	"slack",
-	"discord",
-	"whatsapp",
-}
-
 func requirePlatformAvailable(t *testing.T, name string) {
 	t.Helper()
 	if !isPlatformAvailable(name) {
@@ -18,8 +10,8 @@ func requirePlatformAvailable(t *testing.T, name string) {
 }
 
 func expectedAvailablePlatformNames() []string {
-	names := make([]string, 0, len(allPlatformNames))
-	for _, name := range allPlatformNames {
+	names := make([]string, 0, len(platformOrder))
+	for _, name := range platformOrder {
 		if isPlatformAvailable(name) {
 			names = append(names, name)
 		}

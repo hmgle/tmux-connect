@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -28,14 +27,12 @@ func init() {
 			if strings.TrimSpace(cfg.SlackAppToken) == "" {
 				return tmuxconn.UsageError("slack app token is required; pass --slack-app-token, TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].app_token in config")
 			}
-			if _, err := fmt.Fprintln(stdout, "slack tokens: ok"); err != nil {
-				return err
-			}
-			if _, err := fmt.Fprintln(stdout, "slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read"); err != nil {
-				return err
-			}
-			_, err := fmt.Fprintln(stdout, "slack snapshot uploads: uses the current Web API upload flow; reinstall the app after scope changes")
-			return err
+			return writeDoctorLines(
+				stdout,
+				"slack tokens: ok",
+				"slack bot scopes: ensure app_mentions:read, chat:write, files:write, im:history, im:read",
+				"slack snapshot uploads: uses the current Web API upload flow; reinstall the app after scope changes",
+			)
 		},
 	})
 }
