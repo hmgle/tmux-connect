@@ -65,6 +65,9 @@ make build PLATFORMS_INCLUDE=telegram,slack
 make build EXCLUDE=feishu,whatsapp
 ```
 
+`EXCLUDE` 和 `PLATFORMS_INCLUDE` 不能同时使用；未知平台名也会直接报错，
+不再静默忽略。
+
 构建完成后，`./tmux-connect daemon help` 会显示当前二进制实际编入的平台；
 `daemon run --help` 中 `--platform` 的说明也会随之变化。
 

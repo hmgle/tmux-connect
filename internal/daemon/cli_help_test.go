@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -11,9 +12,9 @@ import (
 func TestAvailablePlatformNames(t *testing.T) {
 	t.Parallel()
 
-	got := strings.Join(availablePlatformNames(), ",")
-	want := "telegram,feishu,slack,discord,whatsapp"
-	if got != want {
+	got := availablePlatformNames()
+	want := expectedAvailablePlatformNames()
+	if !slices.Equal(got, want) {
 		t.Fatalf("availablePlatformNames() = %q, want %q", got, want)
 	}
 }
@@ -24,12 +25,20 @@ func TestPrintUsageIncludesCompiledPlatforms(t *testing.T) {
 	var buf bytes.Buffer
 	printUsage(&buf)
 	output := buf.String()
+	platformSummary := availablePlatformSummary()
+	if platformSummary == "" {
+		platformSummary = "(none)"
+	}
+	defaultPlatform := defaultPlatformName()
+	if defaultPlatform == "" {
+		defaultPlatform = "(none)"
+	}
 
 	for _, want := range []string{
 		"Compiled platforms:",
-		"telegram, feishu, slack, discord, whatsapp",
+		platformSummary,
 		"Default platform:",
-		"\n  telegram\n",
+		"\n  " + defaultPlatform + "\n",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("printUsage() output = %q, want %q", output, want)
@@ -51,7 +60,7 @@ func TestPlatformFlagUsageIncludesCompiledPlatforms(t *testing.T) {
 	if platformFlag == nil {
 		t.Fatal("platform flag = nil")
 	}
-	if !strings.Contains(platformFlag.Usage, "telegram|feishu|slack|discord|whatsapp") {
+	if !strings.Contains(platformFlag.Usage, availablePlatformChoices()) {
 		t.Fatalf("platform flag usage = %q", platformFlag.Usage)
 	}
 }
@@ -68,7 +77,7 @@ func TestParseConfigRejectsUnknownPlatformWithCompiledPlatformList(t *testing.T)
 	}
 	for _, want := range []string{
 		`unsupported --platform "matrix"`,
-		"compiled platforms: telegram, feishu, slack, discord, whatsapp",
+		"compiled platforms: " + availablePlatformSummary(),
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("parseConfig() error = %q, want %q", err, want)

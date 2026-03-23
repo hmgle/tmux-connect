@@ -55,6 +55,14 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Test selective daemon packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -tags no_telegram ./internal/daemon/...
+          go test -tags no_feishu ./internal/daemon/...
+          go test -tags no_slack ./internal/daemon/...
+
       - name: Build default CLI
         shell: bash
         run: |
@@ -71,4 +79,25 @@ jobs:
           make clean build EXCLUDE=feishu,whatsapp
           ./tmux-connect daemon help | grep -F "Compiled platforms:"
           ./tmux-connect daemon help | grep -F "telegram, slack, discord"
+          ! ./tmux-connect daemon help | grep -F "feishu"
+          ! ./tmux-connect daemon help | grep -F "whatsapp"
           ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|slack|discord)'
+
+          make clean build EXCLUDE=telegram
+          ./tmux-connect daemon help | grep -F "feishu, slack, discord, whatsapp"
+          ! ./tmux-connect daemon help | grep -F "telegram"
+          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (feishu|slack|discord|whatsapp)'
+
+          make clean build EXCLUDE=slack
+          ./tmux-connect daemon help | grep -F "telegram, feishu, discord, whatsapp"
+          ! ./tmux-connect daemon help | grep -F " slack,"
+          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|feishu|discord|whatsapp)'
+
+          make clean build PLATFORMS_INCLUDE=slack
+          ./tmux-connect daemon help | grep -F "Compiled platforms:"
+          ./tmux-connect daemon help | grep -F "slack"
+          ! ./tmux-connect daemon help | grep -F "telegram"
+          ! ./tmux-connect daemon help | grep -F "feishu"
+          ! ./tmux-connect daemon help | grep -F "discord"
+          ! ./tmux-connect daemon help | grep -F "whatsapp"
+          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (slack)'

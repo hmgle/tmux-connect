@@ -13,9 +13,11 @@ import (
 
 func TestParseConfigAcceptsSnapshotRenderFlags(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	fontPath := writeTempFont(t, "mono.ttf")
 	cfg, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "light",
@@ -37,13 +39,14 @@ func TestParseConfigAcceptsSnapshotRenderFlags(t *testing.T) {
 }
 
 func TestParseConfigReadsSnapshotRenderEnv(t *testing.T) {
+	requirePlatformAvailable(t, "telegram")
 	fontPath := writeTempFont(t, "env-font.ttf")
 	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "token")
 	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", "light")
 	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
 	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", fontPath)
 
-	cfg, err := parseConfig([]string{"--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true)
+	cfg, err := parseConfig([]string{"--platform", "telegram", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true)
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
@@ -60,8 +63,10 @@ func TestParseConfigReadsSnapshotRenderEnv(t *testing.T) {
 
 func TestParseConfigRejectsInvalidSnapshotTheme(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	_, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "sepia",
@@ -72,8 +77,10 @@ func TestParseConfigRejectsInvalidSnapshotTheme(t *testing.T) {
 }
 
 func TestParseConfigRejectsInvalidSnapshotFontSizeEnv(t *testing.T) {
+	requirePlatformAvailable(t, "telegram")
 	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "large")
 	_, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
@@ -84,12 +91,14 @@ func TestParseConfigRejectsInvalidSnapshotFontSizeEnv(t *testing.T) {
 
 func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	fontPath := filepath.Join(t.TempDir(), "mono.txt")
 	if err := os.WriteFile(fontPath, []byte("not a font"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	_, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-font-file", fontPath,
@@ -101,6 +110,7 @@ func TestParseConfigRejectsInvalidSnapshotFontExtension(t *testing.T) {
 
 func TestParseConfigReadsFileDefaults(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	cfg, err := parseConfigWithFile(nil, &bytes.Buffer{}, true, config.Daemon{
 		DB:                   stringPtr(filepath.Join(t.TempDir(), "tmuxconn.db")),
@@ -162,12 +172,14 @@ func TestParseConfigReadsFileDefaults(t *testing.T) {
 }
 
 func TestParseConfigEnvOverridesFile(t *testing.T) {
+	requirePlatformAvailable(t, "telegram")
 	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "env-token")
 	t.Setenv("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE", "16.5")
 	t.Setenv("TMUXCONN_PLAIN_TEXT_MODE", "execute")
 	t.Setenv("TMUXCONN_PLAIN_TEXT_ECHO_LINES", "7")
 
 	cfg, err := parseConfigWithFile([]string{"--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Platform: stringPtr("telegram"),
 		Telegram: config.Telegram{
 			Token:            stringPtr("file-token"),
 			SnapshotFontSize: float64Ptr(18),
@@ -194,6 +206,7 @@ func TestParseConfigEnvOverridesFile(t *testing.T) {
 
 func TestParseConfigReadsFeishuDefaults(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "feishu")
 
 	cfg, err := parseConfigWithFile([]string{"--platform", "feishu", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
 		Feishu: config.Feishu{
@@ -219,6 +232,7 @@ func TestParseConfigReadsFeishuDefaults(t *testing.T) {
 }
 
 func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
+	requirePlatformAvailable(t, "feishu")
 	t.Setenv("TMUXCONN_FEISHU_APP_ID", "cli_env")
 	t.Setenv("TMUXCONN_FEISHU_APP_SECRET", "secret_env")
 	t.Setenv("TMUXCONN_FEISHU_BOT_OPEN_ID", "ou_env")
@@ -250,6 +264,7 @@ func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
 
 func TestParseConfigRequiresFeishuCredentialsForRun(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "feishu")
 
 	_, err := parseConfig([]string{
 		"--platform", "feishu",
@@ -266,8 +281,10 @@ func TestParseConfigRequiresFeishuCredentialsForRun(t *testing.T) {
 
 func TestParseConfigFlagsOverrideFile(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	cfg, err := parseConfigWithFile([]string{
+		"--platform", "telegram",
 		"--telegram-token", "flag-token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--telegram-snapshot-theme", "light",
@@ -315,6 +332,7 @@ func TestParseConfigFlagsOverrideFile(t *testing.T) {
 
 func TestParseConfigReadsWhatsAppDefaults(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "whatsapp")
 
 	dbPath := filepath.Join(t.TempDir(), "tmuxconn.db")
 	cfg, err := parseConfigWithFile([]string{"--platform", "whatsapp", "--db", dbPath}, &bytes.Buffer{}, true, config.Daemon{
@@ -345,6 +363,7 @@ func TestParseConfigReadsWhatsAppDefaults(t *testing.T) {
 }
 
 func TestParseConfigWhatsAppEnvOverridesFile(t *testing.T) {
+	requirePlatformAvailable(t, "whatsapp")
 	t.Setenv("TMUXCONN_WHATSAPP_SESSION_DB", filepath.Join(t.TempDir(), "custom-wa.db"))
 	t.Setenv("TMUXCONN_WHATSAPP_DEVICE_NAME", "field-phone")
 	t.Setenv("TMUXCONN_WHATSAPP_AUTO_MARK_READ", "false")
@@ -377,8 +396,10 @@ func TestParseConfigWhatsAppEnvOverridesFile(t *testing.T) {
 
 func TestParseConfigRejectsInvalidPlainTextMode(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	_, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--plain-text-mode", "run",
@@ -390,8 +411,10 @@ func TestParseConfigRejectsInvalidPlainTextMode(t *testing.T) {
 
 func TestParseConfigRejectsInvalidPlainTextEchoLines(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	_, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--plain-text-echo-lines", "0",
@@ -403,8 +426,10 @@ func TestParseConfigRejectsInvalidPlainTextEchoLines(t *testing.T) {
 
 func TestParseConfigRejectsInvalidPlainTextEchoDelay(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	_, err := parseConfigWithFile([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true, config.Daemon{
@@ -417,8 +442,10 @@ func TestParseConfigRejectsInvalidPlainTextEchoDelay(t *testing.T) {
 
 func TestParseConfigAllowChatFlagOverridesFile(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	cfg, err := parseConfigWithFile([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 		"--allow-chat", "999",
@@ -436,8 +463,10 @@ func TestParseConfigAllowChatFlagOverridesFile(t *testing.T) {
 
 func TestParseConfigRejectsInvalidFileDuration(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "telegram")
 
 	_, err := parseConfigWithFile([]string{
+		"--platform", "telegram",
 		"--telegram-token", "token",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true, config.Daemon{
@@ -450,6 +479,7 @@ func TestParseConfigRejectsInvalidFileDuration(t *testing.T) {
 
 func TestParseConfigSlackCommandPrefixFlag(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "slack")
 
 	cfg, err := parseConfig([]string{
 		"--platform", "slack",
@@ -467,6 +497,7 @@ func TestParseConfigSlackCommandPrefixFlag(t *testing.T) {
 }
 
 func TestParseConfigSlackCommandPrefixEnv(t *testing.T) {
+	requirePlatformAvailable(t, "slack")
 	t.Setenv("TMUXCONN_PLATFORM", "slack")
 	t.Setenv("TMUXCONN_SLACK_BOT_TOKEN", "xoxb-test")
 	t.Setenv("TMUXCONN_SLACK_APP_TOKEN", "xapp-test")
@@ -485,6 +516,7 @@ func TestParseConfigSlackCommandPrefixEnv(t *testing.T) {
 
 func TestParseConfigSlackCommandPrefixDefault(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "slack")
 
 	cfg, err := parseConfig([]string{
 		"--platform", "slack",
@@ -502,6 +534,7 @@ func TestParseConfigSlackCommandPrefixDefault(t *testing.T) {
 
 func TestParseConfigDiscordCommandPrefixFlag(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "discord")
 
 	cfg, err := parseConfig([]string{
 		"--platform", "discord",
@@ -519,6 +552,7 @@ func TestParseConfigDiscordCommandPrefixFlag(t *testing.T) {
 
 func TestParseConfigDiscordCommandPrefixDefault(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "discord")
 
 	cfg, err := parseConfig([]string{
 		"--platform", "discord",
@@ -535,6 +569,7 @@ func TestParseConfigDiscordCommandPrefixDefault(t *testing.T) {
 
 func TestParseConfigRejectsWhitespaceDiscordCommandPrefix(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "discord")
 
 	_, err := parseConfig([]string{
 		"--platform", "discord",
@@ -549,6 +584,7 @@ func TestParseConfigRejectsWhitespaceDiscordCommandPrefix(t *testing.T) {
 
 func TestParseConfigRejectsEmptySlackCommandPrefix(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "slack")
 
 	_, err := parseConfig([]string{
 		"--platform", "slack",
@@ -564,6 +600,7 @@ func TestParseConfigRejectsEmptySlackCommandPrefix(t *testing.T) {
 
 func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "slack")
 
 	_, err := parseConfig([]string{
 		"--platform", "slack",
@@ -578,10 +615,12 @@ func TestParseConfigRejectsWhitespaceSlackCommandPrefix(t *testing.T) {
 }
 
 func TestParseConfigTelegramClearsSlackPrefixEnv(t *testing.T) {
+	requirePlatformAvailable(t, "telegram")
 	t.Setenv("TMUXCONN_TELEGRAM_TOKEN", "token")
 	t.Setenv("TMUXCONN_SLACK_COMMAND_PREFIX", "bad prefix")
 
 	cfg, err := parseConfig([]string{
+		"--platform", "telegram",
 		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
 	}, &bytes.Buffer{}, true)
 	if err != nil {

@@ -6,14 +6,29 @@ COMMA := ,
 
 _EXCLUDE_TAGS :=
 
+ifneq ($(strip $(PLATFORMS_INCLUDE)),)
+ifneq ($(strip $(EXCLUDE)),)
+$(error EXCLUDE and PLATFORMS_INCLUDE are mutually exclusive)
+endif
+endif
+
 ifdef PLATFORMS_INCLUDE
   _WANTED_PLATFORMS := $(subst $(COMMA), ,$(PLATFORMS_INCLUDE))
+  _UNKNOWN_INCLUDE_PLATFORMS := $(filter-out $(ALL_PLATFORMS),$(_WANTED_PLATFORMS))
+ifneq ($(_UNKNOWN_INCLUDE_PLATFORMS),)
+$(error unknown platform(s) in PLATFORMS_INCLUDE: $(_UNKNOWN_INCLUDE_PLATFORMS))
+endif
   _EXCLUDE_PLATFORMS := $(filter-out $(_WANTED_PLATFORMS),$(ALL_PLATFORMS))
   _EXCLUDE_TAGS += $(addprefix no_,$(_EXCLUDE_PLATFORMS))
 endif
 
 ifdef EXCLUDE
-  _EXCLUDE_TAGS += $(addprefix no_,$(subst $(COMMA), ,$(EXCLUDE)))
+  _EXCLUDE_PLATFORMS_DIRECT := $(subst $(COMMA), ,$(EXCLUDE))
+  _UNKNOWN_EXCLUDE_PLATFORMS := $(filter-out $(ALL_PLATFORMS),$(_EXCLUDE_PLATFORMS_DIRECT))
+ifneq ($(_UNKNOWN_EXCLUDE_PLATFORMS),)
+$(error unknown platform(s) in EXCLUDE: $(_UNKNOWN_EXCLUDE_PLATFORMS))
+endif
+  _EXCLUDE_TAGS += $(addprefix no_,$(_EXCLUDE_PLATFORMS_DIRECT))
 endif
 
 BUILD_TAGS := $(strip $(_EXCLUDE_TAGS))
@@ -27,6 +42,7 @@ help:
 		'  make build                                 Build all compiled-in platforms' \
 		'  make build EXCLUDE=feishu,whatsapp         Exclude specific platforms via negative build tags' \
 		'  make build PLATFORMS_INCLUDE=telegram      Keep only specific platforms' \
+		'                                             EXCLUDE and PLATFORMS_INCLUDE are mutually exclusive' \
 		'  make test                                  Run the default test suite' \
 		'  make clean                                 Remove the built binary' \
 		'  make print-tags                            Show the effective Go build tags'

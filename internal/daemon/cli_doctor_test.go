@@ -12,6 +12,7 @@ import (
 
 func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "slack")
 
 	stdout := &bytes.Buffer{}
 	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
@@ -38,6 +39,7 @@ func TestRunDoctorSlackPrintsSnapshotUploadHints(t *testing.T) {
 
 func TestRunDoctorFeishuPrintsSetupHints(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "feishu")
 
 	stdout := &bytes.Buffer{}
 	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
@@ -65,6 +67,7 @@ func TestRunDoctorFeishuPrintsSetupHints(t *testing.T) {
 
 func TestRunDoctorFeishuPrintsBotIdentityConfiguredHint(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "feishu")
 
 	stdout := &bytes.Buffer{}
 	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
@@ -84,6 +87,7 @@ func TestRunDoctorFeishuPrintsBotIdentityConfiguredHint(t *testing.T) {
 
 func TestRunDoctorDiscordPrintsIntentHint(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "discord")
 
 	stdout := &bytes.Buffer{}
 	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
@@ -108,6 +112,7 @@ func TestRunDoctorDiscordPrintsIntentHint(t *testing.T) {
 
 func TestRunDoctorWhatsAppPrintsLoginHint(t *testing.T) {
 	t.Parallel()
+	requirePlatformAvailable(t, "whatsapp")
 
 	stdout := &bytes.Buffer{}
 	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{

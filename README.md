@@ -66,6 +66,9 @@ make build PLATFORMS_INCLUDE=telegram,slack
 make build EXCLUDE=feishu,whatsapp
 ```
 
+`EXCLUDE` and `PLATFORMS_INCLUDE` are mutually exclusive, and unknown platform
+names fail fast instead of being ignored.
+
 After building, `./tmux-connect daemon help` prints the platforms compiled into
 that binary, and the `--platform` flag help matches the current build.
 
