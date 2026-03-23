@@ -14,6 +14,9 @@ type Config struct {
 	TelegramToken         string
 	FeishuAppID           string
 	FeishuAppSecret       string
+	FeishuBotOpenID       string
+	FeishuBotUserID       string
+	FeishuBotUnionID      string
 	SlackBotToken         string
 	SlackAppToken         string
 	SlackCommandPrefix    string

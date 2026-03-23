@@ -30,6 +30,10 @@ allow_chats = ["feishu:oc_xxx"]
 [daemon.feishu]
 app_id = "cli_xxx"
 app_secret = "secret_xxx"
+bot_open_id = "ou_bot"
+# optional fallback if you prefer other ID types:
+# bot_user_id = "cli_xxx"
+# bot_union_id = "on_xxx"
 ```
 
 Or use environment variables:
@@ -38,6 +42,7 @@ Or use environment variables:
 export TMUXCONN_PLATFORM=feishu
 export TMUXCONN_FEISHU_APP_ID=cli_xxx
 export TMUXCONN_FEISHU_APP_SECRET=secret_xxx
+export TMUXCONN_FEISHU_BOT_OPEN_ID=ou_bot
 ```
 
 ## Run
@@ -54,6 +59,7 @@ export TMUXCONN_FEISHU_APP_SECRET=secret_xxx
 
 - In private chats, plain text targets the current pane. With `--plain-text-mode execute`, plain text becomes input + Enter.
 - In groups, only `@bot` commands are handled. Plain text without `@bot` is ignored.
+- For precise group mention matching, set one of `bot_open_id`, `bot_user_id`, or `bot_union_id`. Otherwise `tmux-connect` falls back to treating any mention as a potential bot command for compatibility.
 - Use `/send <text>` when the text itself starts with `/`.
 - When no pane is selected, the bot replies with a static card listing available panes. Reply with a pane number like `1` or a pane id like `%5`.
 

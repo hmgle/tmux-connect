@@ -55,10 +55,30 @@ func TestRunDoctorFeishuPrintsSetupHints(t *testing.T) {
 		"feishu app credentials: ok",
 		"im.message.receive_v1",
 		"@mentions",
+		"feishu bot identity: optional",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("runDoctor() output = %q, want %q", output, want)
 		}
+	}
+}
+
+func TestRunDoctorFeishuPrintsBotIdentityConfiguredHint(t *testing.T) {
+	t.Parallel()
+
+	stdout := &bytes.Buffer{}
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
+		"--platform", "feishu",
+		"--feishu-app-id", "cli_test",
+		"--feishu-app-secret", "secret_test",
+		"--feishu-bot-open-id", "ou_bot",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, "precise group @mention matching enabled") {
+		t.Fatalf("runDoctor() output = %q, want precise bot identity hint", got)
 	}
 }
 

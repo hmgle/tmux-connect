@@ -63,8 +63,13 @@ Commands:
   status   Show sqlite counts and current managed pane count
 
 Common flags:
-  --platform telegram|slack|discord|whatsapp
+  --platform telegram|feishu|slack|discord|whatsapp
   --telegram-token TOKEN
+  --feishu-app-id APP_ID
+  --feishu-app-secret APP_SECRET
+  --feishu-bot-open-id OPEN_ID
+  --feishu-bot-user-id USER_ID
+  --feishu-bot-union-id UNION_ID
   --slack-bot-token TOKEN
   --slack-app-token TOKEN
   --discord-token TOKEN

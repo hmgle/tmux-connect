@@ -36,6 +36,11 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 		fmt.Fprintln(stdout, "feishu app credentials: ok")
 		fmt.Fprintln(stdout, "feishu bot capability: enable bot ability and subscribe to im.message.receive_v1")
 		fmt.Fprintln(stdout, "feishu group behavior: the bot only handles @mentions in group chats")
+		if strings.TrimSpace(cfg.FeishuBotOpenID) != "" || strings.TrimSpace(cfg.FeishuBotUserID) != "" || strings.TrimSpace(cfg.FeishuBotUnionID) != "" {
+			fmt.Fprintln(stdout, "feishu bot identity: ok (precise group @mention matching enabled)")
+		} else {
+			fmt.Fprintln(stdout, "feishu bot identity: optional; set --feishu-bot-open-id/--feishu-bot-user-id/--feishu-bot-union-id to avoid mistaking @other-user as a bot command")
+		}
 	case "slack":
 		if strings.TrimSpace(cfg.SlackBotToken) == "" {
 			return tmuxconn.UsageError("slack bot token is required; pass --slack-bot-token, TMUXCONN_SLACK_BOT_TOKEN, or [daemon.slack].bot_token in config")

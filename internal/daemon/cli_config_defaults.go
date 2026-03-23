@@ -16,6 +16,9 @@ type daemonConfigDefaults struct {
 	telegramToken         string
 	feishuAppID           string
 	feishuAppSecret       string
+	feishuBotOpenID       string
+	feishuBotUserID       string
+	feishuBotUnionID      string
 	slackBotToken         string
 	slackAppToken         string
 	slackCommandPrefix    string
@@ -108,6 +111,9 @@ func resolveConfigDefaults(fileCfg config.Daemon) (daemonConfigDefaults, error) 
 	defaults.telegramToken = envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, ""))
 	defaults.feishuAppID = envOrDefault("TMUXCONN_FEISHU_APP_ID", stringValue(fileCfg.Feishu.AppID, ""))
 	defaults.feishuAppSecret = envOrDefault("TMUXCONN_FEISHU_APP_SECRET", stringValue(fileCfg.Feishu.AppSecret, ""))
+	defaults.feishuBotOpenID = envOrDefault("TMUXCONN_FEISHU_BOT_OPEN_ID", stringValue(fileCfg.Feishu.BotOpenID, ""))
+	defaults.feishuBotUserID = envOrDefault("TMUXCONN_FEISHU_BOT_USER_ID", stringValue(fileCfg.Feishu.BotUserID, ""))
+	defaults.feishuBotUnionID = envOrDefault("TMUXCONN_FEISHU_BOT_UNION_ID", stringValue(fileCfg.Feishu.BotUnionID, ""))
 	defaults.slackBotToken = envOrDefault("TMUXCONN_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, ""))
 	defaults.slackAppToken = envOrDefault("TMUXCONN_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, ""))
 	defaults.slackCommandPrefix = envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix))

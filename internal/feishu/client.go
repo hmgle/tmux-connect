@@ -44,29 +44,37 @@ type SendOptions struct {
 	ThreadID         string
 }
 
-type Client struct {
-	appID     string
-	appSecret string
-	api       *lark.Client
-	logger    larkcore.Logger
+type BotIdentity struct {
+	OpenID  string
+	UserID  string
+	UnionID string
 }
 
-func NewClient(appID string, appSecret string, logWriter io.Writer) *Client {
+type Client struct {
+	appID         string
+	appSecret     string
+	api           *lark.Client
+	logger        larkcore.Logger
+	botMentionIDs map[string]struct{}
+}
+
+func NewClient(appID string, appSecret string, identity BotIdentity, logWriter io.Writer) *Client {
 	appID = strings.TrimSpace(appID)
 	appSecret = strings.TrimSpace(appSecret)
 	logger := newSDKLogger(logWriter)
 	return &Client{
-		appID:     appID,
-		appSecret: appSecret,
-		api:       lark.NewClient(appID, appSecret, lark.WithLogger(logger)),
-		logger:    logger,
+		appID:         appID,
+		appSecret:     appSecret,
+		api:           lark.NewClient(appID, appSecret, lark.WithLogger(logger)),
+		logger:        logger,
+		botMentionIDs: botIdentitySet(identity),
 	}
 }
 
 func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageEvent) error) error {
 	dispatcher := larkdispatcher.NewEventDispatcher("", "").
 		OnP2MessageReceiveV1(func(runCtx context.Context, event *larkim.P2MessageReceiveV1) error {
-			message, ok, err := parseMessageEvent(event)
+			message, ok, err := parseMessageEvent(event, c.botMentionIDs)
 			if err != nil || !ok {
 				return err
 			}
@@ -189,7 +197,7 @@ func marshalContent(value any) (string, error) {
 	return string(data), nil
 }
 
-func parseMessageEvent(event *larkim.P2MessageReceiveV1) (MessageEvent, bool, error) {
+func parseMessageEvent(event *larkim.P2MessageReceiveV1, botMentionIDs map[string]struct{}) (MessageEvent, bool, error) {
 	if event == nil || event.Event == nil || event.Event.Message == nil {
 		return MessageEvent{}, false, nil
 	}
@@ -203,7 +211,7 @@ func parseMessageEvent(event *larkim.P2MessageReceiveV1) (MessageEvent, bool, er
 	if err != nil {
 		return MessageEvent{}, false, err
 	}
-	isAppMention := len(message.Mentions) > 0
+	isAppMention := hasBotMention(message.Mentions, botMentionIDs)
 	text := normalizeIncomingText(content.Text)
 	if strings.TrimSpace(larkcore.StringValue(message.ChatType)) != chatTypeP2P {
 		text = normalizeMentionCommandText(text)
@@ -259,6 +267,56 @@ func eventSenderID(sender *larkim.EventSender) string {
 		}
 	}
 	return ""
+}
+
+func botIdentitySet(identity BotIdentity) map[string]struct{} {
+	ids := make(map[string]struct{}, 3)
+	for _, value := range []string{
+		strings.TrimSpace(identity.OpenID),
+		strings.TrimSpace(identity.UserID),
+		strings.TrimSpace(identity.UnionID),
+	} {
+		if value != "" {
+			ids[value] = struct{}{}
+		}
+	}
+	return ids
+}
+
+func hasBotMention(mentions []*larkim.MentionEvent, botMentionIDs map[string]struct{}) bool {
+	if len(mentions) == 0 {
+		return false
+	}
+	if len(botMentionIDs) == 0 {
+		// Backward-compatible fallback until the bot identity is configured.
+		return true
+	}
+	for _, mention := range mentions {
+		if mentionMatchesBotIdentity(mention, botMentionIDs) {
+			return true
+		}
+	}
+	return false
+}
+
+func mentionMatchesBotIdentity(mention *larkim.MentionEvent, botMentionIDs map[string]struct{}) bool {
+	if mention == nil || mention.Id == nil {
+		return false
+	}
+	for _, value := range []string{
+		larkcore.StringValue(mention.Id.OpenId),
+		larkcore.StringValue(mention.Id.UserId),
+		larkcore.StringValue(mention.Id.UnionId),
+	} {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := botMentionIDs[value]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func feishuAPIError(action string, code int, msg string) error {

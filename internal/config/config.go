@@ -57,8 +57,11 @@ type Telegram struct {
 }
 
 type Feishu struct {
-	AppID     *string `toml:"app_id"`
-	AppSecret *string `toml:"app_secret"`
+	AppID      *string `toml:"app_id"`
+	AppSecret  *string `toml:"app_secret"`
+	BotOpenID  *string `toml:"bot_open_id"`
+	BotUserID  *string `toml:"bot_user_id"`
+	BotUnionID *string `toml:"bot_union_id"`
 }
 
 type Slack struct {

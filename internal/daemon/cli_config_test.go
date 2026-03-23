@@ -197,8 +197,11 @@ func TestParseConfigReadsFeishuDefaults(t *testing.T) {
 
 	cfg, err := parseConfigWithFile([]string{"--platform", "feishu", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
 		Feishu: config.Feishu{
-			AppID:     stringPtr("cli_xxx"),
-			AppSecret: stringPtr("secret_xxx"),
+			AppID:      stringPtr("cli_xxx"),
+			AppSecret:  stringPtr("secret_xxx"),
+			BotOpenID:  stringPtr("ou_bot"),
+			BotUserID:  stringPtr("cli_bot"),
+			BotUnionID: stringPtr("on_bot"),
 		},
 	})
 	if err != nil {
@@ -210,16 +213,25 @@ func TestParseConfigReadsFeishuDefaults(t *testing.T) {
 	if cfg.FeishuAppSecret != "secret_xxx" {
 		t.Fatalf("FeishuAppSecret = %q, want secret_xxx", cfg.FeishuAppSecret)
 	}
+	if cfg.FeishuBotOpenID != "ou_bot" || cfg.FeishuBotUserID != "cli_bot" || cfg.FeishuBotUnionID != "on_bot" {
+		t.Fatalf("Feishu bot ids = %#v, want file defaults", cfg)
+	}
 }
 
 func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
 	t.Setenv("TMUXCONN_FEISHU_APP_ID", "cli_env")
 	t.Setenv("TMUXCONN_FEISHU_APP_SECRET", "secret_env")
+	t.Setenv("TMUXCONN_FEISHU_BOT_OPEN_ID", "ou_env")
+	t.Setenv("TMUXCONN_FEISHU_BOT_USER_ID", "cli_env_bot")
+	t.Setenv("TMUXCONN_FEISHU_BOT_UNION_ID", "on_env")
 
 	cfg, err := parseConfigWithFile([]string{"--platform", "feishu", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
 		Feishu: config.Feishu{
-			AppID:     stringPtr("cli_file"),
-			AppSecret: stringPtr("secret_file"),
+			AppID:      stringPtr("cli_file"),
+			AppSecret:  stringPtr("secret_file"),
+			BotOpenID:  stringPtr("ou_file"),
+			BotUserID:  stringPtr("cli_file_bot"),
+			BotUnionID: stringPtr("on_file"),
 		},
 	})
 	if err != nil {
@@ -230,6 +242,9 @@ func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.FeishuAppSecret != "secret_env" {
 		t.Fatalf("FeishuAppSecret = %q, want secret_env", cfg.FeishuAppSecret)
+	}
+	if cfg.FeishuBotOpenID != "ou_env" || cfg.FeishuBotUserID != "cli_env_bot" || cfg.FeishuBotUnionID != "on_env" {
+		t.Fatalf("Feishu bot ids = %#v, want env overrides", cfg)
 	}
 }
 

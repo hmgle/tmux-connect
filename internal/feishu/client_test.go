@@ -26,12 +26,13 @@ func TestParseMessageEventStripsMentionsInGroups(t *testing.T) {
 				Content:     stringPtr(`{"text":"<at user_id=\"ou_bot\">tmux-connect</at> /panes"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
+					Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
 				}},
 			},
 		},
 	}
 
-	message, ok, err := parseMessageEvent(event)
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
 	if err != nil {
 		t.Fatalf("parseMessageEvent() error = %v", err)
 	}
@@ -60,12 +61,13 @@ func TestParseMessageEventMentionOnlyDefaultsToHelp(t *testing.T) {
 				Content:     stringPtr(`{"text":"<at user_id=\"ou_bot\">tmux-connect</at>"}`),
 				Mentions: []*larkim.MentionEvent{{
 					Key: stringPtr("@_user_1"),
+					Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
 				}},
 			},
 		},
 	}
 
-	message, ok, err := parseMessageEvent(event)
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
 	if err != nil {
 		t.Fatalf("parseMessageEvent() error = %v", err)
 	}
@@ -74,6 +76,133 @@ func TestParseMessageEventMentionOnlyDefaultsToHelp(t *testing.T) {
 	}
 	if message.Text != "help" {
 		t.Fatalf("text = %q, want help", message.Text)
+	}
+}
+
+func TestParseMessageEventIgnoresOtherMentionsWhenBotIdentityConfigured(t *testing.T) {
+	t.Parallel()
+
+	event := &larkim.P2MessageReceiveV1{
+		EventV2Base: &larkevent.EventV2Base{},
+		Event: &larkim.P2MessageReceiveV1Data{
+			Message: &larkim.EventMessage{
+				MessageId:   stringPtr("om_1"),
+				ChatId:      stringPtr("oc_group_1"),
+				ChatType:    stringPtr("group"),
+				MessageType: stringPtr("text"),
+				Content:     stringPtr(`{"text":"<at user_id=\"ou_coworker\">teammate</at> panes"}`),
+				Mentions: []*larkim.MentionEvent{{
+					Key: stringPtr("@_user_1"),
+					Id:  &larkim.UserId{OpenId: stringPtr("ou_coworker")},
+				}},
+			},
+		},
+	}
+
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
+	if err != nil {
+		t.Fatalf("parseMessageEvent() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if message.IsAppMention {
+		t.Fatal("IsAppMention = true, want false")
+	}
+	if message.Text != "panes" {
+		t.Fatalf("text = %q, want panes", message.Text)
+	}
+}
+
+func TestParseMessageEventMatchesBotIdentityAcrossIDTypes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		identity BotIdentity
+		mention  *larkim.UserId
+	}{
+		{
+			name:     "open_id",
+			identity: BotIdentity{OpenID: "ou_bot"},
+			mention:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
+		},
+		{
+			name:     "user_id",
+			identity: BotIdentity{UserID: "cli_user_bot"},
+			mention:  &larkim.UserId{UserId: stringPtr("cli_user_bot")},
+		},
+		{
+			name:     "union_id",
+			identity: BotIdentity{UnionID: "on_bot"},
+			mention:  &larkim.UserId{UnionId: stringPtr("on_bot")},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			event := &larkim.P2MessageReceiveV1{
+				EventV2Base: &larkevent.EventV2Base{},
+				Event: &larkim.P2MessageReceiveV1Data{
+					Message: &larkim.EventMessage{
+						MessageId:   stringPtr("om_1"),
+						ChatId:      stringPtr("oc_group_1"),
+						ChatType:    stringPtr("group"),
+						MessageType: stringPtr("text"),
+						Content:     stringPtr(`{"text":"<at user_id=\"mention\">tmux-connect</at> panes"}`),
+						Mentions: []*larkim.MentionEvent{{
+							Key: stringPtr("@_user_1"),
+							Id:  tc.mention,
+						}},
+					},
+				},
+			}
+
+			message, ok, err := parseMessageEvent(event, botIdentitySet(tc.identity))
+			if err != nil {
+				t.Fatalf("parseMessageEvent() error = %v", err)
+			}
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+			if !message.IsAppMention {
+				t.Fatal("IsAppMention = false, want true")
+			}
+		})
+	}
+}
+
+func TestParseMessageEventFallsBackToAnyMentionWithoutBotIdentity(t *testing.T) {
+	t.Parallel()
+
+	event := &larkim.P2MessageReceiveV1{
+		EventV2Base: &larkevent.EventV2Base{},
+		Event: &larkim.P2MessageReceiveV1Data{
+			Message: &larkim.EventMessage{
+				MessageId:   stringPtr("om_1"),
+				ChatId:      stringPtr("oc_group_1"),
+				ChatType:    stringPtr("group"),
+				MessageType: stringPtr("text"),
+				Content:     stringPtr(`{"text":"<at user_id=\"ou_any\">somebody</at> panes"}`),
+				Mentions: []*larkim.MentionEvent{{
+					Key: stringPtr("@_user_1"),
+					Id:  &larkim.UserId{OpenId: stringPtr("ou_any")},
+				}},
+			},
+		},
+	}
+
+	message, ok, err := parseMessageEvent(event, nil)
+	if err != nil {
+		t.Fatalf("parseMessageEvent() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if !message.IsAppMention {
+		t.Fatal("IsAppMention = false, want true fallback")
 	}
 }
 
