@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"slices"
@@ -8,8 +9,16 @@ import (
 )
 
 type platformAdapterFactory func(Config, io.Writer, *Store) (platformAdapter, error)
+type platformConfigValidator func(Config) error
+type platformDoctorFunc func(io.Writer, Config) error
 
-var platformAdapterFactories = map[string]platformAdapterFactory{}
+type platformRegistration struct {
+	factory     platformAdapterFactory
+	validateRun platformConfigValidator
+	doctor      platformDoctorFunc
+}
+
+var platformRegistrations = map[string]platformRegistration{}
 
 var platformOrder = []string{
 	"telegram",
@@ -19,24 +28,29 @@ var platformOrder = []string{
 	"whatsapp",
 }
 
-func RegisterPlatformAdapter(name string, factory platformAdapterFactory) {
+func RegisterPlatform(name string, registration platformRegistration) {
 	name = normalizePlatformName(name)
 	if name == "" {
 		panic("daemon: register platform adapter with empty name")
 	}
-	if factory == nil {
+	if registration.factory == nil {
 		panic("daemon: register platform adapter with nil factory")
 	}
-	platformAdapterFactories[name] = factory
+	platformRegistrations[name] = registration
+}
+
+func registeredPlatform(name string) (platformRegistration, bool) {
+	registration, ok := platformRegistrations[normalizePlatformName(name)]
+	return registration, ok
 }
 
 func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapter, error) {
 	name := normalizePlatformName(cfg.Platform)
-	factory, ok := platformAdapterFactories[name]
+	registration, ok := registeredPlatform(name)
 	if !ok {
 		return nil, unsupportedPlatformError(name)
 	}
-	return factory(cfg, stderr, store)
+	return registration.factory(cfg, stderr, store)
 }
 
 func defaultPlatformName() string {
@@ -51,8 +65,8 @@ func defaultPlatformName() string {
 }
 
 func availablePlatformNames() []string {
-	names := make([]string, 0, len(platformAdapterFactories))
-	for name := range platformAdapterFactories {
+	names := make([]string, 0, len(platformRegistrations))
+	for name := range platformRegistrations {
 		names = append(names, name)
 	}
 	slices.SortFunc(names, comparePlatformName)
@@ -68,7 +82,7 @@ func availablePlatformSummary() string {
 }
 
 func isPlatformAvailable(name string) bool {
-	_, ok := platformAdapterFactories[normalizePlatformName(name)]
+	_, ok := registeredPlatform(name)
 	return ok
 }
 
@@ -87,28 +101,15 @@ func normalizePlatformName(name string) string {
 }
 
 func comparePlatformName(left string, right string) int {
-	leftRank := platformRank(left)
-	rightRank := platformRank(right)
-	switch {
-	case leftRank != rightRank:
-		if leftRank < rightRank {
-			return -1
-		}
-		return 1
-	case left < right:
-		return -1
-	case left > right:
-		return 1
-	default:
-		return 0
+	if c := cmp.Compare(platformRank(left), platformRank(right)); c != 0 {
+		return c
 	}
+	return cmp.Compare(left, right)
 }
 
 func platformRank(name string) int {
-	for idx, candidate := range platformOrder {
-		if candidate == name {
-			return idx
-		}
+	if idx := slices.Index(platformOrder, name); idx >= 0 {
+		return idx
 	}
 	return len(platformOrder)
 }

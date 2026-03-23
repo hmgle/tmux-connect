@@ -121,31 +121,14 @@ func validatePlatformPrefixes(cfg *Config) error {
 }
 
 func validateRunRequirements(cfg Config) error {
-	switch cfg.Platform {
-	case "telegram":
-		if strings.TrimSpace(cfg.TelegramToken) == "" {
-			return tmuxconn.UsageError("daemon run requires --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
-		}
-	case "feishu":
-		if strings.TrimSpace(cfg.FeishuAppID) == "" || strings.TrimSpace(cfg.FeishuAppSecret) == "" {
-			return tmuxconn.UsageError("daemon run requires --feishu-app-id/--feishu-app-secret, TMUXCONN_FEISHU_APP_ID/TMUXCONN_FEISHU_APP_SECRET, or [daemon.feishu].app_id/[daemon.feishu].app_secret in config")
-		}
-	case "slack":
-		if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
-			return tmuxconn.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TMUXCONN_SLACK_BOT_TOKEN/TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")
-		}
-	case "discord":
-		if strings.TrimSpace(cfg.DiscordToken) == "" {
-			return tmuxconn.UsageError("daemon run requires --discord-token, TMUXCONN_DISCORD_TOKEN, or [daemon.discord].token in config")
-		}
-	case "whatsapp":
-		if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
-			return tmuxconn.UsageError("daemon run requires --whatsapp-session-db, TMUXCONN_WHATSAPP_SESSION_DB, or [daemon.whatsapp].session_db in config")
-		}
-	default:
+	registration, ok := registeredPlatform(cfg.Platform)
+	if !ok {
 		return tmuxconn.UsageError("%v", unsupportedPlatformError(cfg.Platform))
 	}
-	return nil
+	if registration.validateRun == nil {
+		return nil
+	}
+	return registration.validateRun(cfg)
 }
 
 func parsePlainTextMode(value string) (plainTextMode, error) {
