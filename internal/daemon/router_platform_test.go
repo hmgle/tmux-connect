@@ -326,6 +326,44 @@ func TestRouterFeishuGroupMentionAcceptsCommand(t *testing.T) {
 	}
 }
 
+func TestRouterFeishuGroupPendingReplySelectsPaneWithoutMention(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record2 := record
+	record2.Info.Target.PaneID = "%7"
+	service.records[record2.Info.Target.PaneKey()] = record2
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "select")); err != nil {
+		t.Fatalf("HandleMessage(group mention select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, IncomingMessage{
+		Chat:      feishuChat("oc_group_1"),
+		MessageID: "m2",
+		Text:      "2",
+		ChatType:  "group",
+	}); err != nil {
+		t.Fatalf("HandleMessage(group pending reply) error = %v", err)
+	}
+
+	current, err := store.CurrentPane(ctx, feishuChat("oc_group_1"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%7" {
+		t.Fatalf("current = %q, want default:%%7", current)
+	}
+}
+
 func TestRouterFeishuGroupMentionOnlyShowsHelpCard(t *testing.T) {
 	t.Parallel()
 
@@ -351,6 +389,34 @@ func TestRouterFeishuGroupMentionOnlyShowsHelpCard(t *testing.T) {
 	}
 }
 
+func TestRouterFeishuHelpCardRepliesInThread(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuThreadMentionMessage("oc_group_1", "omt_1", "m1", "help")); err != nil {
+		t.Fatalf("HandleMessage(threaded help) error = %v", err)
+	}
+	messages := messenger.snapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(messages))
+	}
+	if messages[0].ReplyToMessageRef != "m1" {
+		t.Fatalf("reply to = %q, want m1", messages[0].ReplyToMessageRef)
+	}
+	if messages[0].ThreadID != "omt_1" {
+		t.Fatalf("thread id = %q, want omt_1", messages[0].ThreadID)
+	}
+}
+
 func TestRouterFeishuHelpUsesCard(t *testing.T) {
 	t.Parallel()
 
@@ -373,6 +439,43 @@ func TestRouterFeishuHelpUsesCard(t *testing.T) {
 	}
 	if messages[0].Card == nil {
 		t.Fatal("card = nil, want feishu help card")
+	}
+}
+
+func TestRouterFeishuNoCurrentPaneCardCreatesPendingSelection(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	record := service.records["default:%5"]
+	record2 := record
+	record2.Info.Target.PaneID = "%7"
+	service.records[record2.Info.Target.PaneKey()] = record2
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "pwd")); err != nil {
+		t.Fatalf("HandleMessage(no current pane) error = %v", err)
+	}
+	messages := messenger.snapshot()
+	if len(messages) != 1 || messages[0].Card == nil {
+		t.Fatalf("messages = %#v, want single pane-choice card", messages)
+	}
+
+	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m2", "2")); err != nil {
+		t.Fatalf("HandleMessage(pending pane reply) error = %v", err)
+	}
+	current, err := store.CurrentPane(ctx, feishuChat("oc_chat_1"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%7" {
+		t.Fatalf("current = %q, want default:%%7", current)
 	}
 }
 

@@ -33,7 +33,9 @@ func dispatchHelpCommand(r *Router, ctx context.Context, message IncomingMessage
 	r.logInbound(ctx, message, "", "")
 	if isFeishuChat(message.Chat) {
 		help := r.helpText(message.Chat)
-		return r.replyBus.ReplyCard(ctx, message.Chat, "", "help", help, buildFeishuHelpCard(help))
+		opts := feishuReplyOptions(message)
+		opts.Card = buildFeishuHelpCard(help)
+		return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "help", help, opts)
 	}
 	return r.replyBus.Reply(ctx, message.Chat, "", "help", r.helpText(message.Chat))
 }

@@ -23,7 +23,7 @@ func (r *Router) handleFollow(ctx context.Context, message IncomingMessage, args
 func (r *Router) enableFollow(ctx context.Context, message IncomingMessage, opts FollowOptions) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	if err := r.follow.EnableWithOptions(ctx, chat, paneKey, opts); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("follow failed: %v", err))

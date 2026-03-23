@@ -21,17 +21,18 @@ type fakeMessenger struct {
 }
 
 type sentMessage struct {
-	Text             string
-	Card             any
-	Caption          string
-	FileName         string
-	Photo            []byte
-	Embed            *EmbedData
-	ParseMode        telegram.ParseMode
-	ReplyToMessageID int64
-	ReplyMarkup      any
-	ThreadID         string
-	InteractionID    string
+	Text              string
+	Card              any
+	Caption           string
+	FileName          string
+	Photo             []byte
+	Embed             *EmbedData
+	ParseMode         telegram.ParseMode
+	ReplyToMessageID  int64
+	ReplyToMessageRef string
+	ReplyMarkup       any
+	ThreadID          string
+	InteractionID     string
 }
 
 func (m *fakeMessenger) Platform() string {
@@ -54,14 +55,15 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, o
 		replyTo = parsed
 	}
 	m.messages = append(m.messages, sentMessage{
-		Text:             text,
-		Card:             opts.Card,
-		Embed:            opts.Embed,
-		ParseMode:        parseMode,
-		ReplyToMessageID: replyTo,
-		ReplyMarkup:      opts.ReplyMarkup,
-		ThreadID:         opts.ThreadID,
-		InteractionID:    opts.InteractionID,
+		Text:              text,
+		Card:              opts.Card,
+		Embed:             opts.Embed,
+		ParseMode:         parseMode,
+		ReplyToMessageID:  replyTo,
+		ReplyToMessageRef: opts.ReplyToMessageID,
+		ReplyMarkup:       opts.ReplyMarkup,
+		ThreadID:          opts.ThreadID,
+		InteractionID:     opts.InteractionID,
 	})
 	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
 }
@@ -79,14 +81,15 @@ func (m *fakeMessenger) SendImage(_ context.Context, _ ChatRef, fileName string,
 		replyTo = parsed
 	}
 	m.messages = append(m.messages, sentMessage{
-		Caption:          caption,
-		FileName:         fileName,
-		Photo:            append([]byte(nil), photo...),
-		Embed:            opts.Embed,
-		ParseMode:        parseMode,
-		ReplyToMessageID: replyTo,
-		ThreadID:         opts.ThreadID,
-		InteractionID:    opts.InteractionID,
+		Caption:           caption,
+		FileName:          fileName,
+		Photo:             append([]byte(nil), photo...),
+		Embed:             opts.Embed,
+		ParseMode:         parseMode,
+		ReplyToMessageID:  replyTo,
+		ReplyToMessageRef: opts.ReplyToMessageID,
+		ThreadID:          opts.ThreadID,
+		InteractionID:     opts.InteractionID,
 	})
 	return OutboundMessage{MessageID: strconv.Itoa(len(m.messages))}, nil
 }
@@ -115,7 +118,7 @@ func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromp
 		return SendOptions{ReplyToMessageID: message.MessageID, ReplyToSenderID: message.Chat.ChatID}
 	}
 	if m.Platform() == "feishu" {
-		return SendOptions{}
+		return feishuReplyOptions(message)
 	}
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
@@ -387,6 +390,18 @@ func feishuGroupMentionMessage(chatID string, messageID string, text string) Inc
 		MessageID:    messageID,
 		Text:         text,
 		ChatType:     "group",
+		IsAppMention: true,
+	}
+}
+
+func feishuThreadMentionMessage(chatID string, threadID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:         feishuChat(chatID),
+		MessageID:    messageID,
+		Text:         text,
+		ChatType:     "group",
+		ThreadID:     threadID,
+		PendingScope: threadID,
 		IsAppMention: true,
 	}
 }

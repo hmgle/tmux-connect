@@ -102,3 +102,16 @@ func TestFeishuAdapterRunMapsInboundMessage(t *testing.T) {
 		t.Fatal("IsAppMention = false, want true")
 	}
 }
+
+func TestFeishuAdapterPromptOptionsReplyInThread(t *testing.T) {
+	t.Parallel()
+
+	adapter := &feishuAdapter{}
+	opts := adapter.PromptOptions(IncomingMessage{
+		MessageID: "om_parent",
+		ThreadID:  "omt_thread",
+	}, commandPromptSpec{})
+	if opts.ReplyToMessageID != "om_parent" || opts.ThreadID != "omt_thread" {
+		t.Fatalf("PromptOptions() = %#v, want reply+thread context", opts)
+	}
+}

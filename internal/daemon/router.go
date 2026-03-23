@@ -94,11 +94,11 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 
 	command, args := r.parseCommand(message, text)
 	if command == "" {
-		if shouldIgnorePlainTextMessage(message) {
-			return nil
-		}
 		if pending, ok := r.consumePending(message.pendingKey()); ok {
 			return r.handlePendingInput(ctx, message, pending, text)
+		}
+		if shouldIgnorePlainTextMessage(message) {
+			return nil
 		}
 		return r.handlePlainText(ctx, message, text)
 	}

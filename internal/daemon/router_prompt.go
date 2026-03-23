@@ -130,6 +130,13 @@ func isFeishuDirectMessage(message IncomingMessage) bool {
 	return isFeishuChat(message.Chat) && strings.EqualFold(strings.TrimSpace(message.ChatType), "p2p")
 }
 
+func feishuReplyOptions(message IncomingMessage) SendOptions {
+	return SendOptions{
+		ReplyToMessageID: strings.TrimSpace(message.MessageID),
+		ThreadID:         strings.TrimSpace(message.ThreadID),
+	}
+}
+
 func (r *Router) promptForFeishuPaneChoice(ctx context.Context, message IncomingMessage, command string) error {
 	if err := r.registry.Refresh(ctx); err != nil {
 		return r.replyBus.Reply(ctx, message.Chat, "", "error", fmt.Sprintf("list panes failed: %v", err))
@@ -150,5 +157,7 @@ func (r *Router) promptForFeishuPaneChoice(ctx context.Context, message Incoming
 	if command == "unmanage" {
 		summary = "Reply with a pane number or pane id to stop managing it."
 	}
-	return r.replyBus.ReplyCard(ctx, message.Chat, "", "prompt", summary, buildFeishuPaneChoiceCard(command, records))
+	opts := feishuReplyOptions(message)
+	opts.Card = buildFeishuPaneChoiceCard(command, records, "")
+	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", summary, opts)
 }

@@ -5,7 +5,7 @@ import "context"
 func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, args string) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {

@@ -30,12 +30,23 @@ func (r *Router) currentPaneForInbound(ctx context.Context, message IncomingMess
 	return chat, paneKey, err
 }
 
-func (r *Router) replyCurrentPaneError(ctx context.Context, chat ChatRef, paneKey string, err error) error {
+func (r *Router) replyCurrentPaneError(ctx context.Context, message IncomingMessage, paneKey string, err error) error {
+	chat := message.Chat
 	if isFeishuChat(chat) && strings.HasPrefix(strings.TrimSpace(err.Error()), "no current pane;") {
 		if refreshErr := r.registry.Refresh(ctx); refreshErr == nil {
 			records := r.registry.All()
 			if len(records) > 0 {
-				return r.replyBus.ReplyCard(ctx, chat, paneKey, "error", err.Error(), buildFeishuPaneChoiceCard("select", records))
+				options := make([]string, 0, len(records))
+				for _, record := range records {
+					options = append(options, record.Info.Target.PaneKey())
+				}
+				r.setPending(message.pendingKey(), pendingCommand{
+					Command: "select",
+					Options: options,
+				})
+				opts := feishuReplyOptions(message)
+				opts.Card = buildFeishuPaneChoiceCard("select", records, err.Error())
+				return r.replyBus.ReplyWithOptions(ctx, chat, paneKey, "error", err.Error(), opts)
 			}
 		}
 	}

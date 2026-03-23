@@ -21,7 +21,7 @@ func (r *Router) handlePlainText(ctx context.Context, message IncomingMessage, t
 func (r *Router) sendText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, inboundKind)
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	if err := r.service.SendManaged(ctx, paneKey, text, false); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("send failed: %v", err))
@@ -32,9 +32,9 @@ func (r *Router) sendText(ctx context.Context, message IncomingMessage, text str
 func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args string) error {
 	text := strings.TrimSpace(args)
 	if text == "" {
-		chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
+		_, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 		if err != nil {
-			return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+			return r.replyCurrentPaneError(ctx, message, paneKey, err)
 		}
 		return r.promptForCommandInput(ctx, message, "send")
 	}
@@ -52,7 +52,7 @@ func (r *Router) handleSend(ctx context.Context, message IncomingMessage, args s
 func (r *Router) executeText(ctx context.Context, message IncomingMessage, text string, inboundKind string) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, inboundKind)
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	baseline, baselineErr := r.executeBaselineSnapshot(ctx, paneKey)
 	if err := r.service.SendManaged(ctx, paneKey, text, true); err != nil {
@@ -127,7 +127,7 @@ func waitForDuration(ctx context.Context, d time.Duration) error {
 func (r *Router) handleKeys(ctx context.Context, message IncomingMessage, args string) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	keys, err := parseKeysArgs(args)
 	if err != nil {
@@ -150,7 +150,7 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args 
 
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	if err := r.service.EnterManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("enter failed: %v", err))
@@ -161,7 +161,7 @@ func (r *Router) handleEnter(ctx context.Context, message IncomingMessage, args 
 func (r *Router) handleCtrlC(ctx context.Context, message IncomingMessage) error {
 	chat, paneKey, err := r.currentPaneForInbound(ctx, message, "command")
 	if err != nil {
-		return r.replyCurrentPaneError(ctx, chat, paneKey, err)
+		return r.replyCurrentPaneError(ctx, message, paneKey, err)
 	}
 	if err := r.service.CtrlCManaged(ctx, paneKey); err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("ctrl-c failed: %v", err))

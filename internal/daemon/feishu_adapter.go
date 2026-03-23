@@ -70,8 +70,8 @@ func (a *feishuAdapter) DecorateMessage(kind string, text string, opts SendOptio
 	return decorateFeishuMessage(kind, text, opts)
 }
 
-func (a *feishuAdapter) PromptOptions(IncomingMessage, commandPromptSpec) SendOptions {
-	return SendOptions{}
+func (a *feishuAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
+	return feishuReplyOptions(message)
 }
 
 func (a *feishuAdapter) SnapshotCaption(paneKey string) string {

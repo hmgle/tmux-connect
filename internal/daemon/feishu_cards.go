@@ -58,8 +58,9 @@ func buildFeishuHelpCard(helpText string) string {
 	})
 }
 
-func buildFeishuPaneChoiceCard(command string, records []tmuxconn.PaneRecord) string {
+func buildFeishuPaneChoiceCard(command string, records []tmuxconn.PaneRecord, notice string) string {
 	command = strings.TrimSpace(command)
+	notice = strings.TrimSpace(notice)
 	title := "Select A Pane"
 	intro := "Reply with a pane number or pane id, for example `1` or `%5`."
 	if command == "unmanage" {
@@ -67,7 +68,11 @@ func buildFeishuPaneChoiceCard(command string, records []tmuxconn.PaneRecord) st
 		intro = "Reply with a pane number or pane id to stop managing it."
 	}
 
-	lines := []string{intro, "", "Available panes:"}
+	lines := make([]string, 0, len(records)+5)
+	if notice != "" {
+		lines = append(lines, notice, "")
+	}
+	lines = append(lines, intro, "", "Available panes:")
 	limit := len(records)
 	if limit > feishuPaneCardLimit {
 		limit = feishuPaneCardLimit
