@@ -142,20 +142,3 @@ func snapshotRenderOptions(cfg Config) termrender.Options {
 		ThemeName: cfg.SnapshotTheme,
 	}
 }
-
-func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapter, error) {
-	switch cfg.Platform {
-	case "telegram":
-		return newTelegramAdapter(cfg, stderr), nil
-	case "feishu":
-		return newFeishuAdapter(cfg, stderr)
-	case "slack":
-		return newSlackAdapter(cfg, stderr, store)
-	case "discord":
-		return newDiscordAdapter(cfg, stderr)
-	case "whatsapp":
-		return newWhatsAppAdapter(cfg, stderr)
-	default:
-		return nil, tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
-	}
-}

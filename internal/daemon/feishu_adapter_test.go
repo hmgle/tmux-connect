@@ -1,3 +1,5 @@
+//go:build !no_feishu
+
 package daemon
 
 import (

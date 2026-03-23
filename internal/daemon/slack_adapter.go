@@ -1,3 +1,5 @@
+//go:build !no_slack
+
 package daemon
 
 import (

@@ -25,7 +25,7 @@
 
 ```bash
 # 构建
-go build ./cmd/tmux-connect
+make build
 
 # 查看所有 pane
 ./tmux-connect list
@@ -51,6 +51,22 @@ go build ./cmd/tmux-connect
 ```
 
 然后在 Telegram 发送 `/panes` 和 `/select %5` 即可开始交互。
+
+## 选择性构建
+
+默认情况下，`make build` 会把所有支持的远程平台一起编进二进制。
+如果你只需要其中一部分平台，可以通过 `Makefile` 使用负向排除式 build tags：
+
+```bash
+# 只保留 Telegram 和 Slack
+make build PLATFORMS_INCLUDE=telegram,slack
+
+# 或者排除不需要的重依赖平台
+make build EXCLUDE=feishu,whatsapp
+```
+
+构建完成后，`./tmux-connect daemon help` 会显示当前二进制实际编入的平台；
+`daemon run --help` 中 `--platform` 的说明也会随之变化。
 
 ## 前提条件
 

@@ -92,7 +92,13 @@ git clone https://github.com/hmgle/tmux-connect.git
 cd tmux-connect
 
 # 构建二进制文件
-go build ./cmd/tmux-connect
+make build
+```
+
+如果你只打算使用 Discord，也可以裁掉不需要的平台：
+
+```bash
+make build PLATFORMS_INCLUDE=telegram,discord
 ```
 
 ### 2.3 配置方式

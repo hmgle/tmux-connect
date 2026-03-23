@@ -37,7 +37,12 @@ func bindConfigFlags(fs *flag.FlagSet, cfg *Config, defaults daemonConfigDefault
 		plainTextEcho: defaults.plainTextEcho,
 	}
 
-	fs.StringVar(&cfg.Platform, "platform", defaults.platform, "remote platform (telegram|feishu|slack|discord|whatsapp)")
+	platformChoices := availablePlatformChoices()
+	if platformChoices == "" {
+		platformChoices = "none"
+	}
+
+	fs.StringVar(&cfg.Platform, "platform", defaults.platform, "remote platform in this build ("+platformChoices+")")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", defaults.telegramToken, "telegram bot token")
 	fs.StringVar(&cfg.FeishuAppID, "feishu-app-id", defaults.feishuAppID, "feishu app id")
 	fs.StringVar(&cfg.FeishuAppSecret, "feishu-app-secret", defaults.feishuAppSecret, "feishu app secret")

@@ -54,7 +54,7 @@ func resolveConfigDefaults(fileCfg config.Daemon) (daemonConfigDefaults, error) 
 		return daemonConfigDefaults{}, tmuxconn.UsageError("%v", err)
 	}
 
-	defaults.platform = envOrDefault("TMUXCONN_PLATFORM", stringValue(fileCfg.Platform, "telegram"))
+	defaults.platform = envOrDefault("TMUXCONN_PLATFORM", stringValue(fileCfg.Platform, defaultPlatformName()))
 	resolvedDBPath := stringValue(fileCfg.DB, defaultDBPath())
 	defaults.dbPath = envOrDefault("TMUXCONN_DB_PATH", resolvedDBPath)
 	defaults.pollTimeout, err = durationValue("[daemon].poll_timeout", fileCfg.PollTimeout, 20*time.Second)

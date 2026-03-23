@@ -26,7 +26,7 @@ Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Teleg
 
 ```bash
 # Build
-go build ./cmd/tmux-connect
+make build
 
 # See your panes
 ./tmux-connect list
@@ -52,6 +52,22 @@ Want to control the same pane from your phone? Start a Telegram relay:
 ```
 
 Then send `/panes` and `/select %5` from Telegram to start interacting.
+
+## Selective Builds
+
+By default `make build` compiles all supported remote platforms into the binary.
+If you only need a subset, use negative build tags through the `Makefile`:
+
+```bash
+# Keep only Telegram and Slack
+make build PLATFORMS_INCLUDE=telegram,slack
+
+# Or exclude heavy integrations you do not need
+make build EXCLUDE=feishu,whatsapp
+```
+
+After building, `./tmux-connect daemon help` prints the platforms compiled into
+that binary, and the `--platform` flag help matches the current build.
 
 ## Requirements
 

@@ -1,3 +1,5 @@
+//go:build !no_whatsapp
+
 package daemon
 
 import (

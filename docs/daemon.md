@@ -3,6 +3,10 @@
 The relay daemon connects tmux panes to chat platforms. It shares the same
 config file and precedence rules as the CLI: flags > env vars > TOML.
 
+The set of usable platforms depends on how the binary was built. Run
+`./tmux-connect daemon help` to see which platforms are compiled into the
+current binary.
+
 ## Config File
 
 ```toml
@@ -53,7 +57,7 @@ auto_mark_read = true
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--platform` | required | `telegram`, `feishu`, `slack`, `discord`, or `whatsapp` |
+| `--platform` | build-dependent | One of the platforms compiled into the current binary |
 | `--db PATH` | required | SQLite database path |
 | `--allow-chat ID` | — | Restrict access to specific chat IDs (repeatable, preferably platform-scoped like `feishu:oc_xxx`) |
 | `--poll-timeout` | `20s` | Long-poll timeout |

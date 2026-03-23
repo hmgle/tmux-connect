@@ -15,7 +15,7 @@ import (
 func applyConfigValues(fs *flag.FlagSet, cfg *Config, values *daemonConfigFlagValues, fileCfg config.Daemon) error {
 	cfg.Platform = strings.TrimSpace(strings.ToLower(cfg.Platform))
 	if cfg.Platform == "" {
-		cfg.Platform = "telegram"
+		cfg.Platform = defaultPlatformName()
 	}
 	cfg.PlainTextMode = plainTextMode(values.plainTextMode)
 	cfg.PlainTextEcho = plainTextEchoMode(values.plainTextEcho)
@@ -29,6 +29,9 @@ func applyConfigValues(fs *flag.FlagSet, cfg *Config, values *daemonConfigFlagVa
 }
 
 func validateConfig(cfg *Config, fs *flag.FlagSet, fileCfg config.Daemon, requireRun bool) error {
+	if !isPlatformAvailable(cfg.Platform) {
+		return tmuxconn.UsageError("%v", unsupportedPlatformError(cfg.Platform))
+	}
 	if err := validateConfigValues(cfg); err != nil {
 		return err
 	}
@@ -140,7 +143,7 @@ func validateRunRequirements(cfg Config) error {
 			return tmuxconn.UsageError("daemon run requires --whatsapp-session-db, TMUXCONN_WHATSAPP_SESSION_DB, or [daemon.whatsapp].session_db in config")
 		}
 	default:
-		return tmuxconn.UsageError("unsupported --platform %q", cfg.Platform)
+		return tmuxconn.UsageError("%v", unsupportedPlatformError(cfg.Platform))
 	}
 	return nil
 }

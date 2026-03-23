@@ -52,7 +52,16 @@ func runDaemonWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprint(w, `tmux-connect daemon manages remote relay access for tmux panes.
+	platformSummary := availablePlatformSummary()
+	if platformSummary == "" {
+		platformSummary = "(none)"
+	}
+	defaultPlatform := defaultPlatformName()
+	if defaultPlatform == "" {
+		defaultPlatform = "(none)"
+	}
+
+	fmt.Fprintf(w, `tmux-connect daemon manages remote relay access for tmux panes.
 
 Usage:
   tmux-connect daemon <command> [flags]
@@ -62,8 +71,14 @@ Commands:
   doctor   Validate token, sqlite store, and tmux access
   status   Show sqlite counts and current managed pane count
 
+Compiled platforms:
+  %s
+
+Default platform:
+  %s
+
 Common flags:
-  --platform telegram|feishu|slack|discord|whatsapp
+  --platform PLATFORM
   --telegram-token TOKEN
   --feishu-app-id APP_ID
   --feishu-app-secret APP_SECRET
@@ -93,5 +108,5 @@ Common flags:
   --follow-lines 80
   --follow-min-interval 700ms
   --follow-debug
-`)
+`, platformSummary, defaultPlatform)
 }

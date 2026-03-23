@@ -2,6 +2,9 @@
 
 中继 daemon 将 tmux pane 连接到聊天平台。与 CLI 共享相同的配置文件和优先级规则：命令行参数 > 环境变量 > TOML 配置。
 
+可用平台取决于当前二进制的构建方式。运行 `./tmux-connect daemon help`
+即可查看当前二进制实际编入的平台列表。
+
 ## 配置文件
 
 ```toml
@@ -52,7 +55,7 @@ auto_mark_read = true
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--platform` | 必填 | `telegram`、`feishu`、`slack`、`discord` 或 `whatsapp` |
+| `--platform` | 与构建结果相关 | 当前二进制已编入的平台之一 |
 | `--db PATH` | 必填 | SQLite 数据库路径 |
 | `--allow-chat ID` | — | 限制特定 chat ID 的访问权限（可重复，建议写成 `feishu:oc_xxx` 这样的平台作用域格式） |
 | `--poll-timeout` | `20s` | 长轮询超时 |

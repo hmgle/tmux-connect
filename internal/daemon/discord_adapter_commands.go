@@ -1,3 +1,5 @@
+//go:build !no_discord
+
 package daemon
 
 import "github.com/bwmarrin/discordgo"

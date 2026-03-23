@@ -55,5 +55,20 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Build CLI
-        run: go build ./cmd/tmux-connect
+      - name: Build default CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean build
+          ./tmux-connect daemon help | grep -F "Compiled platforms:"
+          ./tmux-connect daemon help | grep -F "telegram, feishu, slack, discord, whatsapp"
+          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|feishu|slack|discord|whatsapp)'
+
+      - name: Build selective CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          make clean build EXCLUDE=feishu,whatsapp
+          ./tmux-connect daemon help | grep -F "Compiled platforms:"
+          ./tmux-connect daemon help | grep -F "telegram, slack, discord"
+          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|slack|discord)'

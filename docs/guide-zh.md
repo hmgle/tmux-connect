@@ -42,10 +42,22 @@
 ### 1. 构建或直接运行
 
 ```bash
-go build ./cmd/tmux-connect
+make build
 ```
 
 后文中的 `./tmux-connect` 也可以替换成 `go run ./cmd/tmux-connect`。
+
+如果你不需要全部远程平台，也可以选择性构建：
+
+```bash
+# 只保留 Telegram 和 Slack
+make build PLATFORMS_INCLUDE=telegram,slack
+
+# 排除飞书和 WhatsApp
+make build EXCLUDE=feishu,whatsapp
+```
+
+构建后可以运行 `./tmux-connect daemon help`，确认当前二进制包含哪些平台。
 
 ### 2. 在 tmux 里启动你的 Agent
 

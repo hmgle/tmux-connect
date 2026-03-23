@@ -8,13 +8,15 @@ tmux-connect is a Go-based local tmux bridge for controlling existing panes from
 
 ## Build and Test Commands
 
-No Makefile — use the Go toolchain directly:
+Use the `Makefile` for normal builds. It also supports selective compilation of remote platforms:
 
 ```bash
-go build ./cmd/tmux-connect      # build the CLI binary
-go test ./...                    # full test suite
-go test ./internal/daemon/...    # single package tests
-go test -run TestRouterFollow ./internal/daemon/  # single test
+make build                                            # build the default binary
+make build EXCLUDE=feishu,whatsapp                    # exclude specific platforms
+make build PLATFORMS_INCLUDE=telegram,slack           # keep only specific platforms
+go test ./...                                         # full test suite
+go test ./internal/daemon/...                         # single package tests
+go test -run TestRouterFollow ./internal/daemon/      # single test
 ```
 
 Format with `gofmt`. There is no separate lint command configured.
@@ -35,7 +37,7 @@ Remote daemon ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.
 
 **`internal/httpapi/`** — RESTful HTTP server. Endpoints under `/v1/panes/*` plus `/healthz`. Streaming is SSE-based.
 
-**`internal/daemon/`** — Multi-connector relay daemon. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence via the embedded Go SQLite driver. `ReplyBus`/`Messenger` handle reply continuity across Telegram, Slack, Discord, and WhatsApp. Schema is versioned via `PRAGMA user_version`.
+**`internal/daemon/`** — Multi-connector relay daemon. `Router` dispatches bot commands. `FollowManager` streams pane output to chats. `Store` is SQLite-backed persistence via the embedded Go SQLite driver. `ReplyBus`/`Messenger` handle reply continuity across Telegram, Feishu, Slack, Discord, and WhatsApp. Platform creation goes through a registry in `internal/daemon/platform_registry.go`, and build-tag-controlled `platform_*.go` registration files decide which remote platforms are compiled into a given binary.
 
 **`internal/telegram/`** — Thin long-polling Telegram Bot API client.
 
@@ -44,6 +46,8 @@ Remote daemon ──→ daemon.Router ──→ tmuxconn.Service ──→ tmux.
 **`internal/discord/`** — Discord gateway and interaction client wrappers.
 
 **`internal/whatsapp/`** — WhatsApp multi-device client wrapper based on `whatsmeow`. Local session database for paired device state. QR-based first-time login.
+
+The current default build includes Telegram plus all tagged-in remote platforms. `./tmux-connect daemon help` shows the compiled platform list at runtime, and `daemon run --help` reflects it in the `--platform` flag help text.
 
 ## Key Conventions
 
