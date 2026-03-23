@@ -28,6 +28,13 @@ func (m IncomingMessage) pendingKey() string {
 	return m.Chat.Key() + "|" + scope
 }
 
+func (m IncomingMessage) replyThreadID() string {
+	if strings.TrimSpace(m.ThreadID) != "" {
+		return strings.TrimSpace(m.ThreadID)
+	}
+	return strings.TrimSpace(m.MessageID)
+}
+
 type Router struct {
 	service              paneService
 	registry             *PaneRegistry

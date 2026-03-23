@@ -1,3 +1,5 @@
+//go:build !no_telegram
+
 package daemon
 
 import (

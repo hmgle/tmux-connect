@@ -119,10 +119,3 @@ func (a *slackAdapter) RegisterCommands(context.Context, []botCommandSpec) error
 }
 
 func (a *slackAdapter) Close() error { return nil }
-
-func (m IncomingMessage) replyThreadID() string {
-	if strings.TrimSpace(m.ThreadID) != "" {
-		return strings.TrimSpace(m.ThreadID)
-	}
-	return strings.TrimSpace(m.MessageID)
-}
