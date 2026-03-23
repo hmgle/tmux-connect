@@ -7,6 +7,23 @@ The set of usable platforms depends on how the binary was built. Run
 `./tmux-connect daemon help` to see which platforms are compiled into the
 current binary.
 
+## Runtime Model
+
+A single `tmux-connect daemon run` process handles exactly one remote platform.
+The binary may be compiled with multiple platforms, but `--platform` still
+selects one platform for that process.
+
+If you want Telegram + Slack + Discord at the same time, start multiple daemon
+instances:
+
+```bash
+./tmux-connect daemon run --platform telegram ...
+./tmux-connect daemon run --platform slack ...
+./tmux-connect daemon run --platform discord ...
+```
+
+This is the supported way to run multiple platforms today.
+
 ## Config File
 
 ```toml
@@ -71,6 +88,10 @@ auto_mark_read = true
 | `--follow-min-interval` | `700ms` | Minimum gap between follow updates (WhatsApp defaults to `2s` if not set) |
 | `--follow-debug` | `false` | Enable follow debug logging |
 
+`--platform` is singular on purpose: each daemon process runs one platform.
+When a binary includes multiple platforms, `--platform` chooses which adapter
+to start for this process.
+
 ### Telegram-specific
 
 | Flag | Default | Description |
@@ -130,6 +151,10 @@ Use `/send <text>` when you want raw input even with execute mode enabled.
 
 # Run with Feishu websocket event delivery
 ./tmux-connect daemon run --platform feishu --feishu-app-id "$TMUXCONN_FEISHU_APP_ID" --feishu-app-secret "$TMUXCONN_FEISHU_APP_SECRET"
+
+# Run two platforms at the same time by starting two daemon processes
+./tmux-connect daemon run --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon run --platform slack --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" --db ~/.tmux-connect/tmux-connect.db
 
 # Show SQLite record counts and managed pane count
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db

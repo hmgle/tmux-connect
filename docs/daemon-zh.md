@@ -5,6 +5,20 @@
 可用平台取决于当前二进制的构建方式。运行 `./tmux-connect daemon help`
 即可查看当前二进制实际编入的平台列表。
 
+## 运行模型
+
+单个 `tmux-connect daemon run` 进程一次只处理一个远程平台。二进制虽然可以同时编入多个平台，但当前进程仍然只会根据 `--platform` 选择其中一个平台启动。
+
+如果你想同时接入 Telegram、Slack、Discord，需要分别启动多个 daemon 实例：
+
+```bash
+./tmux-connect daemon run --platform telegram ...
+./tmux-connect daemon run --platform slack ...
+./tmux-connect daemon run --platform discord ...
+```
+
+这就是当前版本支持的多平台运行方式。
+
 ## 配置文件
 
 ```toml
@@ -69,6 +83,8 @@ auto_mark_read = true
 | `--follow-min-interval` | `700ms` | follow 更新之间的最小间隔（WhatsApp 未显式设置时默认 `2s`） |
 | `--follow-debug` | `false` | 启用 follow 调试日志 |
 
+这里的 `--platform` 是刻意设计成单数的：每个 daemon 进程只运行一个平台。若当前二进制编入了多个平台，`--platform` 只是为这一个进程选择启动哪一个 adapter。
+
 ### Telegram 专用
 
 | 参数 | 默认值 | 说明 |
@@ -126,6 +142,10 @@ auto_mark_read = true
 
 # 通过飞书长连接模式运行
 ./tmux-connect daemon run --platform feishu --feishu-app-id "$TMUXCONN_FEISHU_APP_ID" --feishu-app-secret "$TMUXCONN_FEISHU_APP_SECRET"
+
+# 如需同时接入多个平台，请分别启动多个 daemon 进程
+./tmux-connect daemon run --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" --db ~/.tmux-connect/tmux-connect.db
+./tmux-connect daemon run --platform slack --slack-bot-token "$TMUXCONN_SLACK_BOT_TOKEN" --slack-app-token "$TMUXCONN_SLACK_APP_TOKEN" --db ~/.tmux-connect/tmux-connect.db
 
 # 显示 SQLite 记录数和受管 pane 数量
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db

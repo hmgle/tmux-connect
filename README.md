@@ -53,6 +53,11 @@ Want to control the same pane from your phone? Start a Telegram relay:
 
 Then send `/panes` and `/select %5` from Telegram to start interacting.
 
+One daemon process runs one remote platform. If your binary includes multiple
+platforms and you want more than one active at the same time, start multiple
+`tmux-connect daemon run` processes and choose a different `--platform` for
+each one.
+
 ## Selective Builds
 
 By default `make build` compiles all supported remote platforms into the binary.
@@ -88,7 +93,9 @@ names fail fast instead of being ignored. `make platforms` accepts the same
 arguments, so you can preview the effective selection before building.
 
 After building, `./tmux-connect daemon help` prints the platforms compiled into
-that binary, and the `--platform` flag help matches the current build.
+that binary, and the `--platform` flag help matches the current build. This
+does not mean one daemon process serves all compiled platforms at once; runtime
+selection is still one process per platform.
 
 ## Requirements
 

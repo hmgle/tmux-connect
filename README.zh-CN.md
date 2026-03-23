@@ -52,6 +52,8 @@ make build
 
 然后在 Telegram 发送 `/panes` 和 `/select %5` 即可开始交互。
 
+一个 daemon 进程只运行一个远程平台。如果当前二进制编入了多个平台，而你又想同时启用多个平台，请分别启动多个 `tmux-connect daemon run` 进程，并为每个进程指定不同的 `--platform`。
+
 ## 选择性构建
 
 默认情况下，`make build` 会把所有支持的远程平台一起编进二进制。
@@ -87,7 +89,7 @@ make build EXCLUDE=feishu,whatsapp
 实际会保留哪些平台。
 
 构建完成后，`./tmux-connect daemon help` 会显示当前二进制实际编入的平台；
-`daemon run --help` 中 `--platform` 的说明也会随之变化。
+`daemon run --help` 中 `--platform` 的说明也会随之变化。但这并不表示单个 daemon 进程会同时服务所有已编入的平台；当前运行模型仍然是一个进程对应一个平台。
 
 ## 前提条件
 
