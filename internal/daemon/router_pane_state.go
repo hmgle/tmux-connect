@@ -31,6 +31,14 @@ func (r *Router) currentPaneForInbound(ctx context.Context, message IncomingMess
 }
 
 func (r *Router) replyCurrentPaneError(ctx context.Context, chat ChatRef, paneKey string, err error) error {
+	if isFeishuChat(chat) && strings.HasPrefix(strings.TrimSpace(err.Error()), "no current pane;") {
+		if refreshErr := r.registry.Refresh(ctx); refreshErr == nil {
+			records := r.registry.All()
+			if len(records) > 0 {
+				return r.replyBus.ReplyCard(ctx, chat, paneKey, "error", err.Error(), buildFeishuPaneChoiceCard("select", records))
+			}
+		}
+	}
 	return r.replyBus.Reply(ctx, chat, paneKey, "error", err.Error())
 }
 

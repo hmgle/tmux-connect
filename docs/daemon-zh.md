@@ -29,6 +29,10 @@ snapshot_theme = "dark"
 snapshot_font_size = 14
 snapshot_font_file = "/path/to/font.ttf"
 
+[daemon.feishu]
+app_id = "cli_xxx"
+app_secret = "secret_xxx"
+
 [daemon.slack]
 bot_token = "xoxb-..."
 app_token = "xapp-..."
@@ -48,9 +52,9 @@ auto_mark_read = true
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--platform` | 必填 | `telegram`、`slack`、`discord` 或 `whatsapp` |
+| `--platform` | 必填 | `telegram`、`feishu`、`slack`、`discord` 或 `whatsapp` |
 | `--db PATH` | 必填 | SQLite 数据库路径 |
-| `--allow-chat ID` | — | 限制特定 chat ID 的访问权限（可重复） |
+| `--allow-chat ID` | — | 限制特定 chat ID 的访问权限（可重复，建议写成 `feishu:oc_xxx` 这样的平台作用域格式） |
 | `--poll-timeout` | `20s` | 长轮询超时 |
 | `--snapshot-lines` | `120` | 默认快照行数 |
 | `--plain-text-mode` | `type` | `type`（原始输入）或 `execute`（输入 + 回车） |
@@ -71,6 +75,13 @@ auto_mark_read = true
 | `--telegram-snapshot-font-size` | `14` | 快照图片字号 |
 | `--telegram-snapshot-font-file` | 内置 gomono | 自定义字体路径 |
 | `--telegram-api-base` | — | 自定义 Telegram API 基础 URL |
+
+### Feishu 专用
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--feishu-app-id` | — | 飞书 App ID（或环境变量 `TMUXCONN_FEISHU_APP_ID`） |
+| `--feishu-app-secret` | — | 飞书 App Secret（或环境变量 `TMUXCONN_FEISHU_APP_SECRET`） |
 
 ### Slack 专用
 
@@ -110,6 +121,9 @@ auto_mark_read = true
 # 验证 token、SQLite 存储和 tmux 访问
 ./tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 
+# 通过飞书长连接模式运行
+./tmux-connect daemon run --platform feishu --feishu-app-id "$TMUXCONN_FEISHU_APP_ID" --feishu-app-secret "$TMUXCONN_FEISHU_APP_SECRET"
+
 # 显示 SQLite 记录数和受管 pane 数量
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
@@ -132,6 +146,7 @@ remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系�
 各平台的详细配置、命令列表和操作说明：
 
 - [Telegram](./telegram.md)
+- [Feishu](./feishu.md)
 - [Slack](./slack.md)
 - [Discord](./discord.md)
 - [WhatsApp](./whatsapp.md)

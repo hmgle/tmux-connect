@@ -37,8 +37,10 @@ func bindConfigFlags(fs *flag.FlagSet, cfg *Config, defaults daemonConfigDefault
 		plainTextEcho: defaults.plainTextEcho,
 	}
 
-	fs.StringVar(&cfg.Platform, "platform", defaults.platform, "remote platform (telegram|slack|discord|whatsapp)")
+	fs.StringVar(&cfg.Platform, "platform", defaults.platform, "remote platform (telegram|feishu|slack|discord|whatsapp)")
 	fs.StringVar(&cfg.TelegramToken, "telegram-token", defaults.telegramToken, "telegram bot token")
+	fs.StringVar(&cfg.FeishuAppID, "feishu-app-id", defaults.feishuAppID, "feishu app id")
+	fs.StringVar(&cfg.FeishuAppSecret, "feishu-app-secret", defaults.feishuAppSecret, "feishu app secret")
 	fs.StringVar(&cfg.SlackBotToken, "slack-bot-token", defaults.slackBotToken, "slack bot token")
 	fs.StringVar(&cfg.SlackAppToken, "slack-app-token", defaults.slackAppToken, "slack app token for socket mode")
 	fs.StringVar(&cfg.SlackCommandPrefix, "slack-command-prefix", defaults.slackCommandPrefix, "command prefix for slack messages")
@@ -63,7 +65,7 @@ func bindConfigFlags(fs *flag.FlagSet, cfg *Config, defaults daemonConfigDefault
 	fs.DurationVar(&cfg.FollowMinGap, "follow-min-interval", defaults.followMinGap, "default minimum interval between /follow pushes")
 	fs.BoolVar(&cfg.FollowDebug, "follow-debug", defaults.followDebug, "log follow chunk/flush debug data to stderr")
 	fs.StringVar(&cfg.APIBaseURL, "telegram-api-base", defaults.apiBaseURL, "telegram bot api base url")
-	fs.Var(values.allowChats, "allow-chat", "allowed telegram chat id (repeatable or comma-separated)")
+	fs.Var(values.allowChats, "allow-chat", "allowed remote chat id (repeatable or comma-separated, preferably platform-scoped like feishu:oc_xxx)")
 
 	return values
 }

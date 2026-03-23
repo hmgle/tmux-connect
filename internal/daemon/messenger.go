@@ -22,6 +22,10 @@ func (b *ReplyBus) Reply(ctx context.Context, chat ChatRef, paneKey string, kind
 	return b.ReplyWithOptions(ctx, chat, paneKey, kind, text, SendOptions{})
 }
 
+func (b *ReplyBus) ReplyCard(ctx context.Context, chat ChatRef, paneKey string, kind string, text string, card any) error {
+	return b.ReplyWithOptions(ctx, chat, paneKey, kind, text, SendOptions{Card: card})
+}
+
 func (b *ReplyBus) ReplyWithOptions(ctx context.Context, chat ChatRef, paneKey string, kind string, text string, opts SendOptions) error {
 	state := b.prepareOutbound(ctx, chat, paneKey)
 	opts = applyInteractionReplyContext(ctx, opts)

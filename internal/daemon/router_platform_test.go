@@ -69,6 +69,17 @@ func TestHelpTextUsesWhatsAppReplyGuidance(t *testing.T) {
 	}
 }
 
+func TestHelpTextUsesFeishuGuidance(t *testing.T) {
+	t.Parallel()
+
+	text := helpTextForPlatform("feishu", "", "tmux:")
+	for _, want := range []string{`Feishu private chats`, `mention the bot`, `Static cards are used for help and pane selection prompts`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("helpTextForPlatform(feishu) missing %q in %q", want, text)
+		}
+	}
+}
+
 func TestRouterWhatsAppSelfChatRejectsPlainText(t *testing.T) {
 	t.Parallel()
 
@@ -231,6 +242,112 @@ func TestRouterSlackAcceptsPrefixedCommands(t *testing.T) {
 	last := messages[len(messages)-1]
 	if !strings.Contains(last.Text, "Current pane:") {
 		t.Fatalf("last message = %q, want current pane details", last.Text)
+	}
+}
+
+func TestRouterFeishuPrivatePlainTextUsesCurrentPane(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m2", "pwd")); err != nil {
+		t.Fatalf("HandleMessage(plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 1 {
+		t.Fatalf("sendCalls len = %d, want 1", len(service.sendCalls))
+	}
+	if service.sendCalls[0].text != "pwd" {
+		t.Fatalf("send text = %q, want pwd", service.sendCalls[0].text)
+	}
+}
+
+func TestRouterFeishuGroupIgnoresNonMentionPlainText(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, IncomingMessage{
+		Chat:      feishuChat("oc_group_1"),
+		MessageID: "m1",
+		Text:      "pwd",
+		ChatType:  "group",
+	}); err != nil {
+		t.Fatalf("HandleMessage(group plain text) error = %v", err)
+	}
+	if len(service.sendCalls) != 0 {
+		t.Fatalf("sendCalls = %#v, want none", service.sendCalls)
+	}
+	if len(messenger.snapshot()) != 0 {
+		t.Fatalf("messages = %#v, want none", messenger.snapshot())
+	}
+}
+
+func TestRouterFeishuGroupMentionAcceptsCommand(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "select %5")); err != nil {
+		t.Fatalf("HandleMessage(group mention select) error = %v", err)
+	}
+	current, err := store.CurrentPane(ctx, feishuChat("oc_group_1"))
+	if err != nil {
+		t.Fatalf("CurrentPane() error = %v", err)
+	}
+	if current != "default:%5" {
+		t.Fatalf("current = %q, want default:%%5", current)
+	}
+}
+
+func TestRouterFeishuHelpUsesCard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "feishu"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "/help")); err != nil {
+		t.Fatalf("HandleMessage(help) error = %v", err)
+	}
+	messages := messenger.snapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(messages))
+	}
+	if messages[0].Card == nil {
+		t.Fatal("card = nil, want feishu help card")
 	}
 }
 

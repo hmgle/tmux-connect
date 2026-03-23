@@ -31,6 +31,10 @@ func (r *Router) dispatchCommand(ctx context.Context, message IncomingMessage, c
 
 func dispatchHelpCommand(r *Router, ctx context.Context, message IncomingMessage, _ string) error {
 	r.logInbound(ctx, message, "", "")
+	if isFeishuChat(message.Chat) {
+		help := r.helpText(message.Chat)
+		return r.replyBus.ReplyCard(ctx, message.Chat, "", "help", help, buildFeishuHelpCard(help))
+	}
 	return r.replyBus.Reply(ctx, message.Chat, "", "help", r.helpText(message.Chat))
 }
 

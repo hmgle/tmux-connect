@@ -123,6 +123,10 @@ func validateRunRequirements(cfg Config) error {
 		if strings.TrimSpace(cfg.TelegramToken) == "" {
 			return tmuxconn.UsageError("daemon run requires --telegram-token, TMUXCONN_TELEGRAM_TOKEN, or [daemon.telegram].token in config")
 		}
+	case "feishu":
+		if strings.TrimSpace(cfg.FeishuAppID) == "" || strings.TrimSpace(cfg.FeishuAppSecret) == "" {
+			return tmuxconn.UsageError("daemon run requires --feishu-app-id/--feishu-app-secret, TMUXCONN_FEISHU_APP_ID/TMUXCONN_FEISHU_APP_SECRET, or [daemon.feishu].app_id/[daemon.feishu].app_secret in config")
+		}
 	case "slack":
 		if strings.TrimSpace(cfg.SlackBotToken) == "" || strings.TrimSpace(cfg.SlackAppToken) == "" {
 			return tmuxconn.UsageError("daemon run requires --slack-bot-token/--slack-app-token, TMUXCONN_SLACK_BOT_TOKEN/TMUXCONN_SLACK_APP_TOKEN, or [daemon.slack].bot_token/[daemon.slack].app_token in config")

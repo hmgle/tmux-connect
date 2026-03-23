@@ -81,6 +81,10 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 		lines = append(lines, `Use slash commands such as "/panes" or "/follow on" for explicit actions, and use "/send <text>" when the text itself starts with "/".`)
 		lines = append(lines, `If WhatsApp self-chat mode is enabled, plain text is disabled to avoid reply loops, so use explicit slash commands such as "/send <text>" or "/enter <text>".`)
 		lines = append(lines, `When the bot asks for more input, reply in the same chat. For pane selection prompts, replying with "1" or "2" is supported.`)
+	case platform == "feishu":
+		lines = append(lines, `In Feishu private chats, plain text targets the current pane and may execute immediately when execute mode is enabled.`)
+		lines = append(lines, `In Feishu groups, mention the bot with a command such as "@bot panes". Plain text without @bot is ignored.`)
+		lines = append(lines, `Use "/send <text>" when the text itself starts with "/". Static cards are used for help and pane selection prompts.`)
 	default:
 		lines = append(lines, fmt.Sprintf("Plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))

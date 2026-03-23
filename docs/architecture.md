@@ -57,6 +57,12 @@ The core design choice is that tmux remains the source of truth for pane identit
 - Slack Socket Mode client wrapper
 - outbound Slack message and image upload operations
 
+### `internal/feishu`
+
+- Feishu Open Platform client wrapper using the official Go SDK
+- websocket event delivery for inbound bot messages without a public callback URL
+- outbound text, image, and static card send operations
+
 ### `internal/discord`
 
 - Discord gateway client wrapper using `discordgo`
@@ -86,7 +92,7 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 1. `tmux-connect daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
-3. The platform connector starts: Telegram drains pending updates and enters `getUpdates` long polling; Slack opens a Socket Mode connection; Discord opens a gateway connection and registers slash commands; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
+3. The platform connector starts: Telegram drains pending updates and enters `getUpdates` long polling; Feishu opens a websocket event stream; Slack opens a Socket Mode connection; Discord opens a gateway connection and registers slash commands; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
 4. Incoming platform messages are parsed into commands.
 5. Commands are routed to the current pane or an explicit pane target.
 6. Replies are sent back through the originating platform.

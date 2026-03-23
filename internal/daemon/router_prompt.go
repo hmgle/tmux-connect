@@ -38,6 +38,9 @@ func (r *Router) promptForPaneCommand(ctx context.Context, message IncomingMessa
 	if isWhatsAppChat(message.Chat) {
 		return r.promptForWhatsAppPaneChoice(ctx, message, command)
 	}
+	if isFeishuChat(message.Chat) && (command == "select" || command == "unmanage") {
+		return r.promptForFeishuPaneChoice(ctx, message, command)
+	}
 	return r.promptForCommandInput(ctx, message, command)
 }
 
@@ -117,4 +120,35 @@ func (r *Router) helpText(chat ChatRef) string {
 
 func isWhatsAppChat(chat ChatRef) bool {
 	return strings.EqualFold(strings.TrimSpace(chat.Platform), "whatsapp")
+}
+
+func isFeishuChat(chat ChatRef) bool {
+	return strings.EqualFold(strings.TrimSpace(chat.Platform), "feishu")
+}
+
+func isFeishuDirectMessage(message IncomingMessage) bool {
+	return isFeishuChat(message.Chat) && strings.EqualFold(strings.TrimSpace(message.ChatType), "p2p")
+}
+
+func (r *Router) promptForFeishuPaneChoice(ctx context.Context, message IncomingMessage, command string) error {
+	if err := r.registry.Refresh(ctx); err != nil {
+		return r.replyBus.Reply(ctx, message.Chat, "", "error", fmt.Sprintf("list panes failed: %v", err))
+	}
+	records := r.registry.All()
+	if len(records) == 0 {
+		return r.replyBus.Reply(ctx, message.Chat, "", "panes", "No managed panes.")
+	}
+	options := make([]string, 0, len(records))
+	for _, record := range records {
+		options = append(options, record.Info.Target.PaneKey())
+	}
+	r.setPending(message.pendingKey(), pendingCommand{
+		Command: command,
+		Options: options,
+	})
+	summary := "Reply with a pane number or pane id."
+	if command == "unmanage" {
+		summary = "Reply with a pane number or pane id to stop managing it."
+	}
+	return r.replyBus.ReplyCard(ctx, message.Chat, "", "prompt", summary, buildFeishuPaneChoiceCard(command, records))
 }

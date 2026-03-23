@@ -56,6 +56,7 @@ type SendOptions struct {
 	ReplyToSenderID  string
 	ThreadID         string
 	ReplyMarkup      any
+	Card             any
 	Format           MessageFormat
 	Embed            *EmbedData
 	InteractionID    string

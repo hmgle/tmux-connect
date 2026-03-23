@@ -192,6 +192,63 @@ func TestParseConfigEnvOverridesFile(t *testing.T) {
 	}
 }
 
+func TestParseConfigReadsFeishuDefaults(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseConfigWithFile([]string{"--platform", "feishu", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Feishu: config.Feishu{
+			AppID:     stringPtr("cli_xxx"),
+			AppSecret: stringPtr("secret_xxx"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.FeishuAppID != "cli_xxx" {
+		t.Fatalf("FeishuAppID = %q, want cli_xxx", cfg.FeishuAppID)
+	}
+	if cfg.FeishuAppSecret != "secret_xxx" {
+		t.Fatalf("FeishuAppSecret = %q, want secret_xxx", cfg.FeishuAppSecret)
+	}
+}
+
+func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
+	t.Setenv("TMUXCONN_FEISHU_APP_ID", "cli_env")
+	t.Setenv("TMUXCONN_FEISHU_APP_SECRET", "secret_env")
+
+	cfg, err := parseConfigWithFile([]string{"--platform", "feishu", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Feishu: config.Feishu{
+			AppID:     stringPtr("cli_file"),
+			AppSecret: stringPtr("secret_file"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.FeishuAppID != "cli_env" {
+		t.Fatalf("FeishuAppID = %q, want cli_env", cfg.FeishuAppID)
+	}
+	if cfg.FeishuAppSecret != "secret_env" {
+		t.Fatalf("FeishuAppSecret = %q, want secret_env", cfg.FeishuAppSecret)
+	}
+}
+
+func TestParseConfigRequiresFeishuCredentialsForRun(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseConfig([]string{
+		"--platform", "feishu",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+		"--feishu-app-id", "cli_xxx",
+	}, &bytes.Buffer{}, true)
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "feishu-app-id") && !strings.Contains(err.Error(), "TMUXCONN_FEISHU_APP_ID") {
+		t.Fatalf("parseConfig() error = %q, want feishu credential guidance", err)
+	}
+}
+
 func TestParseConfigFlagsOverrideFile(t *testing.T) {
 	t.Parallel()
 

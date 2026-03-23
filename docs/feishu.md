@@ -1,0 +1,75 @@
+# Feishu
+
+`tmux-connect` can run as a Feishu bot over the official websocket event stream, so the first stage does not require a public callback URL.
+
+## What v1 supports
+
+- inbound bot messages over Feishu websocket long connection
+- App ID + App Secret authentication
+- private chats and group chats
+- group commands only when the bot is mentioned
+- plain-text relay in private chats
+- `/snapshot` image delivery
+- static cards for `/help` and pane-selection prompts
+- follow mode as new text messages instead of in-place message updates
+
+## What v1 does not support
+
+- interactive card callbacks or buttons
+- message editing for follow output
+- webhook callback mode
+
+## Config
+
+```toml
+[daemon]
+platform = "feishu"
+db = "/home/user/.tmux-connect/tmux-connect.db"
+allow_chats = ["feishu:oc_xxx"]
+
+[daemon.feishu]
+app_id = "cli_xxx"
+app_secret = "secret_xxx"
+```
+
+Or use environment variables:
+
+```bash
+export TMUXCONN_PLATFORM=feishu
+export TMUXCONN_FEISHU_APP_ID=cli_xxx
+export TMUXCONN_FEISHU_APP_SECRET=secret_xxx
+```
+
+## Run
+
+```bash
+./tmux-connect daemon run \
+  --platform feishu \
+  --feishu-app-id "$TMUXCONN_FEISHU_APP_ID" \
+  --feishu-app-secret "$TMUXCONN_FEISHU_APP_SECRET" \
+  --db ~/.tmux-connect/tmux-connect.db
+```
+
+## Chat behavior
+
+- In private chats, plain text targets the current pane. With `--plain-text-mode execute`, plain text becomes input + Enter.
+- In groups, only `@bot` commands are handled. Plain text without `@bot` is ignored.
+- Use `/send <text>` when the text itself starts with `/`.
+- When no pane is selected, the bot replies with a static card listing available panes. Reply with a pane number like `1` or a pane id like `%5`.
+
+## Commands
+
+- `/help`
+- `/panes`
+- `/select <pane>`
+- `/current`
+- `/snapshot [lines] [image|text]`
+- `/send <text>`
+- `/enter [text]`
+- `/keys <key...>`
+- `/ctrlc`
+- `/follow on [interval]|off`
+
+## Permissions and event subscription
+
+The Feishu app needs bot capability plus the event subscription for `im.message.receive_v1`. In groups, the exact events you receive still depend on the Feishu permissions you grant to the app.

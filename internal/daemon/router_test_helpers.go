@@ -22,6 +22,7 @@ type fakeMessenger struct {
 
 type sentMessage struct {
 	Text             string
+	Card             any
 	Caption          string
 	FileName         string
 	Photo            []byte
@@ -54,6 +55,7 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, o
 	}
 	m.messages = append(m.messages, sentMessage{
 		Text:             text,
+		Card:             opts.Card,
 		Embed:            opts.Embed,
 		ParseMode:        parseMode,
 		ReplyToMessageID: replyTo,
@@ -93,6 +95,9 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 	if m.Platform() == "slack" {
 		return decorateSlackMessage(kind, text, opts)
 	}
+	if m.Platform() == "feishu" {
+		return decorateFeishuMessage(kind, text, opts)
+	}
 	if m.Platform() == "discord" {
 		return decorateDiscordMessage(kind, text, opts)
 	}
@@ -108,6 +113,9 @@ func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromp
 	}
 	if m.Platform() == "whatsapp" {
 		return SendOptions{ReplyToMessageID: message.MessageID, ReplyToSenderID: message.Chat.ChatID}
+	}
+	if m.Platform() == "feishu" {
+		return SendOptions{}
 	}
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
@@ -306,6 +314,10 @@ func slackChat(id string) ChatRef {
 	return ChatRef{Platform: "slack", ChatID: id}
 }
 
+func feishuChat(id string) ChatRef {
+	return ChatRef{Platform: "feishu", ChatID: id}
+}
+
 func discordChat(id string) ChatRef {
 	return ChatRef{Platform: "discord", ChatID: id}
 }
@@ -357,6 +369,25 @@ func discordMessage(chatID string, messageID string, text string) IncomingMessag
 		Text:         text,
 		ThreadID:     chatID,
 		PendingScope: chatID,
+	}
+}
+
+func feishuPrivateMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      feishuChat(chatID),
+		MessageID: messageID,
+		Text:      text,
+		ChatType:  "p2p",
+	}
+}
+
+func feishuGroupMentionMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:         feishuChat(chatID),
+		MessageID:    messageID,
+		Text:         text,
+		ChatType:     "group",
+		IsAppMention: true,
 	}
 }
 

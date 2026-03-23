@@ -12,6 +12,7 @@
 ## Platform Guides
 
 - [telegram.md](./telegram.md) — Telegram setup, commands, and operations
+- [feishu.md](./feishu.md) — Feishu websocket bot setup, commands, and DM/group behavior
 - [slack.md](./slack.md) — Slack setup, commands, and operations
 - [discord.md](./discord.md) — Discord setup, slash commands, and channel/DM behavior
 - [whatsapp.md](./whatsapp.md) — WhatsApp multi-device setup, QR login, and private-chat behavior

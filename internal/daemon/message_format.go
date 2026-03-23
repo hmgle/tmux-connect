@@ -35,6 +35,10 @@ func decorateWhatsAppMessage(kind string, text string, opts SendOptions) (string
 	}
 }
 
+func decorateFeishuMessage(_ string, text string, opts SendOptions) (string, SendOptions) {
+	return strings.TrimSpace(text), opts
+}
+
 func isPreformattedHTML(kind string) bool {
 	return kind == "panes"
 }

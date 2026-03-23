@@ -42,6 +42,7 @@ type Daemon struct {
 	FollowMinInterval    *string   `toml:"follow_min_interval"`
 	FollowDebug          *bool     `toml:"follow_debug"`
 	Telegram             Telegram  `toml:"telegram"`
+	Feishu               Feishu    `toml:"feishu"`
 	Slack                Slack     `toml:"slack"`
 	Discord              Discord   `toml:"discord"`
 	WhatsApp             WhatsApp  `toml:"whatsapp"`
@@ -53,6 +54,11 @@ type Telegram struct {
 	SnapshotTheme    *string  `toml:"snapshot_theme"`
 	SnapshotFontSize *float64 `toml:"snapshot_font_size"`
 	SnapshotFontFile *string  `toml:"snapshot_font_file"`
+}
+
+type Feishu struct {
+	AppID     *string `toml:"app_id"`
+	AppSecret *string `toml:"app_secret"`
 }
 
 type Slack struct {

@@ -12,6 +12,8 @@ import (
 type Config struct {
 	Platform              string
 	TelegramToken         string
+	FeishuAppID           string
+	FeishuAppSecret       string
 	SlackBotToken         string
 	SlackAppToken         string
 	SlackCommandPrefix    string
@@ -142,6 +144,8 @@ func newPlatformAdapter(cfg Config, stderr io.Writer, store *Store) (platformAda
 	switch cfg.Platform {
 	case "telegram":
 		return newTelegramAdapter(cfg, stderr), nil
+	case "feishu":
+		return newFeishuAdapter(cfg, stderr)
 	case "slack":
 		return newSlackAdapter(cfg, stderr, store)
 	case "discord":

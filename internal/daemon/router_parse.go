@@ -22,6 +22,18 @@ func (r *Router) parseCommand(message IncomingMessage, text string) (string, str
 		}
 		return "", text
 	}
+	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "feishu") {
+		if !isFeishuDirectMessage(message) && !message.IsAppMention {
+			return "", ""
+		}
+		if strings.TrimSpace(text) == "" && message.IsAppMention {
+			return "help", ""
+		}
+		if message.IsAppMention {
+			return parseExplicitCommand(text)
+		}
+		return "", text
+	}
 	return "", text
 }
 

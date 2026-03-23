@@ -30,6 +30,10 @@ snapshot_theme = "dark"
 snapshot_font_size = 14
 snapshot_font_file = "/path/to/font.ttf"
 
+[daemon.feishu]
+app_id = "cli_xxx"
+app_secret = "secret_xxx"
+
 [daemon.slack]
 bot_token = "xoxb-..."
 app_token = "xapp-..."
@@ -49,9 +53,9 @@ auto_mark_read = true
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--platform` | required | `telegram`, `slack`, `discord`, or `whatsapp` |
+| `--platform` | required | `telegram`, `feishu`, `slack`, `discord`, or `whatsapp` |
 | `--db PATH` | required | SQLite database path |
-| `--allow-chat ID` | — | Restrict access to specific chat IDs (repeatable) |
+| `--allow-chat ID` | — | Restrict access to specific chat IDs (repeatable, preferably platform-scoped like `feishu:oc_xxx`) |
 | `--poll-timeout` | `20s` | Long-poll timeout |
 | `--snapshot-lines` | `120` | Default snapshot line count |
 | `--plain-text-mode` | `type` | `type` (raw input) or `execute` (input + Enter) |
@@ -72,6 +76,13 @@ auto_mark_read = true
 | `--telegram-snapshot-font-size` | `14` | Font size for snapshot images |
 | `--telegram-snapshot-font-file` | built-in gomono | Custom font path |
 | `--telegram-api-base` | — | Custom Telegram API base URL |
+
+### Feishu-specific
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--feishu-app-id` | — | Feishu app ID (or `TMUXCONN_FEISHU_APP_ID`) |
+| `--feishu-app-secret` | — | Feishu app secret (or `TMUXCONN_FEISHU_APP_SECRET`) |
 
 ### Slack-specific
 
@@ -113,6 +124,9 @@ Use `/send <text>` when you want raw input even with execute mode enabled.
 # Validate token, SQLite store, and tmux access
 ./tmux-connect daemon doctor --platform telegram --telegram-token "$TMUXCONN_TELEGRAM_TOKEN"
 
+# Run with Feishu websocket event delivery
+./tmux-connect daemon run --platform feishu --feishu-app-id "$TMUXCONN_FEISHU_APP_ID" --feishu-app-secret "$TMUXCONN_FEISHU_APP_SECRET"
+
 # Show SQLite record counts and managed pane count
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
 ```
@@ -138,6 +152,7 @@ current pane selection, sessions, and message links. Schema is versioned via
 For platform-specific setup, commands, and operational notes:
 
 - [Telegram](./telegram.md)
+- [Feishu](./feishu.md)
 - [Slack](./slack.md)
 - [Discord](./discord.md)
 - [WhatsApp](./whatsapp.md)
