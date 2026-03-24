@@ -136,6 +136,36 @@ pwd
 3. 先直接发送命令文本，再补一个 `/enter`，或者直接用 `/enter <命令>`
 4. 如果 daemon 刚重启过，重新执行一次 `/follow on`
 
+### `plain_text_mode = "execute"` 下 Claude Code 没有立即执行
+
+如果目标 pane 跑的是 Claude Code，症状通常是：
+
+- app 里直接发送裸文本后，内容已经出现在 Claude 输入框
+- 但没有真正提交执行
+- 需要再补发一次 `/enter`
+
+这通常不是配置没生效，而是终端输入语义不同：
+
+- tmux 的 bracketed paste 会把这次输入标记成“粘贴”
+- Claude Code 会区分“粘贴内容”和“正常键入”
+- 因此“发送文本并回车”在 Claude pane 里可能表现成“文本已出现，但没有按预期提交”
+
+当前版本会自动兼容这个场景：
+
+- 若 pane metadata 的 `agent` 是 `claude`，会自动改用 plain paste
+- 若 metadata 还没标记，但 `pane_current_command` 是 `claude`，也会自动回退到 plain paste
+
+建议做法：
+
+```bash
+./tmux-connect attach --pane %5 --agent claude
+./tmux-connect inspect --pane %5
+```
+
+优先推荐显式 `attach --agent claude`，这样行为更稳定，也更容易排查。
+
+如果 `inspect` 里 `agent` 不是 `claude`，但这个 pane 确实正在运行 `claude` 命令，当前版本仍会根据 `current_cmd=claude` 自动兼容。
+
 ### daemon 重启后 follow 丢失
 
 这是当前设计行为，不是 bug。

@@ -24,20 +24,21 @@ func (s *Service) SendKeysManaged(ctx context.Context, ref string, keys ...strin
 }
 
 func (s *Service) send(ctx context.Context, ref string, text string, sendEnter bool, managed bool) error {
-	pane, err := s.ResolvePane(ctx, ref)
+	state, err := s.ResolvePaneState(ctx, ref)
 	if err != nil {
 		return err
 	}
-	if err := s.tmux.InjectInput(ctx, pane.Target, []byte(text)); err != nil {
-		return TmuxError("send input to %s: %v", pane.Target.PaneKey(), err)
+	target := state.Info.Target
+	if err := s.tmux.InjectInputWithMode(ctx, target, []byte(text), inputPasteMode(state)); err != nil {
+		return TmuxError("send input to %s: %v", target.PaneKey(), err)
 	}
 	if sendEnter {
-		if err := s.tmux.SendKeys(ctx, pane.Target, "Enter"); err != nil {
-			return TmuxError("send enter to %s: %v", pane.Target.PaneKey(), err)
+		if err := s.tmux.SendKeys(ctx, target, "Enter"); err != nil {
+			return TmuxError("send enter to %s: %v", target.PaneKey(), err)
 		}
 	}
-	if err := s.touchPaneMetadata(ctx, pane.Target, managed); err != nil {
-		return TmuxError("update metadata for %s: %v", pane.Target.PaneKey(), err)
+	if err := s.touchPaneMetadata(ctx, target, managed); err != nil {
+		return TmuxError("update metadata for %s: %v", target.PaneKey(), err)
 	}
 	return nil
 }
@@ -98,4 +99,14 @@ func (s *Service) touchPaneMetadata(ctx context.Context, target tmux.Target, man
 		return s.tmux.TouchMetadataManaged(ctx, target)
 	}
 	return s.tmux.TouchMetadata(ctx, target)
+}
+
+func inputPasteMode(state tmux.PaneState) tmux.PasteMode {
+	if state.Metadata.Agent == tmux.AgentClaude {
+		return tmux.PasteModePlain
+	}
+	if strings.EqualFold(strings.TrimSpace(state.Info.CurrentCmd), string(tmux.AgentClaude)) {
+		return tmux.PasteModePlain
+	}
+	return tmux.PasteModeBracketed
 }

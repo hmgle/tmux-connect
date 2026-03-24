@@ -23,6 +23,21 @@ func (s *Service) ResolvePane(ctx context.Context, ref string) (tmux.PaneInfo, e
 	return pane, nil
 }
 
+func (s *Service) ResolvePaneState(ctx context.Context, ref string) (tmux.PaneState, error) {
+	target, err := tmux.ParseTarget(ref, s.tmux.SocketName())
+	if err != nil {
+		return tmux.PaneState{}, UsageError("%v", err)
+	}
+	if !target.Matches(tmux.Target{Socket: s.tmux.SocketName(), PaneID: target.PaneID}) {
+		return tmux.PaneState{}, NotFoundError("pane not found: %s", ref)
+	}
+	state, err := s.tmux.GetPaneState(ctx, target)
+	if err != nil {
+		return tmux.PaneState{}, classifyPaneLookupError("resolve pane", ref, err)
+	}
+	return state, nil
+}
+
 func (s *Service) parseTarget(ref string) (tmux.Target, error) {
 	target, err := tmux.ParseTarget(ref, s.tmux.SocketName())
 	if err != nil {

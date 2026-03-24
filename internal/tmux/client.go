@@ -51,6 +51,13 @@ type Client struct {
 
 var injectBufferSeq atomic.Uint64
 
+type PasteMode string
+
+const (
+	PasteModeBracketed PasteMode = "bracketed"
+	PasteModePlain     PasteMode = "plain"
+)
+
 func NewClient(runner Runner, socket string) *Client {
 	return &Client{runner: runner, socket: socket}
 }
@@ -60,6 +67,10 @@ func (c *Client) SocketName() string {
 }
 
 func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) error {
+	return c.InjectInputWithMode(ctx, target, data, PasteModeBracketed)
+}
+
+func (c *Client) InjectInputWithMode(ctx context.Context, target Target, data []byte, mode PasteMode) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -67,7 +78,12 @@ func (c *Client) InjectInput(ctx context.Context, target Target, data []byte) er
 	if _, err := c.run(ctx, data, "load-buffer", "-b", bufferName, "-"); err != nil {
 		return err
 	}
-	_, err := c.run(ctx, nil, "paste-buffer", "-b", bufferName, "-d", "-p", "-t", target.PaneID)
+	args := []string{"paste-buffer", "-b", bufferName, "-d"}
+	if mode != PasteModePlain {
+		args = append(args, "-p")
+	}
+	args = append(args, "-t", target.PaneID)
+	_, err := c.run(ctx, nil, args...)
 	return err
 }
 
