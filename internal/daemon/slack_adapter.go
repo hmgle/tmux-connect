@@ -51,10 +51,7 @@ func newSlackAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapte
 func (a *slackAdapter) Platform() string { return "slack" }
 
 func (a *slackAdapter) SendMessage(ctx context.Context, chat ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
-	threadID := strings.TrimSpace(opts.ThreadID)
-	if threadID == "" {
-		threadID = strings.TrimSpace(opts.ReplyToMessageID)
-	}
+	threadID := threadReplyTarget(opts)
 	ts, err := a.client.PostMessage(ctx, chat.ChatID, text, threadID)
 	if err != nil {
 		return OutboundMessage{}, err
@@ -66,10 +63,7 @@ func (a *slackAdapter) SendMessage(ctx context.Context, chat ChatRef, text strin
 }
 
 func (a *slackAdapter) SendImage(ctx context.Context, chat ChatRef, fileName string, data []byte, caption string, opts SendOptions) (OutboundMessage, error) {
-	threadID := strings.TrimSpace(opts.ThreadID)
-	if threadID == "" {
-		threadID = strings.TrimSpace(opts.ReplyToMessageID)
-	}
+	threadID := threadReplyTarget(opts)
 	id, err := a.client.UploadImage(ctx, chat.ChatID, threadID, fileName, data, caption)
 	if err != nil {
 		return OutboundMessage{}, err

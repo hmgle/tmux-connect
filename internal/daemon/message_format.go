@@ -18,21 +18,11 @@ func decorateTelegramMessage(kind string, text string, opts SendOptions) (string
 }
 
 func decorateSlackMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
-	switch strings.TrimSpace(kind) {
-	case "panes", "snapshot", "follow-initial", "follow-output":
-		return renderSlackCodeBlock(text), opts
-	default:
-		return text, opts
-	}
+	return decorateCodeBlockMessage(kind, text, opts)
 }
 
 func decorateWhatsAppMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
-	switch strings.TrimSpace(kind) {
-	case "panes", "snapshot", "follow-initial", "follow-output":
-		return renderSlackCodeBlock(text), opts
-	default:
-		return text, opts
-	}
+	return decorateCodeBlockMessage(kind, text, opts)
 }
 
 func decorateFeishuMessage(_ string, text string, opts SendOptions) (string, SendOptions) {

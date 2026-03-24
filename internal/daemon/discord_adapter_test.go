@@ -123,6 +123,26 @@ func TestDiscordAdapterSendMessageUsesInteractionResponse(t *testing.T) {
 	}
 }
 
+func TestDiscordAdapterSendMessageFallsBackToReplyTargetThread(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeDiscordGatewayClient{}
+	adapter := &discordAdapter{client: client, stderr: io.Discard, commandPrefix: "tmux:"}
+
+	_, err := adapter.SendMessage(context.Background(), ChatRef{Platform: "discord", ChatID: "C123"}, "hello", SendOptions{
+		ReplyToMessageID: "reply-1",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if len(client.threadMessages) != 1 {
+		t.Fatalf("threadMessages = %#v, want one call", client.threadMessages)
+	}
+	if client.threadMessages[0].threadID != "reply-1" {
+		t.Fatalf("threadID = %q, want reply-1", client.threadMessages[0].threadID)
+	}
+}
+
 func TestDiscordHandleMessageCreateSupportsGuildPrefixAndDMPlainText(t *testing.T) {
 	t.Parallel()
 

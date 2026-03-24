@@ -58,6 +58,18 @@ func TestDecorateDiscordMessageUsesEmbedForSnapshot(t *testing.T) {
 	}
 }
 
+func TestDecorateSlackMessageUsesCodeBlockForSnapshot(t *testing.T) {
+	t.Parallel()
+
+	text, opts := decorateSlackMessage("snapshot", "line 1\nline 2", SendOptions{})
+	if text != "```line 1\nline 2```" {
+		t.Fatalf("text = %q, want Slack code block", text)
+	}
+	if opts.Format != "" {
+		t.Fatalf("format = %q, want plain format", opts.Format)
+	}
+}
+
 func TestDecorateWhatsAppMessageUsesCodeBlockForSnapshot(t *testing.T) {
 	t.Parallel()
 
