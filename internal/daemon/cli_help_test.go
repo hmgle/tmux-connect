@@ -2,11 +2,14 @@ package daemon
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/hmgle/tmux-connect/internal/config"
 )
 
 func TestAvailablePlatformNames(t *testing.T) {
@@ -82,5 +85,29 @@ func TestParseConfigRejectsUnknownPlatformWithCompiledPlatformList(t *testing.T)
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("parseConfig() error = %q, want %q", err, want)
 		}
+	}
+}
+
+func TestRunCLIWithConfigHelpReturnsFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	for _, command := range []string{"run", "doctor", "status"} {
+		command := command
+		t.Run(command, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			err := RunCLIWithConfig(t.Context(), &stdout, &stderr, nil, config.Daemon{}, []string{command, "--help"})
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("RunCLIWithConfig(%q, --help) error = %v, want flag.ErrHelp", command, err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), "Usage of daemon:") {
+				t.Fatalf("stderr = %q, want help output", stderr.String())
+			}
+		})
 	}
 }

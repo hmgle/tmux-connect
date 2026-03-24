@@ -2,6 +2,7 @@ package tmuxconn
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 )
 
@@ -47,9 +48,16 @@ func ExitCode(err error) int {
 	if err == nil {
 		return ExitOK
 	}
+	if IsHelpError(err) {
+		return ExitOK
+	}
 	var cliErr *CLIError
 	if errors.As(err, &cliErr) {
 		return cliErr.Code
 	}
 	return 1
+}
+
+func IsHelpError(err error) bool {
+	return errors.Is(err, flag.ErrHelp)
 }

@@ -1,6 +1,7 @@
 package tmuxconn
 
 import (
+	"errors"
 	"flag"
 	"strings"
 )
@@ -21,6 +22,9 @@ func (a *App) newCommandFlags(name string) commandFlags {
 
 func (c commandFlags) parse(args []string) (bool, error) {
 	if err := c.fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return false, err
+		}
 		return false, UsageError("%v", err)
 	}
 	return *c.jsonOut, nil

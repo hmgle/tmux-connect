@@ -44,6 +44,9 @@ func main() {
 	app := tmuxconn.NewApp(os.Stdout, os.Stderr, service)
 	if len(args) > 0 && args[0] == "serve" {
 		if err := runServe(ctx, os.Stdout, os.Stderr, service, loadedConfig.Config.Serve, args[1:]); err != nil {
+			if tmuxconn.IsHelpError(err) {
+				return
+			}
 			code := tmuxconn.ExitCode(err)
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(code)
@@ -52,6 +55,9 @@ func main() {
 	}
 	if len(args) > 0 && args[0] == "daemon" {
 		if err := daemon.RunCLIWithConfig(ctx, os.Stdout, os.Stderr, service, loadedConfig.Config.Daemon, args[1:]); err != nil {
+			if tmuxconn.IsHelpError(err) {
+				return
+			}
 			code := tmuxconn.ExitCode(err)
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(code)
@@ -59,6 +65,9 @@ func main() {
 		return
 	}
 	if err := app.Run(ctx, args); err != nil {
+		if tmuxconn.IsHelpError(err) {
+			return
+		}
 		code := tmuxconn.ExitCode(err)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(code)
@@ -89,6 +98,9 @@ func parseServeArgs(stderr io.Writer, fileCfg config.Serve, args []string) (stri
 	}
 	listen := fs.String("listen", listenDefault, "HTTP listen address")
 	if err := fs.Parse(args); err != nil {
+		if tmuxconn.IsHelpError(err) {
+			return "", err
+		}
 		return "", tmuxconn.UsageError("%v", err)
 	}
 	if strings.TrimSpace(*listen) == "" {

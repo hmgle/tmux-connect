@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"flag"
 	"io"
 	"path/filepath"
@@ -27,6 +28,9 @@ func parseConfigWithFile(args []string, stderr io.Writer, requireRun bool, fileC
 	values := bindConfigFlags(fs, &cfg, defaults)
 
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return Config{}, err
+		}
 		return Config{}, tmuxconn.UsageError("%v", err)
 	}
 	if err := applyConfigValues(fs, &cfg, values, fileCfg); err != nil {

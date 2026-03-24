@@ -3,6 +3,7 @@ package tmuxconn
 import (
 	"context"
 	"errors"
+	"flag"
 	"io"
 	"strings"
 	"testing"
@@ -68,6 +69,14 @@ func TestResolvePanePreservesTmuxFailures(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to connect to tmux server") {
 		t.Fatalf("error = %v, want tmux failure details", err)
+	}
+}
+
+func TestExitCodeTreatsHelpAsSuccess(t *testing.T) {
+	t.Parallel()
+
+	if ExitCode(flag.ErrHelp) != ExitOK {
+		t.Fatalf("ExitCode(flag.ErrHelp) = %d, want %d", ExitCode(flag.ErrHelp), ExitOK)
 	}
 }
 

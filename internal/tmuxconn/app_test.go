@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"strings"
 	"testing"
 	"time"
@@ -225,6 +227,23 @@ func TestAppRunSendRequiresText(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestAppRunListHelpReturnsFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	app, stdout, stderr := newTestApp(t, nil)
+
+	err := app.Run(context.Background(), []string{"list", "--help"})
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("Run(list --help) error = %v, want flag.ErrHelp", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "Usage of list:") {
+		t.Fatalf("stderr = %q, want help output", stderr.String())
 	}
 }
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"flag"
 	"testing"
 
 	"github.com/hmgle/tmux-connect/internal/config"
@@ -73,6 +75,19 @@ func TestParseServeArgsFlagOverridesConfigListen(t *testing.T) {
 	}
 	if listen != "127.0.0.1:9191" {
 		t.Fatalf("listen = %q, want 127.0.0.1:9191", listen)
+	}
+}
+
+func TestParseServeArgsHelpReturnsFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	_, err := parseServeArgs(&stderr, config.Serve{}, []string{"--help"})
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("parseServeArgs(--help) error = %v, want flag.ErrHelp", err)
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("Usage of serve:")) {
+		t.Fatalf("stderr = %q, want help output", stderr.String())
 	}
 }
 
