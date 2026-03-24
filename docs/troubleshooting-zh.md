@@ -210,4 +210,5 @@ pwd
 - [slack.md](./slack.md) — Slack 配置和命令说明
 - [discord.md](./discord.md) — Discord 配置和命令说明
 - [whatsapp.md](./whatsapp.md) — WhatsApp 配置和命令说明
+- [weixin.md](./weixin.md) — 微信 iLink 配置和命令说明
 - [architecture.md](./architecture.md) — 当前架构与恢复模型

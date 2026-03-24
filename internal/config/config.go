@@ -46,6 +46,7 @@ type Daemon struct {
 	Slack                Slack     `toml:"slack"`
 	Discord              Discord   `toml:"discord"`
 	WhatsApp             WhatsApp  `toml:"whatsapp"`
+	Weixin               Weixin    `toml:"weixin"`
 }
 
 type Telegram struct {
@@ -80,6 +81,13 @@ type WhatsApp struct {
 	DeviceName    *string `toml:"device_name"`
 	AutoMarkRead  *bool   `toml:"auto_mark_read"`
 	AllowSelfChat *bool   `toml:"allow_self_chat"`
+}
+
+type Weixin struct {
+	Token      *string `toml:"token"`
+	BaseURL    *string `toml:"base_url"`
+	CDNBaseURL *string `toml:"cdn_base_url"`
+	RouteTag   *string `toml:"route_tag"`
 }
 
 type Loaded struct {

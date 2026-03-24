@@ -75,6 +75,12 @@ The core design choice is that tmux remains the source of truth for pane identit
 - local session database for paired device state
 - QR-based first-time login and outbound text/image send operations
 
+### `internal/weixin`
+
+- Weixin iLink HTTP client wrapper using long-poll `getupdates`
+- SQLite-backed cursor and `context_token` persistence inside the daemon store
+- outbound text and image send operations for replies and snapshots
+
 ### `internal/termrender`
 
 - render terminal snapshots as PNG images for Telegram delivery
@@ -92,7 +98,7 @@ The core design choice is that tmux remains the source of truth for pane identit
 
 1. `tmux-connect daemon run` starts with a connector config and SQLite path.
 2. The daemon opens the SQLite store and refreshes pane inventory from tmux.
-3. The platform connector starts: Telegram drains pending updates and enters `getUpdates` long polling; Feishu opens a websocket event stream; Slack opens a Socket Mode connection; Discord opens a gateway connection and registers slash commands; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing.
+3. The platform connector starts: Telegram drains pending updates and enters `getUpdates` long polling; Feishu opens a websocket event stream; Slack opens a Socket Mode connection; Discord opens a gateway connection and registers slash commands; WhatsApp connects with a persisted multi-device session or prints a QR code for first-time pairing; Weixin starts iLink `getupdates` long polling with a persisted cursor.
 4. Incoming platform messages are parsed into commands.
 5. Commands are routed to the current pane or an explicit pane target.
 6. Replies are sent back through the originating platform.

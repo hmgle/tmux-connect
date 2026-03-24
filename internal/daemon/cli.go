@@ -26,6 +26,10 @@ type Config struct {
 	WhatsAppDeviceName    string
 	WhatsAppAutoMarkRead  bool
 	WhatsAppAllowSelfChat bool
+	WeixinToken           string
+	WeixinBaseURL         string
+	WeixinCDNBaseURL      string
+	WeixinRouteTag        string
 	DBPath                string
 	AllowChats            []string
 	PollTimeout           time.Duration

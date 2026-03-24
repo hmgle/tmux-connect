@@ -1,7 +1,7 @@
 APP := tmux-connect
 CMD := ./cmd/tmux-connect
 
-ALL_PLATFORMS := telegram feishu slack discord whatsapp
+ALL_PLATFORMS := telegram feishu slack discord whatsapp weixin
 COMMA := ,
 
 _EXCLUDE_TAGS :=

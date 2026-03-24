@@ -63,6 +63,12 @@ command_prefix = "tmux:"
 session_db = "/home/user/.tmux-connect/whatsapp-device.db"
 device_name = "tmux-connect"
 auto_mark_read = true
+
+[daemon.weixin]
+token = "ilink-bearer-token"
+base_url = "https://ilinkai.weixin.qq.com"
+cdn_base_url = "https://novac2c.cdn.weixin.qq.com/c2c"
+route_tag = ""
 ```
 
 这里的示例特意写成 `plain_text_mode = "execute"`，这样裸文本会立即发送并回车。程序内建默认值仍然是 `type`；如果你只想输入、不想自动回车，就保留 `type`。
@@ -128,6 +134,15 @@ auto_mark_read = true
 | `--whatsapp-auto-mark-read` | `true` | 自动标记消息已读 |
 | `--whatsapp-allow-self-chat` | `false` | 启用实验性 self-chat 模式 |
 
+### Weixin 专用
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--weixin-token` | — | iLink bot bearer token（或环境变量 `TMUXCONN_WEIXIN_TOKEN`） |
+| `--weixin-base-url` | `https://ilinkai.weixin.qq.com` | iLink API 基础 URL |
+| `--weixin-cdn-base-url` | `https://novac2c.cdn.weixin.qq.com/c2c` | iLink CDN 基础 URL |
+| `--weixin-route-tag` | — | 可选 `SKRouteTag` 请求头 |
+
 ## 裸文本模式
 
 默认情况下，裸文本以 `type` 模式发送到当前 pane——只输入不回车。设置 `--plain-text-mode execute` 后，裸文本会变成"发送并回车"。
@@ -151,6 +166,9 @@ auto_mark_read = true
 
 # 显示 SQLite 记录数和受管 pane 数量
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+
+# 通过微信 iLink 运行
+./tmux-connect daemon run --platform weixin --weixin-token "$TMUXCONN_WEIXIN_TOKEN" --db ~/.tmux-connect/tmux-connect.db --allow-chat weixin:user@im.wechat
 ```
 
 ## 恢复模型
@@ -164,7 +182,7 @@ tmux 仍然是 pane 身份和管理元数据的事实来源。bridge 会通过 t
 - `@tmuxconn_created_by=manual-attach`
 - `@tmuxconn_last_activity_unix=<unix timestamp>`
 
-remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系、当前 pane 选择、session 和消息关联。Schema 通过 `PRAGMA user_version` 进行版本管理。
+remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系、当前 pane 选择、session、消息关联，以及像微信 iLink cursor、每个用户 `context_token` 这样的运行时状态。Schema 通过 `PRAGMA user_version` 进行版本管理。
 
 ## 平台指南
 
@@ -175,3 +193,4 @@ remote daemon 会把平台聊天状态保存在 SQLite 中，包括绑定关系�
 - [Slack](./slack.md)
 - [Discord](./discord.md)
 - [WhatsApp](./whatsapp.md)
+- [Weixin](./weixin.md)

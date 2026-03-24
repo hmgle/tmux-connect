@@ -16,6 +16,7 @@
 - [discord.md](./discord.md) — Discord 专项配置和命令说明
 - [discord-zh.md](./discord-zh.md) — Discord 接入详细指南（中文）
 - [whatsapp.md](./whatsapp.md) — WhatsApp 专项配置和命令说明
+- [weixin.md](./weixin.md) — 微信 iLink 专项配置和命令说明
 - [architecture.md](./architecture.md) — 当前系统架构与恢复模型
 - [troubleshooting-zh.md](./troubleshooting-zh.md) — 中文故障排查
 - [roadmap.md](./roadmap.md) — 后续路线图
@@ -28,7 +29,7 @@
 
 - 本地 CLI 查看和控制 pane
 - 本地 HTTP API 暴露同样的控制面
-- Telegram、飞书、Slack、Discord 或 WhatsApp 远程查看输出、发送文本、回车、中断、开启 follow
+- Telegram、飞书、Slack、Discord、WhatsApp 或微信 iLink 远程查看输出、发送文本、回车、中断、开启 follow
 
 ## 前置条件
 
@@ -36,7 +37,7 @@
 - `tmux`
 - 无需额外安装 `sqlite3` 命令行；daemon 使用内嵌 SQLite
 - 一个已经存在的 tmux pane
-- 对应平台的凭据或会话，例如 Telegram bot token、飞书 app ID/app secret、Slack bot/app token、Discord bot token，或已配对的 WhatsApp 设备
+- 对应平台的凭据或会话，例如 Telegram bot token、飞书 app ID/app secret、Slack bot/app token、Discord bot token、微信 iLink bearer token，或已配对的 WhatsApp 设备
 
 ## 五分钟上手
 

@@ -262,6 +262,74 @@ func TestParseConfigFeishuEnvOverridesFile(t *testing.T) {
 	}
 }
 
+func TestParseConfigReadsWeixinDefaults(t *testing.T) {
+	t.Parallel()
+	requirePlatformAvailable(t, "weixin")
+
+	cfg, err := parseConfigWithFile([]string{"--platform", "weixin", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Weixin: config.Weixin{
+			Token:      stringPtr("wx-token"),
+			BaseURL:    stringPtr("https://example.weixin.local"),
+			CDNBaseURL: stringPtr("https://cdn.weixin.local/c2c"),
+			RouteTag:   stringPtr("route-tag"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.WeixinToken != "wx-token" {
+		t.Fatalf("WeixinToken = %q, want wx-token", cfg.WeixinToken)
+	}
+	if cfg.WeixinBaseURL != "https://example.weixin.local" {
+		t.Fatalf("WeixinBaseURL = %q", cfg.WeixinBaseURL)
+	}
+	if cfg.WeixinCDNBaseURL != "https://cdn.weixin.local/c2c" {
+		t.Fatalf("WeixinCDNBaseURL = %q", cfg.WeixinCDNBaseURL)
+	}
+	if cfg.WeixinRouteTag != "route-tag" {
+		t.Fatalf("WeixinRouteTag = %q", cfg.WeixinRouteTag)
+	}
+}
+
+func TestParseConfigWeixinEnvOverridesFile(t *testing.T) {
+	requirePlatformAvailable(t, "weixin")
+	t.Setenv("TMUXCONN_WEIXIN_TOKEN", "env-token")
+	t.Setenv("TMUXCONN_WEIXIN_BASE_URL", "https://env.weixin.local")
+	t.Setenv("TMUXCONN_WEIXIN_CDN_BASE_URL", "https://env-cdn.weixin.local/c2c")
+	t.Setenv("TMUXCONN_WEIXIN_ROUTE_TAG", "env-route")
+
+	cfg, err := parseConfigWithFile([]string{"--platform", "weixin", "--db", filepath.Join(t.TempDir(), "tmuxconn.db")}, &bytes.Buffer{}, true, config.Daemon{
+		Weixin: config.Weixin{
+			Token:      stringPtr("file-token"),
+			BaseURL:    stringPtr("https://file.weixin.local"),
+			CDNBaseURL: stringPtr("https://file-cdn.weixin.local/c2c"),
+			RouteTag:   stringPtr("file-route"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseConfigWithFile() error = %v", err)
+	}
+	if cfg.WeixinToken != "env-token" || cfg.WeixinBaseURL != "https://env.weixin.local" || cfg.WeixinCDNBaseURL != "https://env-cdn.weixin.local/c2c" || cfg.WeixinRouteTag != "env-route" {
+		t.Fatalf("unexpected weixin cfg %#v", cfg)
+	}
+}
+
+func TestParseConfigWeixinRequiresTokenForRun(t *testing.T) {
+	t.Parallel()
+	requirePlatformAvailable(t, "weixin")
+
+	_, err := parseConfig([]string{
+		"--platform", "weixin",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	}, &bytes.Buffer{}, true)
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "--weixin-token") {
+		t.Fatalf("parseConfig() error = %q, want weixin token hint", err)
+	}
+}
+
 func TestParseConfigRequiresFeishuCredentialsForRun(t *testing.T) {
 	t.Parallel()
 	requirePlatformAvailable(t, "feishu")

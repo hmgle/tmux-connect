@@ -28,6 +28,10 @@ type daemonConfigDefaults struct {
 	whatsAppDeviceName    string
 	whatsAppAutoMarkRead  bool
 	whatsAppAllowSelfChat bool
+	weixinToken           string
+	weixinBaseURL         string
+	weixinCDNBaseURL      string
+	weixinRouteTag        string
 	dbPath                string
 	pollTimeout           time.Duration
 	snapshotLines         int
@@ -119,6 +123,10 @@ func resolveConfigDefaults(fileCfg config.Daemon) (daemonConfigDefaults, error) 
 	defaults.slackCommandPrefix = envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix))
 	defaults.discordToken = envOrDefault("TMUXCONN_DISCORD_TOKEN", stringValue(fileCfg.Discord.Token, ""))
 	defaults.discordCommandPrefix = envOrDefault("TMUXCONN_DISCORD_COMMAND_PREFIX", stringValue(fileCfg.Discord.CommandPrefix, defaultDiscordCommandPrefix))
+	defaults.weixinToken = envOrDefault("TMUXCONN_WEIXIN_TOKEN", stringValue(fileCfg.Weixin.Token, ""))
+	defaults.weixinBaseURL = envOrDefault("TMUXCONN_WEIXIN_BASE_URL", stringValue(fileCfg.Weixin.BaseURL, ""))
+	defaults.weixinCDNBaseURL = envOrDefault("TMUXCONN_WEIXIN_CDN_BASE_URL", stringValue(fileCfg.Weixin.CDNBaseURL, ""))
+	defaults.weixinRouteTag = envOrDefault("TMUXCONN_WEIXIN_ROUTE_TAG", stringValue(fileCfg.Weixin.RouteTag, ""))
 	defaults.snapshotFontFile = envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, ""))
 	defaults.apiBaseURL = envOrDefault("TMUXCONN_TELEGRAM_API_BASE", stringValue(fileCfg.Telegram.APIBase, ""))
 

@@ -53,3 +53,21 @@ PRAGMA user_version = %d;
 COMMIT;
 `, schemaVersionPhase5)
 }
+
+func phase6MigrationSQL() string {
+	return fmt.Sprintf(`
+BEGIN;
+CREATE TABLE IF NOT EXISTS platform_runtime_state (
+  platform TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  entity_id TEXT NOT NULL DEFAULT '',
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (platform, scope, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_platform_runtime_state_platform_scope_updated_at
+  ON platform_runtime_state (platform, scope, updated_at DESC);
+PRAGMA user_version = %d;
+COMMIT;
+`, schemaVersionPhase6)
+}
