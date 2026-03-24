@@ -133,7 +133,7 @@ func TestSendManagedInjectsTextAndTouchesMetadata(t *testing.T) {
 		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			switch args[0] {
 			case "list-panes":
-				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\n"}, nil
+				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"}, nil
 			case "load-buffer", "paste-buffer", "set-option":
 				return tmux.RunResult{}, nil
 			default:
@@ -161,6 +161,58 @@ func TestSendManagedInjectsTextAndTouchesMetadata(t *testing.T) {
 	}
 	if got := runner.calls[3].args; len(got) != 6 || got[0] != "set-option" || got[4] != tmux.OptionLastActivity {
 		t.Fatalf("set-option args = %v, want metadata touch", got)
+	}
+}
+
+func TestSendManagedUsesPlainPasteForClaudeAgent(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+			switch args[0] {
+			case "list-panes":
+				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fclaude\x1freview\x1fmanual-attach\x1f1700000000\n"}, nil
+			case "load-buffer", "paste-buffer", "set-option":
+				return tmux.RunResult{}, nil
+			default:
+				t.Fatalf("unexpected command: %v", args)
+				return tmux.RunResult{}, nil
+			}
+		},
+	}
+	service := NewService(tmux.NewClient(runner, ""))
+
+	if err := service.SendManaged(context.Background(), "%5", "continue", false); err != nil {
+		t.Fatalf("SendManaged() error = %v", err)
+	}
+	if got := runner.calls[2].args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
+		t.Fatalf("paste-buffer args = %v, want plain paste without -p", got)
+	}
+}
+
+func TestSendManagedUsesPlainPasteForClaudeCurrentCommand(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{
+		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+			switch args[0] {
+			case "list-panes":
+				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fclaude\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f0\x1frelay\x1funknown\x1f\x1f\x1f0\n"}, nil
+			case "load-buffer", "paste-buffer", "set-option":
+				return tmux.RunResult{}, nil
+			default:
+				t.Fatalf("unexpected command: %v", args)
+				return tmux.RunResult{}, nil
+			}
+		},
+	}
+	service := NewService(tmux.NewClient(runner, ""))
+
+	if err := service.SendManaged(context.Background(), "%5", "continue", false); err != nil {
+		t.Fatalf("SendManaged() error = %v", err)
+	}
+	if got := runner.calls[2].args; len(got) != 6 || got[0] != "paste-buffer" || got[4] != "-t" || got[5] != "%5" {
+		t.Fatalf("paste-buffer args = %v, want plain paste for current_cmd=claude", got)
 	}
 }
 

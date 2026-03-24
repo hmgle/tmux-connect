@@ -263,8 +263,29 @@ func TestInjectInputUsesNamedBuffer(t *testing.T) {
 	if got := runner.calls[1].args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") {
 		t.Fatalf("unexpected paste-buffer args: %v", got)
 	}
+	if got := runner.calls[1].args; got[3] != "-d" || got[4] != "-p" || got[5] != "-t" || got[6] != "%5" {
+		t.Fatalf("unexpected bracketed paste args: %v", got)
+	}
 	if runner.calls[0].args[2] != runner.calls[1].args[2] {
 		t.Fatalf("expected load-buffer and paste-buffer to use same buffer name: %v vs %v", runner.calls[0].args, runner.calls[1].args)
+	}
+}
+
+func TestInjectInputWithPlainPasteOmitsBracketedPasteFlag(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	client := NewClient(runner, "")
+
+	err := client.InjectInputWithMode(context.Background(), Target{PaneID: "%5"}, []byte("hello"), PasteModePlain)
+	if err != nil {
+		t.Fatalf("InjectInputWithMode() error = %v", err)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("expected 2 tmux calls, got %d", len(runner.calls))
+	}
+	if got := runner.calls[1].args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
+		t.Fatalf("unexpected plain paste args: %v", got)
 	}
 }
 
