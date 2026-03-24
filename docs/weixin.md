@@ -4,8 +4,35 @@
 
 This connector differs from WhatsApp and Telegram in two important ways:
 
-- login is out of scope for `tmux-connect` v1; you must already have an iLink bearer token
-- outbound messages require a valid per-user `context_token`, so the Weixin operator must message the bot first
+- setup is a config-time flow: use `tmux-connect daemon weixin setup|bind`, then run the daemon separately
+- outbound messages still require a valid per-user `context_token`, so the Weixin operator must message the bot first
+
+## Recommended Setup
+
+QR login:
+
+```bash
+tmux-connect daemon weixin setup
+```
+
+Existing token bind:
+
+```bash
+tmux-connect daemon weixin bind --token '<your-ilink-bearer-token>'
+```
+
+What this command does:
+
+- writes `[daemon].platform = "weixin"`
+- writes `[daemon.weixin].token`
+- writes `base_url`, `cdn_base_url`, and optional `route_tag`
+- if `[daemon].allow_chats` is empty and QR login returns the scanned Weixin user, fills it with `weixin:<user@im.wechat>`
+
+Force QR mode even when a token is present:
+
+```bash
+tmux-connect daemon weixin new
+```
 
 ## Example Config
 
@@ -69,6 +96,7 @@ The `chat_id` is the iLink `from_user_id`. Use the full value exactly as deliver
 
 Weixin v1 supports:
 
+- QR login and token bind CLI through `tmux-connect daemon weixin`
 - inbound text commands
 - outbound text replies
 - outbound images for `/snapshot`
@@ -76,7 +104,6 @@ Weixin v1 supports:
 
 Weixin v1 does not yet support:
 
-- QR login or token binding CLI
 - inbound media attachments into the router
 - proactive sends to users who have never messaged the bot
 
@@ -86,6 +113,17 @@ Weixin v1 does not yet support:
 - the connector ignores bot-originated messages from iLink
 - long polling uses `getupdates` with a persisted cursor to avoid replay after restart
 - large text replies are split into chunks before sending
+
+## Setup Command Flags
+
+- `--token` bind an existing bearer token
+- `--api-url` override the iLink API base URL
+- `--cdn-url` set the CDN base URL to save in config
+- `--timeout` QR wait timeout, default `8m`
+- `--route-tag` optional `SKRouteTag`
+- `--bot-type` QR `bot_type`, default `3`
+- `--set-allow-chat-empty` auto-fill `[daemon].allow_chats` when empty
+- `--skip-verify` skip token verification in bind mode
 
 ## Common Pitfalls
 

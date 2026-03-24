@@ -169,6 +169,12 @@ route_tag = ""
 
 # 通过微信 iLink 运行
 ./tmux-connect daemon run --platform weixin --weixin-token "$TMUXCONN_WEIXIN_TOKEN" --db ~/.tmux-connect/tmux-connect.db --allow-chat weixin:user@im.wechat
+
+# 通过二维码配置微信 iLink
+./tmux-connect daemon weixin setup
+
+# 或绑定已有 token
+./tmux-connect daemon weixin bind --token "$TMUXCONN_WEIXIN_TOKEN"
 ```
 
 ## 恢复模型

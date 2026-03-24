@@ -180,6 +180,12 @@ Use `/send <text>` when you want raw input even with execute mode enabled.
 
 # Run with Weixin iLink
 ./tmux-connect daemon run --platform weixin --weixin-token "$TMUXCONN_WEIXIN_TOKEN" --db ~/.tmux-connect/tmux-connect.db --allow-chat weixin:user@im.wechat
+
+# Configure Weixin iLink through QR login
+./tmux-connect daemon weixin setup
+
+# Or bind an existing token
+./tmux-connect daemon weixin bind --token "$TMUXCONN_WEIXIN_TOKEN"
 ```
 
 ## Recovery Model

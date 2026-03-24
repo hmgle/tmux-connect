@@ -136,6 +136,28 @@ func Load(path string) (Loaded, error) {
 	}, nil
 }
 
+func Save(path string, cfg File) (string, error) {
+	explicit := strings.TrimSpace(path) != ""
+	if !explicit {
+		var err error
+		path, err = DefaultPath()
+		if err != nil {
+			return "", err
+		}
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return "", fmt.Errorf("encode config file %s: %w", path, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", fmt.Errorf("create config dir %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", fmt.Errorf("write config file %s: %w", path, err)
+	}
+	return path, nil
+}
+
 func ExtractPath(args []string) (string, []string, error) {
 	var path string
 	remaining := make([]string, 0, len(args))
