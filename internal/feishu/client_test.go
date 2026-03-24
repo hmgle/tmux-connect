@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -244,6 +245,74 @@ func TestParseMessageEventStripsLeadingMentionPrefixWhenPrefixAddressesBot(t *te
 	}
 	if message.Text != "panes @_user_2" {
 		t.Fatalf("text = %q, want panes @_user_2", message.Text)
+	}
+}
+
+func TestParseMessageEventIgnoresUnsupportedMessageType(t *testing.T) {
+	t.Parallel()
+
+	event := &larkim.P2MessageReceiveV1{
+		EventV2Base: &larkevent.EventV2Base{},
+		Event: &larkim.P2MessageReceiveV1Data{
+			Message: &larkim.EventMessage{
+				MessageId:   stringPtr("om_1"),
+				ChatId:      stringPtr("oc_group_1"),
+				ChatType:    stringPtr("group"),
+				MessageType: stringPtr("post"),
+				Content:     stringPtr(`{"zh_cn":{"title":"hi","content":[[{"tag":"text","text":"hello"}]]}}`),
+				Mentions: []*larkim.MentionEvent{{
+					Key: stringPtr("@_user_1"),
+					Id:  &larkim.UserId{OpenId: stringPtr("ou_bot")},
+				}},
+			},
+		},
+	}
+
+	message, ok, err := parseMessageEvent(event, botIdentitySet(BotIdentity{OpenID: "ou_bot"}))
+	if err != nil {
+		t.Fatalf("parseMessageEvent() error = %v", err)
+	}
+	if ok {
+		t.Fatalf("ok = true, want false with message=%#v", message)
+	}
+}
+
+func TestSendTextRejectsThreadWithoutReplyTarget(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{}
+	_, err := client.SendText(context.Background(), "oc_chat_1", "hello", SendOptions{ThreadID: "omt_thread"})
+	if err == nil {
+		t.Fatal("SendText() error = nil, want error")
+	}
+	if got := err.Error(); !strings.Contains(got, "ThreadID") || !strings.Contains(got, "ReplyToMessageID") {
+		t.Fatalf("error = %q, want thread/reply guidance", got)
+	}
+}
+
+func TestSendTextRejectsEmptyChatID(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{}
+	_, err := client.SendText(context.Background(), "   ", "hello", SendOptions{})
+	if err == nil {
+		t.Fatal("SendText() error = nil, want error")
+	}
+	if got := err.Error(); !strings.Contains(got, "chatID") {
+		t.Fatalf("error = %q, want chatID validation", got)
+	}
+}
+
+func TestSendCardRejectsInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{}
+	_, err := client.SendCard(context.Background(), "oc_chat_1", "{", SendOptions{})
+	if err == nil {
+		t.Fatal("SendCard() error = nil, want error")
+	}
+	if got := err.Error(); !strings.Contains(got, "invalid feishu card json") {
+		t.Fatalf("error = %q, want invalid card json", got)
 	}
 }
 

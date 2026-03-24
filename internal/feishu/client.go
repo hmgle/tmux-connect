@@ -11,9 +11,7 @@ import (
 	"github.com/google/uuid"
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
-	larkdispatcher "github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
-	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
 
 const (
@@ -69,33 +67,7 @@ func NewClient(appID string, appSecret string, identity BotIdentity, logWriter i
 }
 
 func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageEvent) error) error {
-	dispatcher := larkdispatcher.NewEventDispatcher("", "").
-		OnP2MessageReceiveV1(func(runCtx context.Context, event *larkim.P2MessageReceiveV1) error {
-			message, ok, err := parseMessageEvent(event, c.botMentionIDs)
-			if err != nil || !ok {
-				return err
-			}
-			return handler(runCtx, message)
-		})
-
-	wsClient := larkws.NewClient(c.appID, c.appSecret,
-		larkws.WithEventHandler(dispatcher),
-		larkws.WithLogger(c.logger),
-	)
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- wsClient.Start(ctx)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil
-	case err := <-errCh:
-		if ctx.Err() != nil {
-			return nil
-		}
-		return wrapFeishuError("start websocket client", err)
-	}
+	return c.runWebsocket(ctx, handler)
 }
 
 func (c *Client) SendText(ctx context.Context, chatID string, text string, opts SendOptions) (string, error) {
@@ -107,7 +79,11 @@ func (c *Client) SendText(ctx context.Context, chatID string, text string, opts 
 }
 
 func (c *Client) SendCard(ctx context.Context, chatID string, cardJSON string, opts SendOptions) (string, error) {
-	return c.sendMessage(ctx, chatID, messageTypeCard, strings.TrimSpace(cardJSON), opts)
+	cardJSON = strings.TrimSpace(cardJSON)
+	if !json.Valid([]byte(cardJSON)) {
+		return "", fmt.Errorf("invalid feishu card json")
+	}
+	return c.sendMessage(ctx, chatID, messageTypeCard, cardJSON, opts)
 }
 
 func (c *Client) SendImage(ctx context.Context, chatID string, data []byte, opts SendOptions) (string, error) {
@@ -140,6 +116,14 @@ func (c *Client) uploadImage(ctx context.Context, data []byte) (string, error) {
 }
 
 func (c *Client) sendMessage(ctx context.Context, chatID string, msgType string, content string, opts SendOptions) (string, error) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return "", fmt.Errorf("invalid chatID")
+	}
+	if err := validateSendOptions(opts); err != nil {
+		return "", err
+	}
+
 	if replyTo := strings.TrimSpace(opts.ReplyToMessageID); replyTo != "" {
 		replyInThread := strings.TrimSpace(opts.ThreadID) != ""
 		resp, err := c.api.Im.V1.Message.Reply(ctx, larkim.NewReplyMessageReqBuilder().
@@ -163,7 +147,7 @@ func (c *Client) sendMessage(ctx context.Context, chatID string, msgType string,
 	resp, err := c.api.Im.V1.Message.Create(ctx, larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(receiveIDTypeChatID).
 		Body(&larkim.CreateMessageReqBody{
-			ReceiveId: larkcore.StringPtr(strings.TrimSpace(chatID)),
+			ReceiveId: larkcore.StringPtr(chatID),
 			MsgType:   larkcore.StringPtr(msgType),
 			Content:   larkcore.StringPtr(content),
 			Uuid:      larkcore.StringPtr(uuid.NewString()),
@@ -176,6 +160,13 @@ func (c *Client) sendMessage(ctx context.Context, chatID string, msgType string,
 		return "", feishuAPIError("send message", resp.Code, resp.Msg)
 	}
 	return strings.TrimSpace(*resp.Data.MessageId), nil
+}
+
+func validateSendOptions(opts SendOptions) error {
+	if strings.TrimSpace(opts.ThreadID) != "" && strings.TrimSpace(opts.ReplyToMessageID) == "" {
+		return fmt.Errorf("invalid send options: ThreadID only applies to replies and requires ReplyToMessageID")
+	}
+	return nil
 }
 
 type textMessageContent struct {
@@ -200,7 +191,8 @@ func parseMessageEvent(event *larkim.P2MessageReceiveV1, botMentionIDs map[strin
 	}
 
 	message := event.Event.Message
-	if strings.TrimSpace(larkcore.StringValue(message.MessageType)) != messageTypeText {
+	messageType := strings.TrimSpace(larkcore.StringValue(message.MessageType))
+	if messageType != messageTypeText {
 		return MessageEvent{}, false, nil
 	}
 
