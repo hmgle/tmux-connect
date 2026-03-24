@@ -47,11 +47,15 @@ Want to control the same pane from your phone? Start a Telegram relay:
 ./tmux-connect daemon run \
   --platform telegram \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
 
 Then send `/panes` and `/select %5` from Telegram to start interacting.
+With `--plain-text-mode execute`, bare text like `continue` runs immediately and
+returns a short snapshot.
 
 One daemon process runs one remote platform. If your binary includes multiple
 platforms and you want more than one active at the same time, start multiple

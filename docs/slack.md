@@ -37,7 +37,7 @@ Using TOML config:
 platform = "slack"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -50,6 +50,10 @@ bot_token = "xoxb-..."
 app_token = "xapp-..."
 command_prefix = "tmux:"
 ```
+
+This example intentionally uses `plain_text_mode = "execute"` so bare text in
+DMs sends and presses Enter immediately. Keep `type` if you want bare text to
+stay as raw input without Enter.
 
 ```bash
 ./tmux-connect daemon run

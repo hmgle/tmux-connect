@@ -115,7 +115,7 @@ platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["discord:123456789012345678"]  # 允许的频道/用户 ID
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -127,6 +127,8 @@ follow_min_interval = "700ms"
 token = "your-discord-bot-token"
 command_prefix = "tmux:"
 ```
+
+这里的示例故意启用了 `plain_text_mode = "execute"`，这样在私聊里直接发 `continue` 之类的裸文本就会立刻执行。如果你更想保留“只输入、不回车”的行为，再改回 `type`。
 
 #### 方式二：使用环境变量
 

@@ -92,9 +92,13 @@ codex
 export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
 
 ./tmux-connect daemon run \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
+
+这里建议直接打开 `execute` 模式。这样在手机里发送裸文本时会直接“发送并回车”。
 
 注意：
 
@@ -112,9 +116,12 @@ export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
 /select %5
 /snapshot
 continue
-/enter
 /follow on
 ```
+
+因为上一步启用了 `--plain-text-mode execute`，这里的 `continue` 会直接执行，不需要再补一条 `/enter`。
+
+如果你保留默认 `type` 模式，则需要改成“先发文本，再发 `/enter`”，或者直接写 `/enter continue`。
 
 如果需要中断：
 
@@ -168,7 +175,7 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates" | jq '.result[0].mess
 
 - `/select` 会在 pane 尚未管理时自动 `attach`
 - 直接发送的文本默认会进入当前 pane，但不会自动附带回车
-- 如果设置 `--plain-text-mode execute`，直接发送文本就会变成“发送并回车”，并可配合文本快照回显
+- 这份快速开始示例建议设置 `--plain-text-mode execute`，这样直接发送文本就会变成“发送并回车”，并可配合文本快照回显
 - 在默认 `type` 模式下，需要执行时，先发送文本，再发 `/enter`
 - 也可以直接用 `/enter make test` 这样的一步写法
 - `/keys` 用来发送 tmux key name，比如 `C-c`、`Enter`、`Escape`、方向键、`PageUp`、`F1-F12`、`C-a` 到 `C-z`、`M-x`

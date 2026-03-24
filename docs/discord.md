@@ -36,7 +36,7 @@ platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["discord:123456789012345678"]
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -48,6 +48,10 @@ follow_min_interval = "700ms"
 token = "discord-bot-token"
 command_prefix = "tmux:"
 ```
+
+This example intentionally enables `plain_text_mode = "execute"` so bare text in
+DMs sends and presses Enter immediately. If you want raw text without automatic
+Enter, change it back to `type`.
 
 ```bash
 ./tmux-connect daemon run

@@ -46,11 +46,14 @@ make build
 ./tmux-connect daemon run \
   --platform telegram \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
+  --plain-text-mode execute \
+  --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db \
   --allow-chat 123456789
 ```
 
 然后在 Telegram 发送 `/panes` 和 `/select %5` 即可开始交互。
+这里额外打开了 `--plain-text-mode execute`，所以像 `continue` 这样的裸文本会直接执行并附带一段快照回显。
 
 一个 daemon 进程只运行一个远程平台。如果当前二进制编入了多个平台，而你又想同时启用多个平台，请分别启动多个 `tmux-connect daemon run` 进程，并为每个进程指定不同的 `--platform`。
 

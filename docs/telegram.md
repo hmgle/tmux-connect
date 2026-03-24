@@ -30,7 +30,7 @@ platform = "telegram"
 db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -45,6 +45,10 @@ snapshot_font_size = 16
 snapshot_font_file = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 ```
 
+This example intentionally enables `plain_text_mode = "execute"` so bare text
+like `continue` runs immediately in chat. If you prefer raw input without
+Enter, switch it back to `type`.
+
 ```bash
 ./tmux-connect daemon run
 ```
@@ -54,6 +58,8 @@ Using environment variables:
 ```bash
 export TMUXCONN_TELEGRAM_TOKEN=123456:example-token
 export TMUXCONN_DB_PATH="$HOME/.tmux-connect/tmux-connect.db"
+export TMUXCONN_PLAIN_TEXT_MODE=execute
+export TMUXCONN_PLAIN_TEXT_ECHO=snapshot
 export TMUXCONN_TELEGRAM_SNAPSHOT_THEME=light
 export TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE=16
 

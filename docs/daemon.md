@@ -36,7 +36,7 @@ db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -69,6 +69,10 @@ session_db = "/home/user/.tmux-connect/whatsapp-device.db"
 device_name = "tmux-connect"
 auto_mark_read = true
 ```
+
+This example opts into `plain_text_mode = "execute"` so bare text sends and
+presses Enter immediately. The built-in default is still `type`, so keep
+`type` if you want bare text without Enter.
 
 ## Common Flags
 

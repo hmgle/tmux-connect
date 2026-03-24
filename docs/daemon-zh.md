@@ -31,7 +31,7 @@ db = "/home/user/.tmux-connect/tmux-connect.db"
 allow_chats = ["123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
-plain_text_mode = "type"
+plain_text_mode = "execute"
 plain_text_echo = "snapshot"
 plain_text_echo_lines = 12
 plain_text_echo_delay = "250ms"
@@ -64,6 +64,8 @@ session_db = "/home/user/.tmux-connect/whatsapp-device.db"
 device_name = "tmux-connect"
 auto_mark_read = true
 ```
+
+这里的示例特意写成 `plain_text_mode = "execute"`，这样裸文本会立即发送并回车。程序内建默认值仍然是 `type`；如果你只想输入、不想自动回车，就保留 `type`。
 
 ## 通用参数
 
