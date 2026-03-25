@@ -15,9 +15,11 @@ import (
 )
 
 type fakeMessenger struct {
-	mu       sync.Mutex
-	messages []sentMessage
-	platform string
+	mu              sync.Mutex
+	messages        []sentMessage
+	platform        string
+	sendMessageErrs []error
+	sendImageErrs   []error
 }
 
 type sentMessage struct {
@@ -45,6 +47,11 @@ func (m *fakeMessenger) Platform() string {
 func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.sendMessageErrs) > 0 {
+		err := m.sendMessageErrs[0]
+		m.sendMessageErrs = m.sendMessageErrs[1:]
+		return OutboundMessage{}, err
+	}
 	parseMode := telegram.ParseMode("")
 	if opts.Format == MessageFormatTelegramHTML {
 		parseMode = telegram.ParseModeHTML
@@ -71,6 +78,11 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, o
 func (m *fakeMessenger) SendImage(_ context.Context, _ ChatRef, fileName string, photo []byte, caption string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.sendImageErrs) > 0 {
+		err := m.sendImageErrs[0]
+		m.sendImageErrs = m.sendImageErrs[1:]
+		return OutboundMessage{}, err
+	}
 	parseMode := telegram.ParseMode("")
 	if opts.Format == MessageFormatTelegramHTML {
 		parseMode = telegram.ParseModeHTML
@@ -106,6 +118,9 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 	}
 	if m.Platform() == "whatsapp" {
 		return decorateWhatsAppMessage(kind, text, opts)
+	}
+	if m.Platform() == "weixin" {
+		return decorateCodeBlockMessage(kind, text, opts)
 	}
 	return decorateTelegramMessage(kind, text, opts)
 }
@@ -329,6 +344,10 @@ func whatsappChat(id string) ChatRef {
 	return ChatRef{Platform: "whatsapp", ChatID: id}
 }
 
+func weixinChat(id string) ChatRef {
+	return ChatRef{Platform: "weixin", ChatID: id}
+}
+
 func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage {
 	return IncomingMessage{
 		Chat:      telegramChat(chatID),
@@ -419,6 +438,15 @@ func whatsappSelfMessage(chatID string, messageID string, text string) IncomingM
 	message := whatsappMessage(chatID, messageID, text)
 	message.IsFromSelf = true
 	return message
+}
+
+func weixinMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      weixinChat(chatID),
+		MessageID: messageID,
+		Text:      text,
+		ChatType:  "private",
+	}
 }
 
 func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentMessage) bool, messenger *fakeMessenger) {

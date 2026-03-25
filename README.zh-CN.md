@@ -6,18 +6,19 @@
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
 [![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-whatsmeow-25D366?style=flat-square&logo=whatsapp)](https://pkg.go.dev/go.mau.fi/whatsmeow)
+[![Weixin](https://img.shields.io/badge/Weixin-iLink-07C160?style=flat-square)](./docs/weixin.md)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README](https://img.shields.io/badge/README-English-1F2937?style=flat-square)](./README.md)
 
 [English](./README.md) | 简体中文
 
-随时随地控制你的 tmux pane——CLI、HTTP API，或通过 Telegram、飞书、Slack、Discord、WhatsApp 在手机上操作。
+随时随地控制你的 tmux pane——CLI、HTTP API，或通过 Telegram、飞书、Slack、Discord、WhatsApp、微信 iLink 在手机上操作。
 
 ## 特性
 
 - **本地 CLI** — 对任意 tmux pane 执行 list、attach、inspect、snapshot、stream 和 send
 - **HTTP API** — RESTful 端点 + SSE 流式输出，适合程序化控制
-- **聊天中继** — 从 Telegram、飞书、Slack、Discord 或 WhatsApp 监控和控制 pane
+- **聊天中继** — 从 Telegram、飞书、Slack、Discord、WhatsApp 或微信 iLink 监控和控制 pane
 - **Tmux 优先** — tmux 始终是事实来源；bridge 元数据通过 tmux user options 跨重启保留
 - **内嵌 SQLite** — daemon 无需外部数据库
 
@@ -76,6 +77,7 @@ make platforms
 | Slack | `slack` | Bot Token + App Token | [docs/slack.md](./docs/slack.md) |
 | Discord | `discord` | Bot Token | [docs/discord.md](./docs/discord.md) |
 | WhatsApp | `whatsapp` | 已配对设备的 session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
+| 微信 iLink | `weixin` | iLink Bearer Token | [docs/weixin.md](./docs/weixin.md) |
 
 如果你只需要其中一部分平台，可以通过 `Makefile` 使用负向排除式 build tags：
 
@@ -113,6 +115,8 @@ make build EXCLUDE=feishu,whatsapp
 | Discord 配置 | [docs/discord.md](./docs/discord.md) |
 | Discord 接入指南（中文） | [docs/discord-zh.md](./docs/discord-zh.md) |
 | WhatsApp 配置 | [docs/whatsapp.md](./docs/whatsapp.md) |
+| 微信 iLink 配置 | [docs/weixin.md](./docs/weixin.md) |
+| iLink 微信开发设计 | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
 | 系统架构 | [docs/architecture.md](./docs/architecture.md) |
 | 路线图 | [docs/roadmap.md](./docs/roadmap.md) |
 | 中文快速开始 | [docs/guide-zh.md](./docs/guide-zh.md) |

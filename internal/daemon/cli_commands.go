@@ -14,17 +14,25 @@ func RunCLI(ctx context.Context, stdout io.Writer, stderr io.Writer, service pan
 }
 
 func RunCLIWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, fileCfg config.Daemon, args []string) error {
+	return RunCLIWithLoadedConfig(ctx, stdout, stderr, service, config.Loaded{
+		Config: config.File{Daemon: fileCfg},
+	}, args)
+}
+
+func RunCLIWithLoadedConfig(ctx context.Context, stdout io.Writer, stderr io.Writer, service paneService, loaded config.Loaded, args []string) error {
 	if len(args) == 0 {
 		printUsage(stderr)
 		return tmuxconn.UsageError("missing daemon command")
 	}
 	switch args[0] {
 	case "run":
-		return runDaemonWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
+		return runDaemonWithConfig(ctx, stdout, stderr, service, loaded.Config.Daemon, args[1:])
 	case "doctor":
-		return runDoctorWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
+		return runDoctorWithConfig(ctx, stdout, stderr, service, loaded.Config.Daemon, args[1:])
 	case "status":
-		return runStatusWithConfig(ctx, stdout, stderr, service, fileCfg, args[1:])
+		return runStatusWithConfig(ctx, stdout, stderr, service, loaded.Config.Daemon, args[1:])
+	case "weixin":
+		return runWeixinCLIWithLoadedConfig(ctx, stdout, stderr, loaded, args[1:])
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -70,6 +78,7 @@ Commands:
   run      Start the relay daemon
   doctor   Validate token, sqlite store, and tmux access
   status   Show sqlite counts and current managed pane count
+  weixin   Configure Weixin iLink login and token binding
 
 Compiled platforms:
   %s
@@ -93,6 +102,10 @@ Common flags:
   --whatsapp-device-name NAME
   --whatsapp-auto-mark-read
   --whatsapp-allow-self-chat
+  --weixin-token TOKEN
+  --weixin-base-url URL
+  --weixin-cdn-base-url URL
+  --weixin-route-tag TAG
   --db PATH
   --allow-chat 123456
   --poll-timeout 20s

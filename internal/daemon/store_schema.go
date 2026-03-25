@@ -11,6 +11,7 @@ const (
 	schemaVersionPhase3 = 2
 	schemaVersionPhase4 = 3
 	schemaVersionPhase5 = 4
+	schemaVersionPhase6 = 5
 )
 
 func (s *Store) applyMigrations(ctx context.Context) error {
@@ -44,6 +45,13 @@ func (s *Store) applyMigrations(ctx context.Context) error {
 	}
 	if version < schemaVersionPhase5 {
 		query := phase5MigrationSQL()
+		if err := s.exec(ctx, query); err != nil {
+			return err
+		}
+		version = schemaVersionPhase5
+	}
+	if version < schemaVersionPhase6 {
+		query := phase6MigrationSQL()
 		if err := s.exec(ctx, query); err != nil {
 			return err
 		}

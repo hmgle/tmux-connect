@@ -131,6 +131,16 @@ CREATE TABLE IF NOT EXISTS message_log (
 );
 CREATE INDEX IF NOT EXISTS idx_message_log_platform_chat_created_at
   ON message_log (platform, chat_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS platform_runtime_state (
+  platform TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  entity_id TEXT NOT NULL DEFAULT '',
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (platform, scope, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_platform_runtime_state_platform_scope_updated_at
+  ON platform_runtime_state (platform, scope, updated_at DESC);
 `
 	if err := s.exec(ctx, schema); err != nil {
 		return err

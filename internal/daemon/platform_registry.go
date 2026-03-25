@@ -26,6 +26,7 @@ var platformOrder = []string{
 	"slack",
 	"discord",
 	"whatsapp",
+	"weixin",
 }
 
 func RegisterPlatform(name string, registration platformRegistration) {

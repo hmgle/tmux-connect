@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -150,4 +151,14 @@ func (m *FollowManager) debugf(session *followSession, format string, args ...an
 	m.debugMu.Lock()
 	defer m.debugMu.Unlock()
 	fmt.Fprintf(w, "%s %s %s\n", time.Now().Format(time.RFC3339Nano), label, message)
+}
+
+func (m *FollowManager) warnf(session *followSession, format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	if session != nil {
+		log.Printf("warn: follow chat=%s pane=%s %s", session.chat.Key(), session.paneKey, message)
+	} else {
+		log.Printf("warn: follow %s", message)
+	}
+	m.debugf(session, "%s", message)
 }

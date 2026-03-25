@@ -157,6 +157,39 @@ func TestStoreHasThread(t *testing.T) {
 	}
 }
 
+func TestStorePlatformRuntimeState(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+
+	if err := store.SetPlatformRuntimeState(ctx, "weixin", "context_token", "user@im.wechat", "ctx-1"); err != nil {
+		t.Fatalf("SetPlatformRuntimeState() error = %v", err)
+	}
+	if err := store.SetPlatformRuntimeState(ctx, "weixin", "cursor", "", "cursor-2"); err != nil {
+		t.Fatalf("SetPlatformRuntimeState(cursor) error = %v", err)
+	}
+
+	token, err := store.GetPlatformRuntimeState(ctx, "weixin", "context_token", "user@im.wechat")
+	if err != nil {
+		t.Fatalf("GetPlatformRuntimeState(token) error = %v", err)
+	}
+	if token != "ctx-1" {
+		t.Fatalf("context token = %q, want ctx-1", token)
+	}
+
+	cursor, err := store.GetPlatformRuntimeState(ctx, "weixin", "cursor", "")
+	if err != nil {
+		t.Fatalf("GetPlatformRuntimeState(cursor) error = %v", err)
+	}
+	if cursor != "cursor-2" {
+		t.Fatalf("cursor = %q, want cursor-2", cursor)
+	}
+}
+
 func TestStoreMigratePhase2ToPhase3(t *testing.T) {
 	t.Parallel()
 
@@ -182,8 +215,8 @@ PRAGMA user_version = 1;
 	if err != nil {
 		t.Fatalf("schemaVersion() error = %v", err)
 	}
-	if version != schemaVersionPhase5 {
-		t.Fatalf("schema version = %d, want %d", version, schemaVersionPhase5)
+	if version != schemaVersionPhase6 {
+		t.Fatalf("schema version = %d, want %d", version, schemaVersionPhase6)
 	}
 
 	if _, err := store.EnsureSession(ctx, telegramChat(7), "default:%5", "codex"); err != nil {

@@ -68,6 +68,12 @@ command_prefix = "tmux:"
 session_db = "/home/user/.tmux-connect/whatsapp-device.db"
 device_name = "tmux-connect"
 auto_mark_read = true
+
+[daemon.weixin]
+token = "ilink-bearer-token"
+base_url = "https://ilinkai.weixin.qq.com"
+cdn_base_url = "https://novac2c.cdn.weixin.qq.com/c2c"
+route_tag = ""
 ```
 
 This example opts into `plain_text_mode = "execute"` so bare text sends and
@@ -137,6 +143,15 @@ to start for this process.
 | `--whatsapp-auto-mark-read` | `true` | Auto-mark messages as read |
 | `--whatsapp-allow-self-chat` | `false` | Enable experimental self-chat mode |
 
+### Weixin-specific
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--weixin-token` | — | iLink bot bearer token (or `TMUXCONN_WEIXIN_TOKEN`) |
+| `--weixin-base-url` | `https://ilinkai.weixin.qq.com` | iLink API base URL |
+| `--weixin-cdn-base-url` | `https://novac2c.cdn.weixin.qq.com/c2c` | iLink CDN base URL |
+| `--weixin-route-tag` | — | Optional `SKRouteTag` request header |
+
 ## Plain Text Mode
 
 By default, bare text is sent to the current pane in `type` mode — input only,
@@ -162,6 +177,15 @@ Use `/send <text>` when you want raw input even with execute mode enabled.
 
 # Show SQLite record counts and managed pane count
 ./tmux-connect daemon status --db ~/.tmux-connect/tmux-connect.db
+
+# Run with Weixin iLink
+./tmux-connect daemon run --platform weixin --weixin-token "$TMUXCONN_WEIXIN_TOKEN" --db ~/.tmux-connect/tmux-connect.db --allow-chat weixin:user@im.wechat
+
+# Configure Weixin iLink through QR login
+./tmux-connect daemon weixin setup
+
+# Or bind an existing token
+./tmux-connect daemon weixin bind --token "$TMUXCONN_WEIXIN_TOKEN"
 ```
 
 ## Recovery Model
@@ -177,8 +201,9 @@ The bridge writes recovery state onto the pane with tmux user options:
 - `@tmuxconn_last_activity_unix=<unix timestamp>`
 
 The remote daemon stores platform chat state in SQLite, including bindings,
-current pane selection, sessions, and message links. Schema is versioned via
-`PRAGMA user_version`.
+current pane selection, sessions, message links, and platform runtime state
+such as the Weixin iLink cursor and per-user `context_token`. Schema is
+versioned via `PRAGMA user_version`.
 
 ## Platform Guides
 
@@ -189,3 +214,4 @@ For platform-specific setup, commands, and operational notes:
 - [Slack](./slack.md)
 - [Discord](./discord.md)
 - [WhatsApp](./whatsapp.md)
+- [Weixin](./weixin.md)

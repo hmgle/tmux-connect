@@ -98,6 +98,15 @@ func applyPlatformSpecificConfigDefaults(cfg *Config, fs *flag.FlagSet, fileCfg 
 	if strings.TrimSpace(cfg.WhatsAppDeviceName) == "" {
 		cfg.WhatsAppDeviceName = "tmux-connect"
 	}
+	if strings.TrimSpace(cfg.WeixinBaseURL) == "" {
+		cfg.WeixinBaseURL = defaultWeixinBaseURL
+	}
+	if strings.TrimSpace(cfg.WeixinCDNBaseURL) == "" {
+		cfg.WeixinCDNBaseURL = defaultWeixinCDNBaseURL
+	}
+	cfg.WeixinBaseURL = strings.TrimRight(strings.TrimSpace(cfg.WeixinBaseURL), "/")
+	cfg.WeixinCDNBaseURL = strings.TrimRight(strings.TrimSpace(cfg.WeixinCDNBaseURL), "/")
+	cfg.WeixinRouteTag = strings.TrimSpace(cfg.WeixinRouteTag)
 	if cfg.Platform != "slack" {
 		cfg.SlackCommandPrefix = ""
 	}

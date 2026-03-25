@@ -7,18 +7,19 @@
 [![Slack](https://img.shields.io/badge/Slack-Socket%20Mode-4A154B?style=flat-square&logo=slack)](https://api.slack.com/apis/connections/socket)
 [![Discord](https://img.shields.io/badge/Discord-Slash%20Commands-5865F2?style=flat-square&logo=discord)](https://discord.com/developers/docs/interactions/application-commands)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-whatsmeow-25D366?style=flat-square&logo=whatsapp)](https://pkg.go.dev/go.mau.fi/whatsmeow)
+[![Weixin](https://img.shields.io/badge/Weixin-iLink-07C160?style=flat-square)](./docs/weixin.md)
 [![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)](./LICENSE)
 [![README.zh-CN](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-0F766E?style=flat-square)](./README.zh-CN.md)
 
 English | [简体中文](./README.zh-CN.md)
 
-Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Telegram, Feishu, Slack, Discord, and WhatsApp.
+Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Telegram, Feishu, Slack, Discord, WhatsApp, and Weixin via iLink.
 
 ## Features
 
 - **Local CLI** — list, attach, inspect, snapshot, stream, and send input to any tmux pane
 - **HTTP API** — RESTful endpoints with SSE streaming for programmatic control
-- **Chat relay** — monitor and control panes from Telegram, Feishu, Slack, Discord, or WhatsApp
+- **Chat relay** — monitor and control panes from Telegram, Feishu, Slack, Discord, WhatsApp, or Weixin
 - **Tmux-first** — tmux stays the source of truth; bridge metadata survives restarts via tmux user options
 - **Embedded SQLite** — no external database required for the daemon
 
@@ -81,6 +82,7 @@ Supported platform names:
 | Slack | `slack` | Bot token + App token | [docs/slack.md](./docs/slack.md) |
 | Discord | `discord` | Bot token | [docs/discord.md](./docs/discord.md) |
 | WhatsApp | `whatsapp` | Paired device session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
+| Weixin | `weixin` | iLink bearer token | [docs/weixin.md](./docs/weixin.md) |
 
 If you only need a subset, use negative build tags through the `Makefile`:
 
@@ -119,6 +121,8 @@ selection is still one process per platform.
 | Slack Setup | [docs/slack.md](./docs/slack.md) |
 | Discord Setup | [docs/discord.md](./docs/discord.md) |
 | WhatsApp Setup | [docs/whatsapp.md](./docs/whatsapp.md) |
+| Weixin Setup | [docs/weixin.md](./docs/weixin.md) |
+| iLink Weixin Design | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
 | Architecture | [docs/architecture.md](./docs/architecture.md) |
 | Roadmap | [docs/roadmap.md](./docs/roadmap.md) |
 | 中文快速开始 | [docs/guide-zh.md](./docs/guide-zh.md) |

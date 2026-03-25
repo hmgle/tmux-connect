@@ -46,6 +46,7 @@ type Daemon struct {
 	Slack                Slack     `toml:"slack"`
 	Discord              Discord   `toml:"discord"`
 	WhatsApp             WhatsApp  `toml:"whatsapp"`
+	Weixin               Weixin    `toml:"weixin"`
 }
 
 type Telegram struct {
@@ -80,6 +81,13 @@ type WhatsApp struct {
 	DeviceName    *string `toml:"device_name"`
 	AutoMarkRead  *bool   `toml:"auto_mark_read"`
 	AllowSelfChat *bool   `toml:"allow_self_chat"`
+}
+
+type Weixin struct {
+	Token      *string `toml:"token"`
+	BaseURL    *string `toml:"base_url"`
+	CDNBaseURL *string `toml:"cdn_base_url"`
+	RouteTag   *string `toml:"route_tag"`
 }
 
 type Loaded struct {
@@ -126,6 +134,28 @@ func Load(path string) (Loaded, error) {
 		Path:   path,
 		Config: cfg,
 	}, nil
+}
+
+func Save(path string, cfg File) (string, error) {
+	explicit := strings.TrimSpace(path) != ""
+	if !explicit {
+		var err error
+		path, err = DefaultPath()
+		if err != nil {
+			return "", err
+		}
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return "", fmt.Errorf("encode config file %s: %w", path, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", fmt.Errorf("create config dir %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", fmt.Errorf("write config file %s: %w", path, err)
+	}
+	return path, nil
 }
 
 func ExtractPath(args []string) (string, []string, error) {

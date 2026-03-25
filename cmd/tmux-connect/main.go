@@ -54,7 +54,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "daemon" {
-		if err := daemon.RunCLIWithConfig(ctx, os.Stdout, os.Stderr, service, loadedConfig.Config.Daemon, args[1:]); err != nil {
+		if err := daemon.RunCLIWithLoadedConfig(ctx, os.Stdout, os.Stderr, service, loadedConfig, args[1:]); err != nil {
 			if tmuxconn.IsHelpError(err) {
 				return
 			}

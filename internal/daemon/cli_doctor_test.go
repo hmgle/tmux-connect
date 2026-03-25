@@ -134,3 +134,28 @@ func TestRunDoctorWhatsAppPrintsLoginHint(t *testing.T) {
 		}
 	}
 }
+
+func TestRunDoctorWeixinPrintsContextHint(t *testing.T) {
+	t.Parallel()
+	requirePlatformAvailable(t, "weixin")
+
+	stdout := &bytes.Buffer{}
+	err := runDoctorWithConfig(context.Background(), stdout, &bytes.Buffer{}, newFakePaneService(), config.Daemon{}, []string{
+		"--platform", "weixin",
+		"--weixin-token", "test-token",
+		"--db", filepath.Join(t.TempDir(), "tmuxconn.db"),
+	})
+	if err != nil {
+		t.Fatalf("runDoctor() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"weixin token: ok",
+		"weixin first message",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("runDoctor() output = %q, want %q", output, want)
+		}
+	}
+}
