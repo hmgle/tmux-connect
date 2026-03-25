@@ -38,7 +38,7 @@ BUILD_TAGS := $(strip $(_EXCLUDE_TAGS))
 TAGS_FLAG := $(if $(BUILD_TAGS),-tags '$(BUILD_TAGS)',)
 EFFECTIVE_PLATFORMS_DISPLAY := $(if $(strip $(EFFECTIVE_PLATFORMS)),$(EFFECTIVE_PLATFORMS),<none>)
 
-.PHONY: build test clean print-tags help platforms
+.PHONY: build test clean print-tags help platforms print-platforms print-selected-platforms
 
 help:
 	@printf '%s\n' \
@@ -48,6 +48,8 @@ help:
 		'  make build PLATFORMS_INCLUDE=telegram      Keep only specific platforms' \
 		'                                             EXCLUDE and PLATFORMS_INCLUDE are mutually exclusive' \
 		'  make platforms                             List supported platforms without building' \
+		'  make print-platforms                       Print supported platform names, one per line' \
+		'  make print-selected-platforms              Print selected platform names, one per line' \
 		'  make test                                  Run the default test suite' \
 		'  make clean                                 Remove the built binary' \
 		'  make print-tags                            Show the effective Go build tags'
@@ -66,6 +68,12 @@ platforms:
 		'Supported remote platforms:' \
 		$(foreach platform,$(ALL_PLATFORMS),'  - $(platform)')
 	@printf 'Selected for this invocation: %s\n' "$(EFFECTIVE_PLATFORMS_DISPLAY)"
+
+print-platforms:
+	@printf '%s\n' $(ALL_PLATFORMS)
+
+print-selected-platforms:
+	@printf '%s\n' $(EFFECTIVE_PLATFORMS)
 
 print-tags:
 	@printf 'BUILD_TAGS=%s\n' "$(BUILD_TAGS)"

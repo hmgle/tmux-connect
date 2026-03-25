@@ -59,45 +59,73 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -tags no_telegram ./internal/daemon/...
-          go test -tags no_feishu ./internal/daemon/...
-          go test -tags no_slack ./internal/daemon/...
-
-      - name: Build default CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          make clean build
-          ./tmux-connect daemon help | grep -F "Compiled platforms:"
-          ./tmux-connect daemon help | grep -F "telegram, feishu, slack, discord, whatsapp"
-          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|feishu|slack|discord|whatsapp)'
+          for platform in $(make -s print-platforms); do
+            go test -tags "no_${platform}" ./internal/daemon/...
+          done
 
       - name: Build selective CLI
         shell: bash
         run: |
           set -euo pipefail
-          make clean build EXCLUDE=feishu,whatsapp
-          ./tmux-connect daemon help | grep -F "Compiled platforms:"
-          ./tmux-connect daemon help | grep -F "telegram, slack, discord"
-          ! ./tmux-connect daemon help | grep -F "feishu"
-          ! ./tmux-connect daemon help | grep -F "whatsapp"
-          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|slack|discord)'
 
-          make clean build EXCLUDE=telegram
-          ./tmux-connect daemon help | grep -F "feishu, slack, discord, whatsapp"
-          ! ./tmux-connect daemon help | grep -F "telegram"
-          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (feishu|slack|discord|whatsapp)'
+          join_with() {
+            local delimiter="$1"
+            awk -v delimiter="${delimiter}" '
+              BEGIN { first = 1 }
+              {
+                if (!first) {
+                  printf "%s", delimiter
+                }
+                printf "%s", $0
+                first = 0
+              }
+              END { printf "\n" }
+            '
+          }
 
-          make clean build EXCLUDE=slack
-          ./tmux-connect daemon help | grep -F "telegram, feishu, discord, whatsapp"
-          ! ./tmux-connect daemon help | grep -F " slack,"
-          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (telegram|feishu|discord|whatsapp)'
+          verify_build() {
+            local compiled_summary help_output run_help_output selected_choices selected_summary
 
-          make clean build PLATFORMS_INCLUDE=slack
-          ./tmux-connect daemon help | grep -F "Compiled platforms:"
-          ./tmux-connect daemon help | grep -F "slack"
-          ! ./tmux-connect daemon help | grep -F "telegram"
-          ! ./tmux-connect daemon help | grep -F "feishu"
-          ! ./tmux-connect daemon help | grep -F "discord"
-          ! ./tmux-connect daemon help | grep -F "whatsapp"
-          ./tmux-connect daemon run --help 2>&1 | grep -F 'remote platform in this build (slack)'
+            make clean build "$@"
+
+            help_output="$(./tmux-connect daemon help)"
+            run_help_output="$(./tmux-connect daemon run --help 2>&1)"
+            selected_summary="$(make -s print-selected-platforms "$@" | join_with ', ')"
+            selected_choices="$(make -s print-selected-platforms "$@" | join_with '|')"
+            compiled_summary="$(
+              printf '%s\n' "${help_output}" | awk '
+                /^Compiled platforms:$/ {
+                  getline
+                  sub(/^  /, "", $0)
+                  print
+                  exit
+                }
+              '
+            )"
+
+            printf '%s\n' "${help_output}" | grep -F "Compiled platforms:"
+            [ "${compiled_summary}" = "${selected_summary}" ]
+            printf '%s\n' "${run_help_output}" | grep -F "remote platform in this build (${selected_choices})"
+          }
+
+          verify_build
+
+          first_two_exclude="$(
+            make -s print-platforms | awk '
+              NR <= 2 {
+                if (NR > 1) {
+                  printf ","
+                }
+                printf "%s", $0
+              }
+              END { printf "\n" }
+            '
+          )"
+          if [ -n "${first_two_exclude}" ]; then
+            verify_build "EXCLUDE=${first_two_exclude}"
+          fi
+
+          for platform in $(make -s print-platforms); do
+            verify_build "EXCLUDE=${platform}"
+            verify_build "PLATFORMS_INCLUDE=${platform}"
+          done
