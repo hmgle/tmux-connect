@@ -719,6 +719,39 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	}
 }
 
+func TestRouterWeixinSnapshotForcesTextMode(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "weixin"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+
+	if err := router.HandleMessage(ctx, weixinMessage("user@im.wechat", "1", "/select %5")); err != nil {
+		t.Fatalf("HandleMessage(select) error = %v", err)
+	}
+	if err := router.HandleMessage(ctx, weixinMessage("user@im.wechat", "2", "/snapshot image")); err != nil {
+		t.Fatalf("HandleMessage(snapshot image) error = %v", err)
+	}
+
+	messages := messenger.snapshot()
+	last := messages[len(messages)-1]
+	if len(last.Photo) != 0 {
+		t.Fatalf("expected text snapshot for weixin, got photo message %#v", last)
+	}
+	if !strings.Contains(last.Text, "hello from pane") {
+		t.Fatalf("snapshot text = %q, want pane text", last.Text)
+	}
+	if !strings.HasPrefix(last.Text, "```") {
+		t.Fatalf("snapshot text = %q, want code block formatting", last.Text)
+	}
+}
+
 func TestReplyBusReplySnapshotUsesConfiguredRenderOptions(t *testing.T) {
 	t.Parallel()
 

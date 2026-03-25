@@ -80,6 +80,20 @@ func TestHelpTextUsesFeishuGuidance(t *testing.T) {
 	}
 }
 
+func TestHelpTextUsesWeixinSnapshotTextGuidance(t *testing.T) {
+	t.Parallel()
+
+	text := helpTextForPlatform("weixin", "", "tmux:")
+	for _, want := range []string{`/snapshot [lines] [text]`, `forces "/snapshot" to text output`, `placeholder boxes`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("helpTextForPlatform(weixin) missing %q in %q", want, text)
+		}
+	}
+	if strings.Contains(text, "/snapshot [lines] [image|text]") {
+		t.Fatalf("helpTextForPlatform(weixin) unexpectedly contains image snapshot usage in %q", text)
+	}
+}
+
 func TestRouterWhatsAppSelfChatRejectsPlainText(t *testing.T) {
 	t.Parallel()
 

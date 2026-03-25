@@ -9,7 +9,7 @@ func (r *Router) handleSnapshot(ctx context.Context, message IncomingMessage, ar
 	}
 	lines, mode, err := parseSnapshotArgs(args, r.snapshotLines)
 	if err != nil {
-		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), "snapshot [lines] [image|text]"))
+		return r.replyBus.Reply(ctx, chat, paneKey, "usage", "usage: "+formatCommandUsage(r.commandPrefix(chat), snapshotCommandUsage(chat.Platform)))
 	}
 	return r.replySnapshotForMode(ctx, chat, paneKey, lines, mode)
 }

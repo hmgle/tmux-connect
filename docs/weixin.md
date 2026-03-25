@@ -99,13 +99,24 @@ Weixin v1 supports:
 - QR login and token bind CLI through `tmux-connect daemon weixin`
 - inbound text commands
 - outbound text replies
-- outbound images for `/snapshot`
+- `/snapshot` replies in plain text mode
 - persisted iLink cursor and per-user `context_token` in the daemon SQLite store
 
 Weixin v1 does not yet support:
 
 - inbound media attachments into the router
 - proactive sends to users who have never messaged the bot
+
+## Snapshot Behavior
+
+`/snapshot` is currently forced to text output on Weixin.
+
+Why:
+
+- iLink image replies currently render as placeholder gray boxes in the Weixin client
+- the text snapshot path is stable, so the daemon uses that path until image rendering is understood
+
+If you need rendered snapshot images today, use Telegram, Slack, Discord, or Feishu instead.
 
 ## Notes
 
@@ -147,10 +158,6 @@ Use the exact platform-scoped value:
 weixin:user@im.wechat
 ```
 
-### Images fail to send
+### `/snapshot` only returns text
 
-Check:
-
-- `cdn_base_url` matches your iLink environment
-- the token is still valid
-- the operator has an active cached `context_token`
+This is expected for now. The Weixin connector intentionally disables snapshot image replies because current iLink clients render them as placeholder gray boxes.

@@ -58,6 +58,26 @@ func helpText(commandPrefix string) string {
 	return helpTextForPlatform("telegram", commandPrefix, defaultDiscordCommandPrefix)
 }
 
+func snapshotCommandUsage(platform string) string {
+	if isWeixinPlatform(platform) {
+		return "snapshot [lines] [text]"
+	}
+	return "snapshot [lines] [image|text]"
+}
+
+func commandUsageForPlatform(platform string, spec botCommandSpec) string {
+	if spec.Command == "snapshot" {
+		return snapshotCommandUsage(platform)
+	}
+	return spec.Usage
+}
+
+func appendDefaultPlainTextHelp(lines []string, commandPrefix string) []string {
+	lines = append(lines, fmt.Sprintf("Plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
+	lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
+	return lines
+}
+
 func helpTextForPlatform(platform string, commandPrefix string, discordCommandPrefix string) string {
 	platform = strings.TrimSpace(strings.ToLower(platform))
 	lines := make([]string, 0, len(daemonCommandSpecs())+4)
@@ -85,16 +105,18 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 		lines = append(lines, `In Feishu private chats, plain text targets the current pane and may execute immediately when execute mode is enabled.`)
 		lines = append(lines, `In Feishu groups, mention the bot with a command such as "@bot panes". Plain text without @bot is ignored.`)
 		lines = append(lines, `Use "/send <text>" when the text itself starts with "/". Static cards are used for help and pane selection prompts.`)
+	case platform == "weixin":
+		lines = appendDefaultPlainTextHelp(lines, commandPrefix)
+		lines = append(lines, `Weixin iLink currently forces "/snapshot" to text output because image replies render as placeholder boxes in the client.`)
 	default:
-		lines = append(lines, fmt.Sprintf("Plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
-		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
+		lines = appendDefaultPlainTextHelp(lines, commandPrefix)
 	}
 	usagePrefix := commandPrefix
 	if platform == "discord" {
 		usagePrefix = ""
 	}
 	for _, spec := range daemonCommandSpecs() {
-		lines = append(lines, formatCommandUsage(usagePrefix, spec.Usage))
+		lines = append(lines, formatCommandUsage(usagePrefix, commandUsageForPlatform(platform, spec)))
 	}
 	return strings.Join(lines, "\n")
 }

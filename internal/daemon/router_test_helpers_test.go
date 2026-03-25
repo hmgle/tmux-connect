@@ -119,6 +119,9 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 	if m.Platform() == "whatsapp" {
 		return decorateWhatsAppMessage(kind, text, opts)
 	}
+	if m.Platform() == "weixin" {
+		return decorateCodeBlockMessage(kind, text, opts)
+	}
 	return decorateTelegramMessage(kind, text, opts)
 }
 
@@ -341,6 +344,10 @@ func whatsappChat(id string) ChatRef {
 	return ChatRef{Platform: "whatsapp", ChatID: id}
 }
 
+func weixinChat(id string) ChatRef {
+	return ChatRef{Platform: "weixin", ChatID: id}
+}
+
 func telegramMessage(chatID int64, messageID int64, text string) IncomingMessage {
 	return IncomingMessage{
 		Chat:      telegramChat(chatID),
@@ -431,6 +438,15 @@ func whatsappSelfMessage(chatID string, messageID string, text string) IncomingM
 	message := whatsappMessage(chatID, messageID, text)
 	message.IsFromSelf = true
 	return message
+}
+
+func weixinMessage(chatID string, messageID string, text string) IncomingMessage {
+	return IncomingMessage{
+		Chat:      weixinChat(chatID),
+		MessageID: messageID,
+		Text:      text,
+		ChatType:  "private",
+	}
 }
 
 func waitForMessages(t *testing.T, timeout time.Duration, predicate func([]sentMessage) bool, messenger *fakeMessenger) {

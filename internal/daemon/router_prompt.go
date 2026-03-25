@@ -126,6 +126,14 @@ func isFeishuChat(chat ChatRef) bool {
 	return strings.EqualFold(strings.TrimSpace(chat.Platform), "feishu")
 }
 
+func isWeixinPlatform(platform string) bool {
+	return strings.EqualFold(strings.TrimSpace(platform), "weixin")
+}
+
+func isWeixinChat(chat ChatRef) bool {
+	return isWeixinPlatform(chat.Platform)
+}
+
 func isFeishuDirectMessage(message IncomingMessage) bool {
 	return isFeishuChat(message.Chat) && strings.EqualFold(strings.TrimSpace(message.ChatType), "p2p")
 }
