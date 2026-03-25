@@ -68,33 +68,8 @@ func (s *Store) tableHasColumn(ctx context.Context, table string, column string)
 	return false, nil
 }
 
-func sqlString(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
-}
-
 func sqlIdent(value string) string {
 	return `"` + strings.ReplaceAll(strings.TrimSpace(value), `"`, `""`) + `"`
-}
-
-func wrapTransaction(statements ...string) string {
-	if len(statements) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("BEGIN;\n")
-	for _, statement := range statements {
-		trimmed := strings.TrimSpace(statement)
-		if trimmed == "" {
-			continue
-		}
-		b.WriteString(trimmed)
-		if !strings.HasSuffix(trimmed, ";") {
-			b.WriteString(";")
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString("COMMIT;\n")
-	return b.String()
 }
 
 func truncatePreview(value string) string {

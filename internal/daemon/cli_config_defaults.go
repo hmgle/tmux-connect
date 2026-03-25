@@ -1,9 +1,6 @@
 package daemon
 
 import (
-	"flag"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/hmgle/tmux-connect/internal/config"
@@ -93,8 +90,6 @@ func resolveConfigDefaults(fileCfg config.Daemon) (daemonConfigDefaults, error) 
 		defaults.plainTextEchoTimeout = value
 	}
 	defaults.snapshotTheme = envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_THEME", stringValue(fileCfg.Telegram.SnapshotTheme, termrender.ThemeDark))
-	defaults.whatsAppSessionDB = envOrDefault("TMUXCONN_WHATSAPP_SESSION_DB", stringValue(fileCfg.WhatsApp.SessionDB, defaultWhatsAppSessionDBPath(resolvedDBPath)))
-	defaults.whatsAppDeviceName = envOrDefault("TMUXCONN_WHATSAPP_DEVICE_NAME", stringValue(fileCfg.WhatsApp.DeviceName, "tmux-connect"))
 	defaults.followLines = intValue(fileCfg.FollowLines, 80)
 	defaults.followMinGap, err = durationValue("[daemon].follow_min_interval", fileCfg.FollowMinInterval, 700*time.Millisecond)
 	if err != nil {
@@ -104,38 +99,8 @@ func resolveConfigDefaults(fileCfg config.Daemon) (daemonConfigDefaults, error) 
 	if envValue, ok := envBoolValue("TMUXCONN_FOLLOW_DEBUG"); ok {
 		defaults.followDebug = envValue
 	}
-	defaults.whatsAppAutoMarkRead = boolValue(fileCfg.WhatsApp.AutoMarkRead, true)
-	if envValue, ok := envBoolValue("TMUXCONN_WHATSAPP_AUTO_MARK_READ"); ok {
-		defaults.whatsAppAutoMarkRead = envValue
-	}
-	defaults.whatsAppAllowSelfChat = boolValue(fileCfg.WhatsApp.AllowSelfChat, false)
-	if envValue, ok := envBoolValue("TMUXCONN_WHATSAPP_ALLOW_SELF_CHAT"); ok {
-		defaults.whatsAppAllowSelfChat = envValue
-	}
-	defaults.telegramToken = envOrDefault("TMUXCONN_TELEGRAM_TOKEN", stringValue(fileCfg.Telegram.Token, ""))
-	defaults.feishuAppID = envOrDefault("TMUXCONN_FEISHU_APP_ID", stringValue(fileCfg.Feishu.AppID, ""))
-	defaults.feishuAppSecret = envOrDefault("TMUXCONN_FEISHU_APP_SECRET", stringValue(fileCfg.Feishu.AppSecret, ""))
-	defaults.feishuBotOpenID = envOrDefault("TMUXCONN_FEISHU_BOT_OPEN_ID", stringValue(fileCfg.Feishu.BotOpenID, ""))
-	defaults.feishuBotUserID = envOrDefault("TMUXCONN_FEISHU_BOT_USER_ID", stringValue(fileCfg.Feishu.BotUserID, ""))
-	defaults.feishuBotUnionID = envOrDefault("TMUXCONN_FEISHU_BOT_UNION_ID", stringValue(fileCfg.Feishu.BotUnionID, ""))
-	defaults.slackBotToken = envOrDefault("TMUXCONN_SLACK_BOT_TOKEN", stringValue(fileCfg.Slack.BotToken, ""))
-	defaults.slackAppToken = envOrDefault("TMUXCONN_SLACK_APP_TOKEN", stringValue(fileCfg.Slack.AppToken, ""))
-	defaults.slackCommandPrefix = envOrDefault("TMUXCONN_SLACK_COMMAND_PREFIX", stringValue(fileCfg.Slack.CommandPrefix, defaultSlackCommandPrefix))
-	defaults.discordToken = envOrDefault("TMUXCONN_DISCORD_TOKEN", stringValue(fileCfg.Discord.Token, ""))
-	defaults.discordCommandPrefix = envOrDefault("TMUXCONN_DISCORD_COMMAND_PREFIX", stringValue(fileCfg.Discord.CommandPrefix, defaultDiscordCommandPrefix))
-	defaults.weixinToken = envOrDefault("TMUXCONN_WEIXIN_TOKEN", stringValue(fileCfg.Weixin.Token, ""))
-	defaults.weixinBaseURL = envOrDefault("TMUXCONN_WEIXIN_BASE_URL", stringValue(fileCfg.Weixin.BaseURL, ""))
-	defaults.weixinCDNBaseURL = envOrDefault("TMUXCONN_WEIXIN_CDN_BASE_URL", stringValue(fileCfg.Weixin.CDNBaseURL, ""))
-	defaults.weixinRouteTag = envOrDefault("TMUXCONN_WEIXIN_ROUTE_TAG", stringValue(fileCfg.Weixin.RouteTag, ""))
 	defaults.snapshotFontFile = envOrDefault("TMUXCONN_TELEGRAM_SNAPSHOT_FONT_FILE", stringValue(fileCfg.Telegram.SnapshotFontFile, ""))
-	defaults.apiBaseURL = envOrDefault("TMUXCONN_TELEGRAM_API_BASE", stringValue(fileCfg.Telegram.APIBase, ""))
+	applyPlatformDefaultsFromFileAndEnv(&defaults, fileCfg, resolvedDBPath)
 
 	return defaults, nil
-}
-
-func shouldUseWhatsAppFollowMinGap(fs *flag.FlagSet, fileCfg config.Daemon, platform string) bool {
-	return platform == "whatsapp" &&
-		!flagWasSet(fs, "follow-min-interval") &&
-		fileCfg.FollowMinInterval == nil &&
-		strings.TrimSpace(os.Getenv("TMUXCONN_FOLLOW_MIN_INTERVAL")) == ""
 }
