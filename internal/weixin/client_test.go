@@ -177,6 +177,7 @@ func TestClientSendImageUploadsMediaAndCaption(t *testing.T) {
 		"weixin|context_token|user@im.wechat": "ctx-1",
 	}}
 	uploaded := false
+	sendMessageCalls := 0
 	clientHTTP := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		switch r.URL.Path {
 		case "/ilink/bot/getuploadurl":
@@ -185,18 +186,34 @@ func TestClientSendImageUploadsMediaAndCaption(t *testing.T) {
 			uploaded = true
 			return jsonResponse(t, r, map[string]any{}, map[string]string{"x-encrypted-param": "download-param"})
 		case "/ilink/bot/sendmessage":
+			sendMessageCalls++
 			var req sendMessageReq
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				t.Fatalf("Decode() error = %v", err)
 			}
-			if len(req.Msg.ItemList) != 2 {
-				t.Fatalf("item count = %d, want 2", len(req.Msg.ItemList))
-			}
-			if req.Msg.ItemList[0].ImageItem == nil || req.Msg.ItemList[0].ImageItem.Media == nil || req.Msg.ItemList[0].ImageItem.Media.EncryptQueryParam != "download-param" {
-				t.Fatalf("image item = %#v", req.Msg.ItemList[0].ImageItem)
-			}
-			if req.Msg.ItemList[1].TextItem == nil || req.Msg.ItemList[1].TextItem.Text != "pane snapshot" {
-				t.Fatalf("caption item = %#v", req.Msg.ItemList[1].TextItem)
+			switch sendMessageCalls {
+			case 1:
+				if len(req.Msg.ItemList) != 1 {
+					t.Fatalf("first send item count = %d, want 1", len(req.Msg.ItemList))
+				}
+				if req.Msg.ItemList[0].ImageItem == nil || req.Msg.ItemList[0].ImageItem.Media == nil || req.Msg.ItemList[0].ImageItem.Media.EncryptQueryParam != "download-param" {
+					t.Fatalf("first send image item = %#v", req.Msg.ItemList[0].ImageItem)
+				}
+				if req.Msg.ItemList[0].TextItem != nil {
+					t.Fatalf("first send text item = %#v, want nil", req.Msg.ItemList[0].TextItem)
+				}
+			case 2:
+				if len(req.Msg.ItemList) != 1 {
+					t.Fatalf("second send item count = %d, want 1", len(req.Msg.ItemList))
+				}
+				if req.Msg.ItemList[0].TextItem == nil || req.Msg.ItemList[0].TextItem.Text != "pane snapshot" {
+					t.Fatalf("second send text item = %#v", req.Msg.ItemList[0].TextItem)
+				}
+				if req.Msg.ItemList[0].ImageItem != nil {
+					t.Fatalf("second send image item = %#v, want nil", req.Msg.ItemList[0].ImageItem)
+				}
+			default:
+				t.Fatalf("unexpected sendmessage call #%d", sendMessageCalls)
 			}
 			return jsonResponse(t, r, sendMessageResp{Ret: 0}, nil)
 		default:
@@ -221,5 +238,8 @@ func TestClientSendImageUploadsMediaAndCaption(t *testing.T) {
 	}
 	if !uploaded {
 		t.Fatal("expected CDN upload request")
+	}
+	if sendMessageCalls != 2 {
+		t.Fatalf("sendmessage calls = %d, want 2", sendMessageCalls)
 	}
 }

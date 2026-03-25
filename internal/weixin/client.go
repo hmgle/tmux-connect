@@ -235,16 +235,15 @@ func (c *Client) SendImage(ctx context.Context, chatID string, fileName string, 
 			MidSize: aesECBPaddedSize(len(data)),
 		},
 	}}
-	caption = strings.TrimSpace(caption)
-	if caption != "" {
-		items = append(items, messageItem{
-			Type:     messageItemText,
-			TextItem: &textItem{Text: caption},
-		})
-	}
 	messageID := "tmuxconn-" + randomHex(8)
 	if err := c.api.sendItems(ctx, chatID, contextToken, messageID, items); err != nil {
 		return "", err
+	}
+	caption = strings.TrimSpace(caption)
+	if caption != "" {
+		if _, err := c.SendText(ctx, chatID, caption); err != nil {
+			return "", err
+		}
 	}
 	return messageID, nil
 }
