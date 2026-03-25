@@ -78,3 +78,21 @@ func TestVerifyTokenSetsHeaders(t *testing.T) {
 		t.Fatalf("VerifyToken() error = %v", err)
 	}
 }
+
+func TestVerifyTokenRejectsBusinessError(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ret":1,"errcode":4001,"errmsg":"invalid token"}`)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+
+	err := VerifyToken(context.Background(), client, "https://ilinkai.weixin.qq.com", "token-1", "")
+	if err == nil || !strings.Contains(err.Error(), "invalid token") {
+		t.Fatalf("VerifyToken() error = %v, want business error", err)
+	}
+}

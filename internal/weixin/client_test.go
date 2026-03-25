@@ -131,6 +131,63 @@ func TestClientGetUpdatesAndToMessageEventPersistState(t *testing.T) {
 	}
 }
 
+func TestClientGetUpdatesRejectsBusinessError(t *testing.T) {
+	t.Parallel()
+
+	clientHTTP := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, r, getUpdatesResp{
+			Ret:     0,
+			Errcode: 4001,
+			Errmsg:  "invalid token",
+		}, nil)
+	})}
+
+	client, err := NewClient(ClientConfig{
+		Token:      "test-token",
+		BaseURL:    "https://example.test",
+		CDNBaseURL: "https://example.test",
+		HTTPClient: clientHTTP,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.api.getUpdates(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "invalid token") {
+		t.Fatalf("getUpdates() error = %v, want business error", err)
+	}
+}
+
+func TestClientGetUpdatesAllowsSessionExpiredResponse(t *testing.T) {
+	t.Parallel()
+
+	clientHTTP := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(t, r, getUpdatesResp{
+			Ret:     1,
+			Errcode: sessionExpiredErrcode,
+			Errmsg:  "session expired",
+		}, nil)
+	})}
+
+	client, err := NewClient(ClientConfig{
+		Token:      "test-token",
+		BaseURL:    "https://example.test",
+		CDNBaseURL: "https://example.test",
+		HTTPClient: clientHTTP,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	resp, err := client.api.getUpdates(context.Background(), "")
+	if err != nil {
+		t.Fatalf("getUpdates() error = %v", err)
+	}
+	if resp.Errcode != sessionExpiredErrcode {
+		t.Fatalf("errcode = %d, want %d", resp.Errcode, sessionExpiredErrcode)
+	}
+}
+
 func TestClientSendTextUsesStoredContextToken(t *testing.T) {
 	t.Parallel()
 

@@ -124,7 +124,9 @@ func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageE
 				return ctx.Err()
 			}
 			c.logf("weixin getUpdates error: %v", err)
-			time.Sleep(backoff)
+			if err := waitForContextOrTimeout(ctx, backoff); err != nil {
+				return err
+			}
 			if backoff < 30*time.Second {
 				backoff *= 2
 			}
@@ -134,12 +136,10 @@ func (c *Client) Run(ctx context.Context, handler func(context.Context, MessageE
 
 		if resp.Errcode == sessionExpiredErrcode {
 			c.logf("weixin session expired: errcode=%d errmsg=%s", resp.Errcode, strings.TrimSpace(resp.Errmsg))
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Minute):
-				continue
+			if err := waitForContextOrTimeout(ctx, time.Minute); err != nil {
+				return err
 			}
+			continue
 		}
 		if resp.GetUpdatesBuf != "" && resp.GetUpdatesBuf != cursor {
 			cursor = resp.GetUpdatesBuf
@@ -434,6 +434,12 @@ func (c *apiClient) getUpdates(ctx context.Context, cursor string) (*getUpdatesR
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("weixin getupdates json: %w", err)
 	}
+	if resp.Errcode == sessionExpiredErrcode {
+		return &resp, nil
+	}
+	if resp.Ret != 0 || resp.Errcode != 0 {
+		return nil, fmt.Errorf("weixin getupdates: ret=%d errcode=%d errmsg=%s", resp.Ret, resp.Errcode, strings.TrimSpace(resp.Errmsg))
+	}
 	return &resp, nil
 }
 
@@ -503,4 +509,23 @@ func randomHex(n int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buf)
+}
+
+func waitForContextOrTimeout(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

@@ -34,7 +34,7 @@ func init() {
 				return err
 			}
 			lines := []string{
-				"weixin login: bearer token must already be provisioned outside tmux-connect",
+				"weixin login: use `tmux-connect daemon weixin setup` to fetch or bind an iLink bearer token",
 				"weixin first message: the operator must send one WeChat message first so tmux-connect can store context_token",
 			}
 			if cfg.WeixinRouteTag != "" {

@@ -124,9 +124,14 @@ func VerifyToken(ctx context.Context, httpClient *http.Client, apiBase string, t
 	if err != nil {
 		return err
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(raw, &parsed); err != nil {
+	var resp getUpdatesResp
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return fmt.Errorf("verify token: invalid json response: %w", err)
+	}
+	// Verification is intentionally stricter than runtime polling: an expired
+	// session means this token is not usable for setup/bind purposes.
+	if resp.Ret != 0 || resp.Errcode != 0 {
+		return fmt.Errorf("verify token: ret=%d errcode=%d errmsg=%s", resp.Ret, resp.Errcode, strings.TrimSpace(resp.Errmsg))
 	}
 	return nil
 }
