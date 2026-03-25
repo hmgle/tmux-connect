@@ -15,9 +15,11 @@ import (
 )
 
 type fakeMessenger struct {
-	mu       sync.Mutex
-	messages []sentMessage
-	platform string
+	mu              sync.Mutex
+	messages        []sentMessage
+	platform        string
+	sendMessageErrs []error
+	sendImageErrs   []error
 }
 
 type sentMessage struct {
@@ -45,6 +47,11 @@ func (m *fakeMessenger) Platform() string {
 func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.sendMessageErrs) > 0 {
+		err := m.sendMessageErrs[0]
+		m.sendMessageErrs = m.sendMessageErrs[1:]
+		return OutboundMessage{}, err
+	}
 	parseMode := telegram.ParseMode("")
 	if opts.Format == MessageFormatTelegramHTML {
 		parseMode = telegram.ParseModeHTML
@@ -71,6 +78,11 @@ func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, o
 func (m *fakeMessenger) SendImage(_ context.Context, _ ChatRef, fileName string, photo []byte, caption string, opts SendOptions) (OutboundMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(m.sendImageErrs) > 0 {
+		err := m.sendImageErrs[0]
+		m.sendImageErrs = m.sendImageErrs[1:]
+		return OutboundMessage{}, err
+	}
 	parseMode := telegram.ParseMode("")
 	if opts.Format == MessageFormatTelegramHTML {
 		parseMode = telegram.ParseModeHTML

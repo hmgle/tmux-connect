@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -244,6 +245,48 @@ func TestFollowManagerReplacingSessionKeepsNewestSessionAndDropsStaleBuffer(t *t
 	if !strings.Contains(joined, "fresh buffered output") {
 		t.Fatalf("messages = %q, want fresh buffered output from replacement session", joined)
 	}
+}
+
+func TestFollowManagerDeliveryFailureKeepsSessionAndRetries(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	service.initialOutput = ""
+	messenger := &fakeMessenger{
+		sendMessageErrs: []error{errors.New("weixin sendmessage: ret=1 errcode=4001 errmsg=context_token expired")},
+	}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	follow := NewFollowManager(service, replyBus, 20)
+	follow.minInterval = 10 * time.Millisecond
+
+	chat := ChatRef{Platform: "weixin", ChatID: "user@im.wechat"}
+	if err := follow.Enable(ctx, chat, "default:%5"); err != nil {
+		t.Fatalf("Enable() error = %v", err)
+	}
+
+	service.sub.PushChunk(tmux.OutputChunk{Text: "retry after failure", ReceivedAt: time.Now()})
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !follow.IsEnabled(chat.Key()) {
+			t.Fatal("follow session disappeared after a delivery failure")
+		}
+		sent := joinSentTexts(messenger.snapshot())
+		if strings.Contains(sent, "retry after failure") {
+			if !strings.Contains(sent, "delivery resumed after 1 failed attempt") {
+				t.Fatalf("messages = %q, want recovery notice", sent)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for retried follow output, messages=%q", joinSentTexts(messenger.snapshot()))
 }
 
 type queuedFollowPaneService struct {

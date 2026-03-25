@@ -23,15 +23,6 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 	lastSentTranscript := ""
 	var lastSentAt time.Time
 
-	if initial := strings.TrimSpace(stream.Initial); initial != "" {
-		if err := m.replyBus.Reply(ctx, session.chat, session.paneKey, "follow-initial", formatFollowMessage(session.paneKey, initial, m.maxMessageLen)); err != nil {
-			return
-		}
-		m.debugf(session, "initial sent initial_len=%d initial_preview=%s", len([]rune(stream.Initial)), debugPreview(stream.Initial, 180))
-		lastSentTranscript = stream.Initial
-		lastSentAt = time.Now()
-	}
-
 	timer := time.NewTimer(session.minInterval)
 	if !timer.Stop() {
 		select {
@@ -42,8 +33,10 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 	defer timer.Stop()
 
 	pendingRunes := 0
-	dirty := false
+	dirty := strings.TrimSpace(stream.Initial) != ""
 	timerActive := false
+	sendFailures := 0
+	var lastSendErr error
 	chunks := stream.Subscription.Chunks()
 	errs := stream.Subscription.Errs()
 
@@ -73,22 +66,59 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		timer.Reset(wait)
 		timerActive = true
 	}
-	flush := func(flushCtx context.Context) bool {
+	scheduleRetry := func() {
+		if timerActive {
+			return
+		}
+		wait := session.minInterval
+		if wait <= 0 {
+			wait = 700 * time.Millisecond
+		}
+		for attempt := 1; attempt < sendFailures && wait < 30*time.Second; attempt++ {
+			wait *= 2
+			if wait > 30*time.Second {
+				wait = 30 * time.Second
+			}
+		}
+		timer.Reset(wait)
+		timerActive = true
+	}
+	flush := func(flushCtx context.Context, kind string) bool {
 		if !dirty {
 			return true
 		}
 		currentView := buildRecentFollowContext(transcript, 6, 600)
 		previousView := buildRecentFollowContext(lastSentTranscript, 6, 600)
 		text, changed := buildFollowUpdate(lastSentTranscript, transcript)
-		dirty = false
-		pendingRunes = 0
 		m.debugf(session, "flush changed=%t transcript_len=%d prev_view=%s curr_view=%s send=%s", changed, len([]rune(transcript)), debugPreview(previousView, 160), debugPreview(currentView, 160), debugPreview(text, 180))
 		if !changed {
+			dirty = false
+			pendingRunes = 0
 			return true
 		}
-		if err := m.replyBus.Reply(flushCtx, session.chat, session.paneKey, "follow-output", formatFollowMessage(session.paneKey, text, m.maxMessageLen)); err != nil {
+		messageKind := kind
+		if messageKind == "" {
+			messageKind = "follow-output"
+		}
+		if sendFailures > 0 {
+			recoveryNotice := fmt.Sprintf("[follow delivery resumed after %d failed attempt(s)]\n", sendFailures)
+			text = recoveryNotice + text
+		}
+		if err := m.replyBus.Reply(flushCtx, session.chat, session.paneKey, messageKind, formatFollowMessage(session.paneKey, text, m.maxMessageLen)); err != nil {
+			lastSendErr = err
+			sendFailures++
+			pendingRunes = 0
+			dirty = true
+			m.warnf(session, "delivery failure attempt=%d kind=%s err=%v", sendFailures, messageKind, err)
 			return false
 		}
+		if sendFailures > 0 {
+			m.warnf(session, "delivery recovered after %d failed attempt(s); last_err=%v", sendFailures, lastSendErr)
+			sendFailures = 0
+			lastSendErr = nil
+		}
+		dirty = false
+		pendingRunes = 0
 		lastSentTranscript = transcript
 		lastSentAt = time.Now()
 		return true
@@ -117,6 +147,10 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 		}
 	}
 
+	if dirty && !flush(ctx, "follow-initial") {
+		scheduleRetry()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -125,7 +159,9 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 			}
 			drainPendingChunks()
 			flushCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			_ = flush(flushCtx)
+			if !flush(flushCtx, "follow-output") {
+				m.warnf(session, "dropping buffered follow output on shutdown after delivery failure: %v", lastSendErr)
+			}
 			cancel()
 			return
 		case err, ok := <-errs:
@@ -133,23 +169,29 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 				errs = nil
 				if chunks == nil {
 					drainPendingChunks()
-					_ = flush(ctx)
+					if !flush(ctx, "follow-output") {
+						m.warnf(session, "stream closed with unsent follow output: %v", lastSendErr)
+					}
 					return
 				}
 				continue
 			}
 			drainPendingChunks()
-			if !flush(ctx) {
-				return
+			if !flush(ctx, "follow-output") {
+				m.warnf(session, "follow stream failed while buffered output was unsent: stream_err=%v send_err=%v", err, lastSendErr)
 			}
-			_ = m.replyBus.Reply(ctx, session.chat, session.paneKey, "follow-error", fmt.Sprintf("follow stopped for %s: %v", session.paneKey, err))
+			if replyErr := m.replyBus.Reply(ctx, session.chat, session.paneKey, "follow-error", fmt.Sprintf("follow stopped for %s: %v", session.paneKey, err)); replyErr != nil {
+				m.warnf(session, "failed to deliver follow stop notification: %v", replyErr)
+			}
 			return
 		case chunk, ok := <-chunks:
 			if !ok {
 				chunks = nil
 				if errs == nil {
 					drainPendingChunks()
-					_ = flush(ctx)
+					if !flush(ctx, "follow-output") {
+						m.warnf(session, "chunk stream closed with unsent follow output: %v", lastSendErr)
+					}
 					return
 				}
 				continue
@@ -157,16 +199,16 @@ func (m *FollowManager) run(ctx context.Context, session *followSession, stream 
 			appendChunk(chunk.Text)
 			if pendingRunes >= m.maxMessageLen {
 				stopTimer()
-				if !flush(ctx) {
-					return
+				if !flush(ctx, "follow-output") {
+					scheduleRetry()
 				}
 				continue
 			}
 			scheduleFlush(time.Now())
 		case <-timer.C:
 			timerActive = false
-			if !flush(ctx) {
-				return
+			if !flush(ctx, "follow-output") {
+				scheduleRetry()
 			}
 		}
 	}
