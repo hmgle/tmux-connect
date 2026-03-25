@@ -27,10 +27,7 @@ func (r *Router) promptForCommandInput(ctx context.Context, message IncomingMess
 	r.setPending(message.pendingKey(), pendingCommand{
 		Command: spec.Command,
 	})
-	promptText := spec.Prompt.Message
-	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "discord") && strings.TrimSpace(message.ThreadID) != "" {
-		promptText += "\n\nIn Discord channels, reply with " + strconv.Quote(r.discordCommandPrefix+" <value>") + "."
-	}
+	promptText := r.replyBus.adapter.PromptText(message, *spec.Prompt)
 	return r.replyBus.ReplyWithOptions(ctx, message.Chat, "", "prompt", promptText, r.replyBus.adapter.PromptOptions(message, *spec.Prompt))
 }
 

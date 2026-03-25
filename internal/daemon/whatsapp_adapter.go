@@ -58,11 +58,23 @@ func (a *whatsappAdapter) DecorateMessage(kind string, text string, opts SendOpt
 	return decorateWhatsAppMessage(kind, text, opts)
 }
 
+func (a *whatsappAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *whatsappAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
 		ReplyToSenderID:  message.Chat.ChatID,
 	}
+}
+
+func (a *whatsappAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	return defaultPromptText(message, spec)
+}
+
+func (a *whatsappAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return defaultSnapshotMode(mode)
 }
 
 func (a *whatsappAdapter) SnapshotCaption(paneKey string) string {

@@ -66,12 +66,21 @@ type OutboundMessage struct {
 	MessageID string
 }
 
+type parsedCommand struct {
+	Command string
+	Args    string
+	Ignore  bool
+}
+
 type platformAdapter interface {
 	Platform() string
 	SendMessage(context.Context, ChatRef, string, SendOptions) (OutboundMessage, error)
 	SendImage(context.Context, ChatRef, string, []byte, string, SendOptions) (OutboundMessage, error)
 	DecorateMessage(kind string, text string, opts SendOptions) (string, SendOptions)
+	ParseMessage(message IncomingMessage) parsedCommand
 	PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions
+	PromptText(message IncomingMessage, spec commandPromptSpec) string
+	NormalizeSnapshotMode(mode snapshotMode) snapshotMode
 	SnapshotCaption(paneKey string) string
 	Run(context.Context, func(context.Context, IncomingMessage) error) error
 	RegisterCommands(context.Context, []botCommandSpec) error

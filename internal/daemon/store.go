@@ -87,6 +87,13 @@ func (s *Store) Path() string {
 	return s.path
 }
 
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
 func (s *Store) configure(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping sqlite db: %w", err)

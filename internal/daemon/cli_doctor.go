@@ -31,6 +31,7 @@ func runDoctorWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 	if err != nil {
 		return tmuxconn.UsageError("open sqlite store: %v", err)
 	}
+	defer store.Close()
 	fmt.Fprintf(stdout, "sqlite store: ok (%s)\n", store.Path())
 
 	registry := NewPaneRegistry(service)

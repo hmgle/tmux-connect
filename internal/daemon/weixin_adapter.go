@@ -60,8 +60,20 @@ func (a *weixinAdapter) DecorateMessage(kind string, text string, opts SendOptio
 	return decorateCodeBlockMessage(kind, text, opts)
 }
 
+func (a *weixinAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *weixinAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{ReplyToMessageID: message.MessageID}
+}
+
+func (a *weixinAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	return defaultPromptText(message, spec)
+}
+
+func (a *weixinAdapter) NormalizeSnapshotMode(snapshotMode) snapshotMode {
+	return snapshotModeText
 }
 
 func (a *weixinAdapter) SnapshotCaption(paneKey string) string {

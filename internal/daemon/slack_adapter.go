@@ -14,9 +14,10 @@ import (
 )
 
 type slackAdapter struct {
-	client *slackclient.Client
-	stderr io.Writer
-	store  *Store
+	client        *slackclient.Client
+	stderr        io.Writer
+	store         *Store
+	commandPrefix string
 
 	mu            sync.Mutex
 	activeThreads map[string]time.Time
@@ -37,10 +38,15 @@ func newSlackAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapte
 	if strings.TrimSpace(cfg.SlackAppToken) == "" {
 		return nil, fmt.Errorf("slack app token is required")
 	}
+	prefix := strings.TrimSpace(cfg.SlackCommandPrefix)
+	if prefix == "" {
+		prefix = defaultSlackCommandPrefix
+	}
 	return &slackAdapter{
 		client:        slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
 		stderr:        stderr,
 		store:         store,
+		commandPrefix: prefix,
 		activeThreads: make(map[string]time.Time),
 		threadTTL:     defaultSlackThreadTTL,
 		maxThreads:    defaultSlackMaxThreads,
@@ -78,8 +84,20 @@ func (a *slackAdapter) DecorateMessage(kind string, text string, opts SendOption
 	return decorateSlackMessage(kind, text, opts)
 }
 
+func (a *slackAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, a.commandPrefix)
+}
+
 func (a *slackAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{ThreadID: message.replyThreadID()}
+}
+
+func (a *slackAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	return defaultPromptText(message, spec)
+}
+
+func (a *slackAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return defaultSnapshotMode(mode)
 }
 
 func (a *slackAdapter) SnapshotCaption(paneKey string) string {

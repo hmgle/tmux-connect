@@ -81,6 +81,10 @@ func (a *telegramAdapter) DecorateMessage(kind string, text string, opts SendOpt
 	return decorateTelegramMessage(kind, text, opts)
 }
 
+func (a *telegramAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *telegramAdapter) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
@@ -89,6 +93,14 @@ func (a *telegramAdapter) PromptOptions(message IncomingMessage, spec commandPro
 			InputFieldPlaceholder: spec.Placeholder,
 		},
 	}
+}
+
+func (a *telegramAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	return defaultPromptText(message, spec)
+}
+
+func (a *telegramAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return defaultSnapshotMode(mode)
 }
 
 func (a *telegramAdapter) SnapshotCaption(paneKey string) string {

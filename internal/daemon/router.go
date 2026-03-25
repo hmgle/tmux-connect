@@ -99,22 +99,19 @@ func (r *Router) HandleMessage(ctx context.Context, message IncomingMessage) err
 		return r.replyBus.Reply(ctx, message.Chat, "", "unauthorized", "chat is not allowed to use this bot")
 	}
 
-	command, args := r.parseCommand(message, text)
+	parsed := r.replyBus.adapter.ParseMessage(message)
+	command, args := parsed.Command, parsed.Args
 	if command == "" {
 		if pending, ok := r.consumePending(message.pendingKey()); ok {
 			return r.handlePendingInput(ctx, message, pending, text)
 		}
-		if shouldIgnorePlainTextMessage(message) {
+		if parsed.Ignore {
 			return nil
 		}
-		return r.handlePlainText(ctx, message, text)
+		return r.handlePlainText(ctx, message, args)
 	}
 	if command != "" {
 		r.clearPending(message.pendingKey())
 	}
 	return r.dispatchCommand(ctx, message, command, args)
-}
-
-func shouldIgnorePlainTextMessage(message IncomingMessage) bool {
-	return isFeishuChat(message.Chat) && !isFeishuDirectMessage(message) && !message.IsAppMention
 }

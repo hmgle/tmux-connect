@@ -125,6 +125,20 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 	return decorateTelegramMessage(kind, text, opts)
 }
 
+func (m *fakeMessenger) ParseMessage(message IncomingMessage) parsedCommand {
+	switch m.Platform() {
+	case "slack":
+		return defaultParseMessage(message, defaultSlackCommandPrefix)
+	case "feishu":
+		if !isFeishuDirectMessage(message) && !message.IsAppMention {
+			return parsedCommand{Ignore: true}
+		}
+		return defaultParseMessage(message, "")
+	default:
+		return defaultParseMessage(message, "")
+	}
+}
+
 func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
 	if m.Platform() == "slack" {
 		return SendOptions{ThreadID: message.replyThreadID()}
@@ -142,6 +156,20 @@ func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromp
 			InputFieldPlaceholder: spec.Placeholder,
 		},
 	}
+}
+
+func (m *fakeMessenger) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	if m.Platform() == "discord" && strings.TrimSpace(message.ThreadID) != "" {
+		return spec.Message + "\n\nIn Discord channels, reply with " + strconv.Quote(defaultDiscordCommandPrefix+" <value>") + "."
+	}
+	return spec.Message
+}
+
+func (m *fakeMessenger) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	if m.Platform() == "weixin" {
+		return snapshotModeText
+	}
+	return mode
 }
 
 func (m *fakeMessenger) SnapshotCaption(paneKey string) string {

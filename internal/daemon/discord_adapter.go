@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -104,8 +105,24 @@ func (a *discordAdapter) DecorateMessage(kind string, text string, opts SendOpti
 	return decorateDiscordMessage(kind, text, opts)
 }
 
+func (a *discordAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *discordAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{ThreadID: message.ThreadID}
+}
+
+func (a *discordAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	text := defaultPromptText(message, spec)
+	if strings.TrimSpace(message.ThreadID) != "" {
+		text += "\n\nIn Discord channels, reply with " + strconv.Quote(a.commandPrefix+" <value>") + "."
+	}
+	return text
+}
+
+func (a *discordAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return defaultSnapshotMode(mode)
 }
 
 func (a *discordAdapter) SnapshotCaption(paneKey string) string {

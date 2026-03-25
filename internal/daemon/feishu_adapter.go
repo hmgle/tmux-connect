@@ -76,8 +76,23 @@ func (a *feishuAdapter) DecorateMessage(kind string, text string, opts SendOptio
 	return decorateFeishuMessage(kind, text, opts)
 }
 
+func (a *feishuAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	if !isFeishuDirectMessage(message) && !message.IsAppMention {
+		return parsedCommand{Ignore: true}
+	}
+	return defaultParseMessage(message, "")
+}
+
 func (a *feishuAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return feishuReplyOptions(message)
+}
+
+func (a *feishuAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	return defaultPromptText(message, spec)
+}
+
+func (a *feishuAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return defaultSnapshotMode(mode)
 }
 
 func (a *feishuAdapter) SnapshotCaption(paneKey string) string {

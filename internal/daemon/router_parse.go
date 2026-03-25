@@ -5,35 +5,6 @@ import (
 	"strings"
 )
 
-func (r *Router) parseCommand(message IncomingMessage, text string) (string, string) {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "", ""
-	}
-	if strings.HasPrefix(text, "/") {
-		return parseExplicitCommand(text)
-	}
-	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "slack") {
-		if message.IsAppMention {
-			return parseExplicitCommand(text)
-		}
-		if prefixed, ok := trimCommandPrefix(text, r.slackCommandPrefix); ok {
-			return parseExplicitCommand(prefixed)
-		}
-		return "", text
-	}
-	if strings.EqualFold(strings.TrimSpace(message.Chat.Platform), "feishu") {
-		if !isFeishuDirectMessage(message) && !message.IsAppMention {
-			return "", ""
-		}
-		if message.IsAppMention {
-			return parseExplicitCommand(text)
-		}
-		return "", text
-	}
-	return "", text
-}
-
 func parseExplicitCommand(text string) (string, string) {
 	text = strings.TrimSpace(text)
 	if text == "" {

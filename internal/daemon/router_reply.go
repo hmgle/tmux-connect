@@ -7,7 +7,7 @@ import (
 )
 
 func (r *Router) replySnapshotForMode(ctx context.Context, chat ChatRef, paneKey string, lines int, mode snapshotMode) error {
-	mode = normalizeSnapshotMode(chat, mode)
+	mode = r.replyBus.adapter.NormalizeSnapshotMode(mode)
 	body, err := r.service.Snapshot(ctx, paneKey, lines)
 	if err != nil {
 		return r.replyBus.Reply(ctx, chat, paneKey, "error", fmt.Sprintf("snapshot failed: %v", err))
@@ -20,13 +20,6 @@ func (r *Router) replySnapshotForMode(ctx context.Context, chat ChatRef, paneKey
 		return r.replyBus.ReplySnapshot(ctx, chat, paneKey, body, richBody)
 	}
 	return r.replySnapshotText(ctx, chat, paneKey, body)
-}
-
-func normalizeSnapshotMode(chat ChatRef, mode snapshotMode) snapshotMode {
-	if isWeixinChat(chat) {
-		return snapshotModeText
-	}
-	return mode
 }
 
 func (r *Router) replySnapshotText(ctx context.Context, chat ChatRef, paneKey string, body string) error {
