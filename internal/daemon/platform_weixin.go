@@ -10,11 +10,6 @@ import (
 	"github.com/hmgle/tmux-connect/internal/tmuxconn"
 )
 
-const (
-	defaultWeixinBaseURL    = "https://ilinkai.weixin.qq.com"
-	defaultWeixinCDNBaseURL = "https://novac2c.cdn.weixin.qq.com/c2c"
-)
-
 func init() {
 	RegisterPlatform("weixin", platformRegistration{
 		factory: func(cfg Config, stderr io.Writer, store *Store) (platformAdapter, error) {
