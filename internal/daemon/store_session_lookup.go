@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 )
@@ -9,60 +10,61 @@ import (
 const sessionSelectColumns = "session_key, platform, chat_id, pane_key, agent, agent_session_id, agent_thread_id, last_inbound_message_id, last_outbound_message_id"
 
 func (s *Store) SessionByKey(ctx context.Context, sessionKey string) (SessionRecord, error) {
-	return s.querySingleSession(ctx, fmt.Sprintf(`
+	return s.querySingleSession(ctx, `
 SELECT %s
 FROM sessions
-WHERE session_key = %s
+WHERE session_key = ?
 LIMIT 1;
-`, sessionSelectColumns, sqlString(strings.TrimSpace(sessionKey))))
+`, strings.TrimSpace(sessionKey))
 }
 
 func (s *Store) LatestSessionByChatPane(ctx context.Context, chat ChatRef, paneKey string) (SessionRecord, error) {
 	chat = chat.Normalized()
-	return s.querySingleSession(ctx, fmt.Sprintf(`
+	return s.querySingleSession(ctx, `
 SELECT %s
 FROM sessions
-WHERE platform = %s AND chat_id = %s AND pane_key = %s
+WHERE platform = ? AND chat_id = ? AND pane_key = ?
 ORDER BY updated_at DESC
 LIMIT 1;
-`, sessionSelectColumns, sqlString(chat.Platform), sqlString(chat.ChatID), sqlString(strings.TrimSpace(paneKey))))
+`, chat.Platform, chat.ChatID, strings.TrimSpace(paneKey))
 }
 
-func (s *Store) querySingleSession(ctx context.Context, query string) (SessionRecord, error) {
-	var rows []sessionRow
-	if err := s.queryJSON(ctx, query, &rows); err != nil {
-		return SessionRecord{}, err
-	}
-	if len(rows) == 0 {
+func (s *Store) querySingleSession(ctx context.Context, query string, args ...any) (SessionRecord, error) {
+	query = fmt.Sprintf(query, sessionSelectColumns)
+	record, err := scanSession(s.db.QueryRowContext(ctx, query, args...))
+	if err == sql.ErrNoRows {
 		return SessionRecord{}, nil
 	}
-	return rows[0].toRecord()
+	if err != nil {
+		return SessionRecord{}, fmt.Errorf("sqlite query failed: %w", err)
+	}
+	return record, nil
 }
 
-type sessionRow struct {
-	SessionKey            string `json:"session_key"`
-	Platform              string `json:"platform"`
-	ChatID                string `json:"chat_id"`
-	PaneKey               string `json:"pane_key"`
-	Agent                 string `json:"agent"`
-	AgentSessionID        string `json:"agent_session_id"`
-	AgentThreadID         string `json:"agent_thread_id"`
-	LastInboundMessageID  string `json:"last_inbound_message_id"`
-	LastOutboundMessageID string `json:"last_outbound_message_id"`
+type sessionScanner interface {
+	Scan(dest ...any) error
 }
 
-func (r sessionRow) toRecord() (SessionRecord, error) {
-	return SessionRecord{
-		SessionKey:            r.SessionKey,
-		Platform:              r.Platform,
-		ChatID:                strings.TrimSpace(r.ChatID),
-		PaneKey:               r.PaneKey,
-		Agent:                 r.Agent,
-		AgentSessionID:        r.AgentSessionID,
-		AgentThreadID:         r.AgentThreadID,
-		LastInboundMessageID:  strings.TrimSpace(r.LastInboundMessageID),
-		LastOutboundMessageID: strings.TrimSpace(r.LastOutboundMessageID),
-	}, nil
+func scanSession(scanner sessionScanner) (SessionRecord, error) {
+	var record SessionRecord
+	err := scanner.Scan(
+		&record.SessionKey,
+		&record.Platform,
+		&record.ChatID,
+		&record.PaneKey,
+		&record.Agent,
+		&record.AgentSessionID,
+		&record.AgentThreadID,
+		&record.LastInboundMessageID,
+		&record.LastOutboundMessageID,
+	)
+	if err != nil {
+		return SessionRecord{}, err
+	}
+	record.ChatID = strings.TrimSpace(record.ChatID)
+	record.LastInboundMessageID = strings.TrimSpace(record.LastInboundMessageID)
+	record.LastOutboundMessageID = strings.TrimSpace(record.LastOutboundMessageID)
+	return record, nil
 }
 
 func sessionKeyFor(chat ChatRef, paneKey string) string {

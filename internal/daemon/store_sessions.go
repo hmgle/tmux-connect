@@ -17,7 +17,7 @@ func (s *Store) EnsureSession(ctx context.Context, chat ChatRef, paneKey string,
 		return SessionRecord{}, fmt.Errorf("pane key is required")
 	}
 	sessionKey := sessionKeyFor(chat, paneKey)
-	query := fmt.Sprintf(`
+	record, err := scanSession(s.db.QueryRowContext(ctx, `
 INSERT INTO sessions (
   session_key,
   platform,
@@ -29,7 +29,7 @@ INSERT INTO sessions (
   last_inbound_message_id,
   last_outbound_message_id
 )
-VALUES (%s, %s, %s, %s, %s, '', '', '', '')
+VALUES (?, ?, ?, ?, ?, '', '', '', '')
 ON CONFLICT(session_key) DO UPDATE SET
   pane_key = excluded.pane_key,
   agent = CASE
@@ -38,18 +38,15 @@ ON CONFLICT(session_key) DO UPDATE SET
   END,
   updated_at = CURRENT_TIMESTAMP
 RETURNING session_key, platform, chat_id, pane_key, agent, agent_session_id, agent_thread_id, last_inbound_message_id, last_outbound_message_id;
-`, sqlString(sessionKey), sqlString(chat.Platform), sqlString(chat.ChatID), sqlString(paneKey), sqlString(agent))
-	var rows []sessionRow
-	if err := s.queryJSON(ctx, query, &rows); err == nil {
-		if len(rows) == 0 {
-			return SessionRecord{}, fmt.Errorf("ensure session returned no rows")
-		}
-		return rows[0].toRecord()
-	} else if !isReturningUnsupported(err) {
-		return SessionRecord{}, err
+`, sessionKey, chat.Platform, chat.ChatID, paneKey, agent))
+	if err == nil {
+		return record, nil
+	}
+	if !isReturningUnsupported(err) {
+		return SessionRecord{}, fmt.Errorf("sqlite query failed: %w", err)
 	}
 
-	fallbackQuery := fmt.Sprintf(`
+	if err := s.execArgs(ctx, `
 INSERT INTO sessions (
   session_key,
   platform,
@@ -61,7 +58,7 @@ INSERT INTO sessions (
   last_inbound_message_id,
   last_outbound_message_id
 )
-VALUES (%s, %s, %s, %s, %s, '', '', '', '')
+VALUES (?, ?, ?, ?, ?, '', '', '', '')
 ON CONFLICT(session_key) DO UPDATE SET
   pane_key = excluded.pane_key,
   agent = CASE
@@ -69,17 +66,42 @@ ON CONFLICT(session_key) DO UPDATE SET
     ELSE sessions.agent
   END,
   updated_at = CURRENT_TIMESTAMP;
-`, sqlString(sessionKey), sqlString(chat.Platform), sqlString(chat.ChatID), sqlString(paneKey), sqlString(agent))
-	if err := s.exec(ctx, fallbackQuery); err != nil {
+`, sessionKey, chat.Platform, chat.ChatID, paneKey, agent); err != nil {
 		return SessionRecord{}, err
 	}
 	return s.SessionByKey(ctx, sessionKey)
 }
 
 func (s *Store) TouchSessionInbound(ctx context.Context, sessionKey string, messageID string) error {
-	return s.exec(ctx, touchSessionInboundStatement(sessionKey, messageID))
+	_, err := s.db.ExecContext(ctx, `
+UPDATE sessions
+SET last_inbound_message_id = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE session_key = ?;
+`, strings.TrimSpace(messageID), strings.TrimSpace(sessionKey))
+	if err != nil {
+		return fmt.Errorf("sqlite exec failed: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) TouchSessionOutbound(ctx context.Context, sessionKey string, messageID string) error {
-	return s.exec(ctx, touchSessionOutboundStatement(sessionKey, messageID))
+	_, err := s.db.ExecContext(ctx, `
+UPDATE sessions
+SET last_outbound_message_id = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE session_key = ?;
+`, strings.TrimSpace(messageID), strings.TrimSpace(sessionKey))
+	if err != nil {
+		return fmt.Errorf("sqlite exec failed: %w", err)
+	}
+	return nil
+}
+
+func isReturningUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "RETURNING") && strings.Contains(strings.ToLower(message), "syntax error")
 }
