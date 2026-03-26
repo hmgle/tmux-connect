@@ -4,45 +4,14 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 
 	"github.com/hmgle/tmux-connect/internal/tmux"
 )
 
-type fakeRunner struct {
-	runFn func(context.Context, []byte, ...string) (tmux.RunResult, error)
-	calls []runnerCall
-}
-
-type runnerCall struct {
-	stdin []byte
-	args  []string
-}
-
-func (r *fakeRunner) Run(ctx context.Context, stdin []byte, args ...string) (tmux.RunResult, error) {
-	r.calls = append(r.calls, runnerCall{
-		stdin: append([]byte(nil), stdin...),
-		args:  append([]string(nil), args...),
-	})
-	if r.runFn != nil {
-		return r.runFn(ctx, stdin, args...)
-	}
-	return tmux.RunResult{}, nil
-}
-
-func (r *fakeRunner) StartPTY(context.Context, ...string) (tmux.PTYSession, error) {
-	return nil, errors.New("not implemented")
-}
-
-type fakePTYSession struct{}
-
-func (s *fakePTYSession) Read([]byte) (int, error)    { return 0, io.EOF }
-func (s *fakePTYSession) Write(p []byte) (int, error) { return len(p), nil }
-func (s *fakePTYSession) Close() error                { return nil }
-func (s *fakePTYSession) Name() string                { return "" }
-func (s *fakePTYSession) Wait() error                 { return nil }
+type fakeRunner = tmux.FakeRunner
+type runnerCall = tmux.RunnerCall
 
 func TestResolvePanePreservesTmuxFailures(t *testing.T) {
 	t.Parallel()
@@ -55,7 +24,7 @@ func TestResolvePanePreservesTmuxFailures(t *testing.T) {
 		Err: errors.New("exit status 1"),
 	}
 	service := NewService(tmux.NewClient(&fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			if len(args) < 3 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected args: %v", args)
 			}
@@ -84,7 +53,7 @@ func TestResolvePaneReturnsNotFoundForMissingPane(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(tmux.NewClient(&fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			if len(args) < 3 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected args: %v", args)
 			}
@@ -109,7 +78,7 @@ func TestInspectPreservesTmuxFailures(t *testing.T) {
 		Err: errors.New("exit status 1"),
 	}
 	service := NewService(tmux.NewClient(&fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			if len(args) < 3 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected args: %v", args)
 			}
@@ -130,7 +99,7 @@ func TestSendManagedInjectsTextAndTouchesMetadata(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			switch args[0] {
 			case "list-panes":
 				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fcodex\x1fbackend\x1fmanual-attach\x1f1700000000\n"}, nil
@@ -147,19 +116,19 @@ func TestSendManagedInjectsTextAndTouchesMetadata(t *testing.T) {
 	if err := service.SendManaged(context.Background(), "%5", "status --short", false); err != nil {
 		t.Fatalf("SendManaged() error = %v", err)
 	}
-	if len(runner.calls) != 4 {
-		t.Fatalf("calls = %d, want 4", len(runner.calls))
+	if len(runner.Calls) != 4 {
+		t.Fatalf("calls = %d, want 4", len(runner.Calls))
 	}
-	if got := runner.calls[1].args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || got[3] != "-" {
+	if got := runner.Calls[1].Args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || got[3] != "-" {
 		t.Fatalf("load-buffer args = %v, want tmux buffer load", got)
 	}
-	if string(runner.calls[1].stdin) != "status --short" {
-		t.Fatalf("load-buffer stdin = %q, want input text", string(runner.calls[1].stdin))
+	if string(runner.Calls[1].Stdin) != "status --short" {
+		t.Fatalf("load-buffer stdin = %q, want input text", string(runner.Calls[1].Stdin))
 	}
-	if got := runner.calls[2].args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-p" || got[5] != "-t" || got[6] != "%5" {
+	if got := runner.Calls[2].Args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-p" || got[5] != "-t" || got[6] != "%5" {
 		t.Fatalf("paste-buffer args = %v, want paste into pane", got)
 	}
-	if got := runner.calls[3].args; len(got) != 6 || got[0] != "set-option" || got[4] != tmux.OptionLastActivity {
+	if got := runner.Calls[3].Args; len(got) != 6 || got[0] != "set-option" || got[4] != tmux.OptionLastActivity {
 		t.Fatalf("set-option args = %v, want metadata touch", got)
 	}
 }
@@ -168,7 +137,7 @@ func TestSendManagedUsesPlainPasteForClaudeAgent(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			switch args[0] {
 			case "list-panes":
 				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f1\x1frelay\x1fclaude\x1freview\x1fmanual-attach\x1f1700000000\n"}, nil
@@ -185,7 +154,7 @@ func TestSendManagedUsesPlainPasteForClaudeAgent(t *testing.T) {
 	if err := service.SendManaged(context.Background(), "%5", "continue", false); err != nil {
 		t.Fatalf("SendManaged() error = %v", err)
 	}
-	if got := runner.calls[2].args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
+	if got := runner.Calls[2].Args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
 		t.Fatalf("paste-buffer args = %v, want plain paste without -p", got)
 	}
 }
@@ -194,7 +163,7 @@ func TestSendManagedUsesPlainPasteForClaudeCurrentCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			switch args[0] {
 			case "list-panes":
 				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fclaude\x1f/home/gle/project\x1f0\x1f120\x1f40\x1f0\x1frelay\x1funknown\x1f\x1f\x1f0\n"}, nil
@@ -211,7 +180,7 @@ func TestSendManagedUsesPlainPasteForClaudeCurrentCommand(t *testing.T) {
 	if err := service.SendManaged(context.Background(), "%5", "continue", false); err != nil {
 		t.Fatalf("SendManaged() error = %v", err)
 	}
-	if got := runner.calls[2].args; len(got) != 6 || got[0] != "paste-buffer" || got[4] != "-t" || got[5] != "%5" {
+	if got := runner.Calls[2].Args; len(got) != 6 || got[0] != "paste-buffer" || got[4] != "-t" || got[5] != "%5" {
 		t.Fatalf("paste-buffer args = %v, want plain paste for current_cmd=claude", got)
 	}
 }
@@ -220,7 +189,7 @@ func TestSendKeysManagedUsesSendKeysAndTouchesMetadata(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (tmux.RunResult, error) {
 			switch args[0] {
 			case "list-panes":
 				return tmux.RunResult{Stdout: "%5\x1fdev\x1f@1\x1fshell\x1fapi\x1fzsh\x1f/home/gle/project\x1f0\x1f120\x1f40\n"}, nil
@@ -237,13 +206,13 @@ func TestSendKeysManagedUsesSendKeysAndTouchesMetadata(t *testing.T) {
 	if err := service.SendKeysManaged(context.Background(), "%5", "C-c", "Enter"); err != nil {
 		t.Fatalf("SendKeysManaged() error = %v", err)
 	}
-	if len(runner.calls) != 3 {
-		t.Fatalf("calls = %d, want 3", len(runner.calls))
+	if len(runner.Calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(runner.Calls))
 	}
-	if got := runner.calls[1].args; len(got) != 5 || got[0] != "send-keys" || got[1] != "-t" || got[2] != "%5" || got[3] != "C-c" || got[4] != "Enter" {
+	if got := runner.Calls[1].Args; len(got) != 5 || got[0] != "send-keys" || got[1] != "-t" || got[2] != "%5" || got[3] != "C-c" || got[4] != "Enter" {
 		t.Fatalf("send-keys args = %v, want key send", got)
 	}
-	if got := runner.calls[2].args; len(got) != 6 || got[0] != "set-option" || got[4] != tmux.OptionLastActivity {
+	if got := runner.Calls[2].Args; len(got) != 6 || got[0] != "set-option" || got[4] != tmux.OptionLastActivity {
 		t.Fatalf("set-option args = %v, want metadata touch", got)
 	}
 }

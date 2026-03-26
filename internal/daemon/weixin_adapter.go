@@ -19,6 +19,7 @@ type weixinClient interface {
 }
 
 type weixinAdapter struct {
+	adapterBehavior
 	client weixinClient
 	stderr io.Writer
 }
@@ -35,7 +36,11 @@ func newWeixinAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapt
 	if err != nil {
 		return nil, err
 	}
-	return &weixinAdapter{client: client, stderr: stderr}, nil
+	return &weixinAdapter{
+		adapterBehavior: newAdapterBehavior("weixin", ""),
+		client:          client,
+		stderr:          stderr,
+	}, nil
 }
 
 func (a *weixinAdapter) Platform() string { return "weixin" }
@@ -68,16 +73,8 @@ func (a *weixinAdapter) PromptOptions(message IncomingMessage, _ commandPromptSp
 	return SendOptions{ReplyToMessageID: message.MessageID}
 }
 
-func (a *weixinAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
-	return defaultPromptText(message, spec)
-}
-
 func (a *weixinAdapter) NormalizeSnapshotMode(snapshotMode) snapshotMode {
 	return snapshotModeText
-}
-
-func (a *weixinAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *weixinAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

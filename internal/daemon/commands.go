@@ -79,6 +79,13 @@ func appendDefaultPlainTextHelp(lines []string, commandPrefix string) []string {
 }
 
 func helpTextForPlatform(platform string, commandPrefix string, discordCommandPrefix string) string {
+	if normalizePlatformName(platform) == "discord" && strings.TrimSpace(commandPrefix) == "" {
+		commandPrefix = discordCommandPrefix
+	}
+	return platformHelpText(platform, commandPrefix)
+}
+
+func platformHelpText(platform string, commandPrefix string) string {
 	platform = strings.TrimSpace(strings.ToLower(platform))
 	lines := make([]string, 0, len(daemonCommandSpecs())+4)
 	lines = append(lines, "Commands:")
@@ -88,7 +95,7 @@ func helpTextForPlatform(platform string, commandPrefix string, discordCommandPr
 		lines = append(lines, fmt.Sprintf("In DMs and managed threads, plain text targets the current pane and may execute immediately when execute mode is enabled. Use %q for raw text, %q to execute, and %q for control keys.", formatCommandUsage(commandPrefix, "send <text>"), formatCommandUsage(commandPrefix, "enter"), formatCommandUsage(commandPrefix, "keys C-c")))
 		lines = append(lines, fmt.Sprintf("Use %q when the text itself starts with \"/\".", formatCommandUsage(commandPrefix, "send <text>")))
 	case platform == "discord":
-		prefix := strings.TrimSpace(discordCommandPrefix)
+		prefix := strings.TrimSpace(commandPrefix)
 		if prefix == "" {
 			prefix = defaultDiscordCommandPrefix
 		}

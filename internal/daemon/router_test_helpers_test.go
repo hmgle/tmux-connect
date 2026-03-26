@@ -176,6 +176,17 @@ func (m *fakeMessenger) SnapshotCaption(paneKey string) string {
 	return formatSnapshotCaption(paneKey)
 }
 
+func (m *fakeMessenger) HelpText() string {
+	switch m.Platform() {
+	case "slack":
+		return platformHelpText("slack", defaultSlackCommandPrefix)
+	case "discord":
+		return platformHelpText("discord", defaultDiscordCommandPrefix)
+	default:
+		return platformHelpText(m.Platform(), "")
+	}
+}
+
 func (m *fakeMessenger) Run(context.Context, func(context.Context, IncomingMessage) error) error {
 	return nil
 }

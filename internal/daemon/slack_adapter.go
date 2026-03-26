@@ -14,6 +14,7 @@ import (
 )
 
 type slackAdapter struct {
+	adapterBehavior
 	client        *slackclient.Client
 	stderr        io.Writer
 	store         *Store
@@ -43,14 +44,15 @@ func newSlackAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapte
 		prefix = defaultSlackCommandPrefix
 	}
 	return &slackAdapter{
-		client:        slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
-		stderr:        stderr,
-		store:         store,
-		commandPrefix: prefix,
-		activeThreads: make(map[string]time.Time),
-		threadTTL:     defaultSlackThreadTTL,
-		maxThreads:    defaultSlackMaxThreads,
-		now:           time.Now,
+		adapterBehavior: newAdapterBehavior("slack", prefix),
+		client:          slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
+		stderr:          stderr,
+		store:           store,
+		commandPrefix:   prefix,
+		activeThreads:   make(map[string]time.Time),
+		threadTTL:       defaultSlackThreadTTL,
+		maxThreads:      defaultSlackMaxThreads,
+		now:             time.Now,
 	}, nil
 }
 
@@ -90,18 +92,6 @@ func (a *slackAdapter) ParseMessage(message IncomingMessage) parsedCommand {
 
 func (a *slackAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{ThreadID: message.replyThreadID()}
-}
-
-func (a *slackAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
-	return defaultPromptText(message, spec)
-}
-
-func (a *slackAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
-	return defaultSnapshotMode(mode)
-}
-
-func (a *slackAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *slackAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

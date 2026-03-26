@@ -19,6 +19,7 @@ type whatsappClient interface {
 }
 
 type whatsappAdapter struct {
+	adapterBehavior
 	client       whatsappClient
 	stderr       io.Writer
 	autoMarkRead bool
@@ -30,9 +31,10 @@ func newWhatsAppAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
 		return nil, err
 	}
 	return &whatsappAdapter{
-		client:       client,
-		stderr:       stderr,
-		autoMarkRead: cfg.WhatsAppAutoMarkRead,
+		adapterBehavior: newAdapterBehavior("whatsapp", ""),
+		client:          client,
+		stderr:          stderr,
+		autoMarkRead:    cfg.WhatsAppAutoMarkRead,
 	}, nil
 }
 
@@ -67,18 +69,6 @@ func (a *whatsappAdapter) PromptOptions(message IncomingMessage, _ commandPrompt
 		ReplyToMessageID: message.MessageID,
 		ReplyToSenderID:  message.Chat.ChatID,
 	}
-}
-
-func (a *whatsappAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
-	return defaultPromptText(message, spec)
-}
-
-func (a *whatsappAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
-	return defaultSnapshotMode(mode)
-}
-
-func (a *whatsappAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *whatsappAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

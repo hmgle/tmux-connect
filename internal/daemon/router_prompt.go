@@ -112,7 +112,7 @@ func (r *Router) resolvePendingArgs(pending pendingCommand, args string) string 
 }
 
 func (r *Router) helpText(chat ChatRef) string {
-	return helpTextForPlatform(chat.Platform, r.commandPrefix(chat), r.discordCommandPrefix)
+	return r.replyBus.adapter.HelpText()
 }
 
 func isWhatsAppChat(chat ChatRef) bool {

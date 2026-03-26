@@ -38,6 +38,7 @@ func (f *fakeRuntimeAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMo
 	return mode
 }
 func (f *fakeRuntimeAdapter) SnapshotCaption(string) string { return "" }
+func (f *fakeRuntimeAdapter) HelpText() string              { return platformHelpText("telegram", "") }
 func (f *fakeRuntimeAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {
 	f.order = append(f.order, "run")
 	if f.runFn != nil {

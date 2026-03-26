@@ -4,79 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
 
-type runnerCall struct {
-	stdin []byte
-	args  []string
-}
+type runnerCall = RunnerCall
+type fakeRunner = FakeRunner
+type fakePTYSession = FakePTYSession
 
-type fakeRunner struct {
-	runFn      func(context.Context, []byte, ...string) (RunResult, error)
-	startPTYFn func(context.Context, ...string) (PTYSession, error)
-	calls      []runnerCall
-}
-
-type fakePTYSession struct {
-	name      string
-	closeFn   func() error
-	waitFn    func() error
-	closeHits atomic.Int32
-	waitHits  atomic.Int32
-}
-
-func stdoutResult(stdout string) RunResult {
-	return RunResult{Stdout: stdout}
-}
-
-func (r *fakeRunner) Run(ctx context.Context, stdin []byte, args ...string) (RunResult, error) {
-	call := runnerCall{
-		stdin: append([]byte(nil), stdin...),
-		args:  append([]string(nil), args...),
-	}
-	r.calls = append(r.calls, call)
-	if r.runFn != nil {
-		return r.runFn(ctx, stdin, args...)
-	}
-	return RunResult{}, nil
-}
-
-func (r *fakeRunner) StartPTY(ctx context.Context, args ...string) (PTYSession, error) {
-	if r.startPTYFn != nil {
-		return r.startPTYFn(ctx, args...)
-	}
-	return nil, errors.New("not implemented")
-}
-
-func (s *fakePTYSession) Read(_ []byte) (int, error)  { return 0, io.EOF }
-func (s *fakePTYSession) Write(p []byte) (int, error) { return len(p), nil }
-func (s *fakePTYSession) Close() error {
-	s.closeHits.Add(1)
-	if s.closeFn != nil {
-		return s.closeFn()
-	}
-	return nil
-}
-func (s *fakePTYSession) Name() string { return s.name }
-func (s *fakePTYSession) Wait() error {
-	s.waitHits.Add(1)
-	if s.waitFn != nil {
-		return s.waitFn()
-	}
-	return nil
-}
+func stdoutResult(stdout string) RunResult { return StdoutResult(stdout) }
 
 func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -89,8 +33,8 @@ func TestListPaneStatesUsesSingleCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPaneStates() error = %v", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
 	if len(states) != 1 {
 		t.Fatalf("expected 1 pane state, got %d", len(states))
@@ -108,7 +52,7 @@ func TestGetPaneUsesTargetedListCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -124,8 +68,8 @@ func TestGetPaneUsesTargetedListCommand(t *testing.T) {
 	if pane.Target.PaneID != "%5" || pane.SessionName != "dev" {
 		t.Fatalf("unexpected pane %#v", pane)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
 }
 
@@ -133,7 +77,7 @@ func TestGetPaneFiltersTargetedListToRequestedPane(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%507" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -158,7 +102,7 @@ func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%5" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -174,8 +118,8 @@ func TestGetPaneStateUsesTargetedListCommand(t *testing.T) {
 	if state.Info.Target.PaneID != "%5" || !state.Metadata.Managed || state.Metadata.Agent != AgentCodex {
 		t.Fatalf("unexpected state %#v", state)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
 }
 
@@ -183,7 +127,7 @@ func TestGetPaneStateFiltersTargetedListToRequestedPane(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if len(args) < 4 || args[0] != "list-panes" || args[1] != "-t" || args[2] != "%507" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -254,20 +198,20 @@ func TestInjectInputUsesNamedBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InjectInput() error = %v", err)
 	}
-	if len(runner.calls) != 2 {
-		t.Fatalf("expected 2 tmux calls, got %d", len(runner.calls))
+	if len(runner.Calls) != 2 {
+		t.Fatalf("expected 2 tmux calls, got %d", len(runner.Calls))
 	}
-	if got := runner.calls[0].args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") || got[3] != "-" {
+	if got := runner.Calls[0].Args; len(got) < 4 || got[0] != "load-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") || got[3] != "-" {
 		t.Fatalf("unexpected load-buffer args: %v", got)
 	}
-	if got := runner.calls[1].args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") {
+	if got := runner.Calls[1].Args; len(got) < 7 || got[0] != "paste-buffer" || got[1] != "-b" || !strings.HasPrefix(got[2], "tmuxconn-5-") {
 		t.Fatalf("unexpected paste-buffer args: %v", got)
 	}
-	if got := runner.calls[1].args; got[3] != "-d" || got[4] != "-p" || got[5] != "-t" || got[6] != "%5" {
+	if got := runner.Calls[1].Args; got[3] != "-d" || got[4] != "-p" || got[5] != "-t" || got[6] != "%5" {
 		t.Fatalf("unexpected bracketed paste args: %v", got)
 	}
-	if runner.calls[0].args[2] != runner.calls[1].args[2] {
-		t.Fatalf("expected load-buffer and paste-buffer to use same buffer name: %v vs %v", runner.calls[0].args, runner.calls[1].args)
+	if runner.Calls[0].Args[2] != runner.Calls[1].Args[2] {
+		t.Fatalf("expected load-buffer and paste-buffer to use same buffer name: %v vs %v", runner.Calls[0].Args, runner.Calls[1].Args)
 	}
 }
 
@@ -281,10 +225,10 @@ func TestInjectInputWithPlainPasteOmitsBracketedPasteFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InjectInputWithMode() error = %v", err)
 	}
-	if len(runner.calls) != 2 {
-		t.Fatalf("expected 2 tmux calls, got %d", len(runner.calls))
+	if len(runner.Calls) != 2 {
+		t.Fatalf("expected 2 tmux calls, got %d", len(runner.Calls))
 	}
-	if got := runner.calls[1].args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
+	if got := runner.Calls[1].Args; len(got) != 6 || got[0] != "paste-buffer" || got[1] != "-b" || got[3] != "-d" || got[4] != "-t" || got[5] != "%5" {
 		t.Fatalf("unexpected plain paste args: %v", got)
 	}
 }
@@ -301,11 +245,11 @@ func TestInjectInputUsesUniqueBufferNamesAcrossCalls(t *testing.T) {
 	if err := client.InjectInput(context.Background(), Target{PaneID: "%5"}, []byte("world")); err != nil {
 		t.Fatalf("second InjectInput() error = %v", err)
 	}
-	if len(runner.calls) != 4 {
-		t.Fatalf("expected 4 tmux calls, got %d", len(runner.calls))
+	if len(runner.Calls) != 4 {
+		t.Fatalf("expected 4 tmux calls, got %d", len(runner.Calls))
 	}
-	first := runner.calls[0].args[2]
-	second := runner.calls[2].args[2]
+	first := runner.Calls[0].Args[2]
+	second := runner.Calls[2].Args[2]
 	if first == second {
 		t.Fatalf("expected unique buffer names, got %q", first)
 	}
@@ -315,7 +259,7 @@ func TestTouchMetadataUpdatesLastActivityOnlyForManagedPanes(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			switch args[0] {
 			case "show-options":
 				return stdoutResult("1\n"), nil
@@ -333,14 +277,14 @@ func TestTouchMetadataUpdatesLastActivityOnlyForManagedPanes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TouchMetadata() error = %v", err)
 	}
-	if len(runner.calls) != 2 {
-		t.Fatalf("expected 2 tmux calls, got %d", len(runner.calls))
+	if len(runner.Calls) != 2 {
+		t.Fatalf("expected 2 tmux calls, got %d", len(runner.Calls))
 	}
-	showCall := runner.calls[0].args
+	showCall := runner.Calls[0].Args
 	if got := showCall[:4]; got[0] != "show-options" || got[1] != "-p" || got[2] != "-v" || got[3] != "-t" {
 		t.Fatalf("unexpected show-options args: %v", showCall)
 	}
-	setCall := runner.calls[1].args
+	setCall := runner.Calls[1].Args
 	if len(setCall) != 6 || setCall[0] != "set-option" || setCall[4] != OptionLastActivity {
 		t.Fatalf("unexpected set-option args: %v", setCall)
 	}
@@ -366,10 +310,10 @@ func TestSetMetadataUsesSingleTmuxCommand(t *testing.T) {
 	if err := client.SetMetadata(context.Background(), Target{PaneID: "%5"}, meta); err != nil {
 		t.Fatalf("SetMetadata() error = %v", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
-	got := runner.calls[0].args
+	got := runner.Calls[0].Args
 	joined := strings.Join(got, " ")
 	for _, fragment := range []string{
 		"set-option -p -t %5 @tmuxconn_managed 1",
@@ -397,14 +341,14 @@ func TestClearMetadataUsesSingleTmuxCommand(t *testing.T) {
 	if err := client.ClearMetadata(context.Background(), Target{PaneID: "%5"}); err != nil {
 		t.Fatalf("ClearMetadata() error = %v", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
-	joined := strings.Join(runner.calls[0].args, " ")
+	joined := strings.Join(runner.Calls[0].Args, " ")
 	for _, key := range []string{OptionManaged, OptionMode, OptionAgent, OptionLabel, OptionCreatedBy, OptionLastActivity} {
 		want := fmt.Sprintf("set-option -p -u -t %%5 %s", key)
 		if !strings.Contains(joined, want) {
-			t.Fatalf("missing unset command %q in args %v", want, runner.calls[0].args)
+			t.Fatalf("missing unset command %q in args %v", want, runner.Calls[0].Args)
 		}
 	}
 }
@@ -413,7 +357,7 @@ func TestDeleteUserOptionIgnoresUnsetErrors(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
 			return RunResult{}, errors.New("exit status 1: unknown option")
 		},
 	}
@@ -446,7 +390,7 @@ func TestStartPollingSubscriptionHonorsLinesAndClose(t *testing.T) {
 
 	captured := make(chan []string, 1)
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if args[0] != "capture-pane" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -480,7 +424,7 @@ func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
 	captures := []string{"one", "one\ntwo"}
 	var captureIndex int
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if args[0] != "capture-pane" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -491,7 +435,7 @@ func TestOpenPaneStreamSeedsPollingWithInitialSnapshot(t *testing.T) {
 			captureIndex++
 			return stdoutResult(body), nil
 		},
-		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
+		StartPTYFn: func(context.Context, ...string) (PTYSession, error) {
 			return nil, fmt.Errorf("%w: disabled for test", ErrControlUnsupported)
 		},
 	}
@@ -526,7 +470,7 @@ func TestOpenPaneStreamFallsBackToPollingOnControlErrors(t *testing.T) {
 	captures := []string{"one", "one\ntwo"}
 	var captureIndex int
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			if args[0] != "capture-pane" {
 				t.Fatalf("unexpected command: %v", args)
 			}
@@ -537,7 +481,7 @@ func TestOpenPaneStreamFallsBackToPollingOnControlErrors(t *testing.T) {
 			captureIndex++
 			return stdoutResult(body), nil
 		},
-		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
+		StartPTYFn: func(context.Context, ...string) (PTYSession, error) {
 			return nil, errors.New("control setup broke")
 		},
 	}
@@ -567,9 +511,9 @@ func TestStartControlSubscriptionUsesSessionScopedPaneListAndWaitsForExitOnClose
 	t.Parallel()
 
 	var startCtx context.Context
-	session := &fakePTYSession{name: "/tmp/fake-tty"}
+	session := &fakePTYSession{SessionName: "/tmp/fake-tty"}
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, args ...string) (RunResult, error) {
 			switch args[0] {
 			case "list-clients":
 				return stdoutResult("/tmp/fake-tty\t1\n"), nil
@@ -587,7 +531,7 @@ func TestStartControlSubscriptionUsesSessionScopedPaneListAndWaitsForExitOnClose
 				return RunResult{}, nil
 			}
 		},
-		startPTYFn: func(ctx context.Context, args ...string) (PTYSession, error) {
+		StartPTYFn: func(ctx context.Context, args ...string) (PTYSession, error) {
 			startCtx = ctx
 			if got := strings.Join(args, " "); !strings.Contains(got, "attach-session -t dev -f ignore-size,active-pane") {
 				t.Fatalf("unexpected StartPTY args: %v", args)
@@ -614,11 +558,11 @@ func TestStartControlSubscriptionUsesSessionScopedPaneListAndWaitsForExitOnClose
 	default:
 		t.Fatal("expected StartPTY context to be canceled on Close")
 	}
-	if session.waitHits.Load() != 1 {
-		t.Fatalf("expected Wait() to be called once, got %d", session.waitHits.Load())
+	if session.WaitHits.Load() != 1 {
+		t.Fatalf("expected Wait() to be called once, got %d", session.WaitHits.Load())
 	}
-	if session.closeHits.Load() != 1 {
-		t.Fatalf("expected Close() to be called once, got %d", session.closeHits.Load())
+	if session.CloseHits.Load() != 1 {
+		t.Fatalf("expected Close() to be called once, got %d", session.CloseHits.Load())
 	}
 }
 
@@ -631,10 +575,10 @@ func TestCapturePaneRichUsesEscapeFlag(t *testing.T) {
 	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); err != nil {
 		t.Fatalf("CapturePaneRich() error = %v", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call, got %d", len(runner.Calls))
 	}
-	got := runner.calls[0].args
+	got := runner.Calls[0].Args
 	want := []string{"capture-pane", "-p", "-J", "-e", "-t", "%5", "-S", "-19"}
 	if len(got) != len(want) {
 		t.Fatalf("args = %v, want %v", got, want)
@@ -650,7 +594,7 @@ func TestCapturePaneRichCachesUnsupportedCapability(t *testing.T) {
 	t.Parallel()
 
 	runner := &fakeRunner{
-		runFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
+		RunFn: func(_ context.Context, _ []byte, _ ...string) (RunResult, error) {
 			return RunResult{}, errors.New("invalid option")
 		},
 	}
@@ -659,14 +603,14 @@ func TestCapturePaneRichCachesUnsupportedCapability(t *testing.T) {
 	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); !errors.Is(err, ErrRichCaptureUnsupported) {
 		t.Fatalf("CapturePaneRich() error = %v, want ErrRichCaptureUnsupported", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected 1 tmux call after first unsupported probe, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected 1 tmux call after first unsupported probe, got %d", len(runner.Calls))
 	}
 	if _, err := client.CapturePaneRich(context.Background(), Target{PaneID: "%5"}, 20); !errors.Is(err, ErrRichCaptureUnsupported) {
 		t.Fatalf("second CapturePaneRich() error = %v, want ErrRichCaptureUnsupported", err)
 	}
-	if len(runner.calls) != 1 {
-		t.Fatalf("expected cached unsupported capability to skip extra tmux calls, got %d", len(runner.calls))
+	if len(runner.Calls) != 1 {
+		t.Fatalf("expected cached unsupported capability to skip extra tmux calls, got %d", len(runner.Calls))
 	}
 }
 
@@ -675,7 +619,7 @@ func TestStartControlSubscriptionCachesUnsupportedCapability(t *testing.T) {
 
 	var startCalls int
 	runner := &fakeRunner{
-		startPTYFn: func(context.Context, ...string) (PTYSession, error) {
+		StartPTYFn: func(context.Context, ...string) (PTYSession, error) {
 			startCalls++
 			return nil, errors.New("unknown option")
 		},

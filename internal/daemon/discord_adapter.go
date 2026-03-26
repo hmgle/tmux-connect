@@ -29,6 +29,7 @@ type discordGatewayClient interface {
 }
 
 type discordAdapter struct {
+	adapterBehavior
 	client        discordGatewayClient
 	stderr        io.Writer
 	commandPrefix string
@@ -55,9 +56,10 @@ func newDiscordAdapter(cfg Config, stderr io.Writer) (*discordAdapter, error) {
 	}
 
 	return &discordAdapter{
-		client:        client,
-		stderr:        stderr,
-		commandPrefix: prefix,
+		adapterBehavior: newAdapterBehavior("discord", prefix),
+		client:          client,
+		stderr:          stderr,
+		commandPrefix:   prefix,
 	}, nil
 }
 
@@ -119,14 +121,6 @@ func (a *discordAdapter) PromptText(message IncomingMessage, spec commandPromptS
 		text += "\n\nIn Discord channels, reply with " + strconv.Quote(a.commandPrefix+" <value>") + "."
 	}
 	return text
-}
-
-func (a *discordAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
-	return defaultSnapshotMode(mode)
-}
-
-func (a *discordAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *discordAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

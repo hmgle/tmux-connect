@@ -19,6 +19,7 @@ type feishuMessageClient interface {
 }
 
 type feishuAdapter struct {
+	adapterBehavior
 	client feishuMessageClient
 	stderr io.Writer
 }
@@ -31,6 +32,7 @@ func newFeishuAdapter(cfg Config, stderr io.Writer) (platformAdapter, error) {
 		return nil, fmt.Errorf("feishu app secret is required")
 	}
 	return &feishuAdapter{
+		adapterBehavior: newAdapterBehavior("feishu", ""),
 		client: feishu.NewClient(cfg.FeishuAppID, cfg.FeishuAppSecret, feishu.BotIdentity{
 			OpenID:  cfg.FeishuBotOpenID,
 			UserID:  cfg.FeishuBotUserID,
@@ -85,18 +87,6 @@ func (a *feishuAdapter) ParseMessage(message IncomingMessage) parsedCommand {
 
 func (a *feishuAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return feishuReplyOptions(message)
-}
-
-func (a *feishuAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
-	return defaultPromptText(message, spec)
-}
-
-func (a *feishuAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
-	return defaultSnapshotMode(mode)
-}
-
-func (a *feishuAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *feishuAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {
