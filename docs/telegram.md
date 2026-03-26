@@ -28,7 +28,8 @@ Using TOML config:
 [daemon]
 platform = "telegram"
 db = "/home/user/.tmux-connect/tmux-connect.db"
-allow_chats = ["123456789"]
+# optional allowlist; remove this line to allow any reachable Telegram chat
+allow_chats = ["telegram:123456789"]
 snapshot_lines = 120
 plain_text_mode = "execute"
 plain_text_echo = "snapshot"
@@ -63,7 +64,7 @@ export TMUXCONN_PLAIN_TEXT_ECHO=snapshot
 export TMUXCONN_TELEGRAM_SNAPSHOT_THEME=light
 export TMUXCONN_TELEGRAM_SNAPSHOT_FONT_SIZE=16
 
-./tmux-connect daemon run --allow-chat 123456789
+./tmux-connect daemon run --allow-chat telegram:123456789
 ```
 
 Using explicit flags:
@@ -79,7 +80,7 @@ Using explicit flags:
   --telegram-snapshot-font-file /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
   --follow-lines 80 \
   --follow-min-interval 700ms \
-  --allow-chat 123456789
+  --allow-chat telegram:123456789
 ```
 
 ## Daemon Note
@@ -93,7 +94,7 @@ Useful daemon flags:
 
 - `--telegram-token TOKEN`
 - `--db PATH`
-- `--allow-chat CHAT_ID`
+- `--allow-chat telegram:CHAT_ID`
 - `--poll-timeout 20s`
 - `--snapshot-lines 120`
 - `--plain-text-mode type|execute`
@@ -108,6 +109,21 @@ Useful daemon flags:
 - `--follow-min-interval 700ms`
 - `--follow-debug`
 - `--telegram-api-base URL`
+
+## Choosing `allow_chats` Values
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you omit them, any
+Telegram chat that can reach the bot may use it.
+
+- recommended format: `telegram:<chat_id>`
+- raw numeric IDs such as `123456789` still work, but the `telegram:` prefix is
+  clearer in shared configs
+- the easiest way to find your `chat_id` is to message `@userinfobot` or
+  `@getmyid_bot`
+- you can also message your own bot once and inspect
+  `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
+
+Group `chat_id` values are usually negative.
 
 Supported environment variables:
 

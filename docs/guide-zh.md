@@ -96,7 +96,7 @@ export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
   --plain-text-mode execute \
   --plain-text-echo snapshot \
   --db ~/.tmux-connect/tmux-connect.db \
-  --allow-chat 123456789
+  --allow-chat telegram:123456789
 ```
 
 这里建议直接打开 `execute` 模式。这样在手机里发送裸文本时会直接“发送并回车”。
@@ -106,6 +106,7 @@ export TMUXCONN_TELEGRAM_TOKEN="123456:ABC-DEF..."
 - 同一个 Telegram bot token 只支持一个活跃的 `tmux-connect daemon run` 实例
 - 如果要管理多台机器，最简单的方式是每台机器使用不同的 bot
 
+`--allow-chat` 是可选的。如果你不需要把 bot 限制给特定聊天，可以先省略它；如果要做白名单，建议写成 `telegram:123456789` 这种带平台前缀的格式。
 如果你还不知道 `chat_id`，见下文“获取 Telegram chat ID”。
 
 ### 5. 在 Telegram 里开始使用
@@ -240,7 +241,7 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 ./tmux-connect daemon run \
   --telegram-token "$TMUXCONN_TELEGRAM_TOKEN" \
   --db ~/.tmux-connect/tmux-connect.db \
-  --allow-chat 123456789 \
+  --allow-chat telegram:123456789 \
   --telegram-snapshot-theme dark \
   --telegram-snapshot-font-size 14 \
   --follow-lines 80 \
@@ -253,7 +254,7 @@ curl -X POST http://127.0.0.1:8080/v1/panes/send \
 |------|------|
 | `--telegram-token` | Telegram bot token |
 | `--db` | SQLite 数据库路径 |
-| `--allow-chat` | 允许访问的 chat ID，可重复传入 |
+| `--allow-chat` | 可选白名单项，限制允许访问的 chat ID，可重复传入；不传则任何能联系到 bot 的 Telegram 聊天都可访问 |
 | `--poll-timeout` | 长轮询超时，默认 `20s` |
 | `--snapshot-lines` | `/snapshot` 默认行数，默认 `120` |
 | `--plain-text-mode` | 纯文本输入行为：`type` 或 `execute` |

@@ -25,6 +25,7 @@
 [daemon]
 platform = "feishu"
 db = "/home/user/.tmux-connect/tmux-connect.db"
+# optional allowlist; remove this line to allow any reachable private chat or group
 allow_chats = ["feishu:oc_xxx"]
 
 [daemon.feishu]
@@ -44,6 +45,20 @@ export TMUXCONN_FEISHU_APP_ID=cli_xxx
 export TMUXCONN_FEISHU_APP_SECRET=secret_xxx
 export TMUXCONN_FEISHU_BOT_OPEN_ID=ou_bot
 ```
+
+## Choosing `allow_chats` Values
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you omit them, any
+Feishu private chat or group that can reach the bot may use it.
+
+- recommended format: `feishu:<chat_id>`
+- use the exact Feishu `chat_id` delivered by inbound events; examples often
+  look like `oc_xxx`
+- this allowlist matches the daemon's chat identifier, not `bot_open_id`,
+  `bot_user_id`, or `bot_union_id`
+- if you are unsure, start once without an allowlist, send a test message, then
+  inspect the latest `platform = feishu` row in `message_log` and copy the
+  exact `chat_id`
 
 ## Run
 

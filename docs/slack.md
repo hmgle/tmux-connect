@@ -36,6 +36,8 @@ Using TOML config:
 [daemon]
 platform = "slack"
 db = "/home/user/.tmux-connect/tmux-connect.db"
+# optional allowlist; remove this line to allow any reachable Slack DM or channel thread
+allow_chats = ["slack:D12345678"]
 snapshot_lines = 120
 plain_text_mode = "execute"
 plain_text_echo = "snapshot"
@@ -76,6 +78,7 @@ Useful flags:
 - `--slack-app-token TOKEN`
 - `--slack-command-prefix PREFIX` (default: `tmux:`)
 - `--db PATH`
+- `--allow-chat slack:CHANNEL_OR_DM_ID`
 - `--snapshot-lines 120`
 - `--plain-text-mode type|execute`
 - `--plain-text-echo off|snapshot`
@@ -99,6 +102,17 @@ Supported environment variables:
 - `TMUXCONN_PLAIN_TEXT_ECHO_DELAY`
 - `TMUXCONN_PLAIN_TEXT_ECHO_TIMEOUT`
 - `TMUXCONN_FOLLOW_DEBUG`
+
+## Choosing `allow_chats` Values
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you do not set them,
+any Slack DM or channel thread that can reach the bot may use it.
+
+- recommended format: `slack:<conversation_id>`
+- DM IDs usually look like `D...`; channel IDs usually look like `C...`
+- if you are unsure which conversation ID Slack is delivering, start once
+  without an allowlist, send a test message, then inspect the latest
+  `platform = slack` row in `message_log` and copy the exact `chat_id`
 
 ## Health Checks
 

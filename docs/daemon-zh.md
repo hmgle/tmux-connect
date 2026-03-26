@@ -28,7 +28,8 @@ socket = "work"
 [daemon]
 platform = "telegram"
 db = "/home/user/.tmux-connect/tmux-connect.db"
-allow_chats = ["123456789"]
+# 可选白名单；删掉这一行或留空表示允许任意 Telegram 聊天访问
+allow_chats = ["telegram:123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
 plain_text_mode = "execute"
@@ -79,7 +80,7 @@ route_tag = ""
 |------|--------|------|
 | `--platform` | 与构建结果相关 | 当前二进制已编入的平台之一 |
 | `--db PATH` | 必填 | SQLite 数据库路径 |
-| `--allow-chat ID` | — | 限制特定 chat ID 的访问权限（可重复，建议写成 `feishu:oc_xxx` 这样的平台作用域格式） |
+| `--allow-chat ID` | — | 可选白名单项，可重复；如果不设置，则当前平台上任何能联系到这个 bot 的聊天都可访问 |
 | `--poll-timeout` | `20s` | 长轮询超时 |
 | `--snapshot-lines` | `120` | 默认快照行数 |
 | `--plain-text-mode` | `type` | `type`（原始输入）或 `execute`（输入 + 回车） |
@@ -92,6 +93,21 @@ route_tag = ""
 | `--follow-debug` | `false` | 启用 follow 调试日志 |
 
 这里的 `--platform` 是刻意设计成单数的：每个 daemon 进程只运行一个平台。若当前二进制编入了多个平台，`--platform` 只是为这一个进程选择启动哪一个 adapter。
+
+## allowlist 格式
+
+`--allow-chat` 和 `[daemon].allow_chats` 都是可选的，只有在你想把 daemon
+限制给特定聊天时才需要配置。
+
+- 白名单为空时，当前平台上任何能联系到这个 bot 的聊天都会被接受
+- 建议使用带平台前缀的值，例如 `telegram:123456789`、`discord:123...`、
+  `feishu:oc_xxx`、`slack:C123`、`whatsapp:8613...@s.whatsapp.net`、
+  `weixin:user@im.wechat`，这样能避免多平台之间 ID 冲突
+- 不带 `platform:` 前缀的原始 ID 仍然可用，但在共享配置里可读性和可维护性更差
+
+如果你暂时还不知道准确值，可以先不配白名单，让 bot 接收一条测试消息，
+再到 daemon 的 SQLite 数据库里查看该平台最新一条 `message_log.chat_id`。
+下面各平台文档也补充了常见 ID 格式，以及更方便的获取方式。
 
 ### Telegram 专用
 

@@ -33,7 +33,8 @@ socket = "work"
 [daemon]
 platform = "telegram"
 db = "/home/user/.tmux-connect/tmux-connect.db"
-allow_chats = ["123456789"]
+# optional allowlist; remove this line or leave it empty to allow any Telegram chat
+allow_chats = ["telegram:123456789"]
 poll_timeout = "20s"
 snapshot_lines = 120
 plain_text_mode = "execute"
@@ -86,7 +87,7 @@ presses Enter immediately. The built-in default is still `type`, so keep
 |------|---------|-------------|
 | `--platform` | build-dependent | One of the platforms compiled into the current binary |
 | `--db PATH` | required | SQLite database path |
-| `--allow-chat ID` | — | Restrict access to specific chat IDs (repeatable, preferably platform-scoped like `feishu:oc_xxx`) |
+| `--allow-chat ID` | — | Optional allowlist entry. Repeatable; if omitted, any chat that can reach the bot on the selected platform may use it |
 | `--poll-timeout` | `20s` | Long-poll timeout |
 | `--snapshot-lines` | `120` | Default snapshot line count |
 | `--plain-text-mode` | `type` | `type` (raw input) or `execute` (input + Enter) |
@@ -101,6 +102,24 @@ presses Enter immediately. The built-in default is still `type`, so keep
 `--platform` is singular on purpose: each daemon process runs one platform.
 When a binary includes multiple platforms, `--platform` chooses which adapter
 to start for this process.
+
+## Allowlist Format
+
+`--allow-chat` and `[daemon].allow_chats` are optional. Use them only when you
+want to restrict the daemon to specific chats.
+
+- if the allowlist is empty, any chat that can reach the bot on the selected
+  platform is accepted
+- platform-scoped values such as `telegram:123456789`, `discord:123...`,
+  `feishu:oc_xxx`, `slack:C123`, `whatsapp:8613...@s.whatsapp.net`, or
+  `weixin:user@im.wechat` are recommended to avoid collisions across platforms
+- raw IDs without the `platform:` prefix still work when they are unique, but
+  the prefixed form is clearer in shared configs
+
+If you do not know the exact value yet, temporarily leave the allowlist empty,
+send one test message to the bot, then inspect the latest `message_log.chat_id`
+for that platform in the daemon SQLite database. Each platform guide below also
+documents the usual ID format and, where practical, easier ways to find it.
 
 ### Telegram-specific
 

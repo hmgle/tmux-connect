@@ -16,6 +16,7 @@ This connector is different from the official Meta Cloud API:
 [daemon]
 platform = "whatsapp"
 db = "/home/user/.tmux-connect/tmux-connect.db"
+# optional allowlist; remove this line to allow any reachable private chat
 allow_chats = ["whatsapp:8613800000000@s.whatsapp.net"]
 follow_lines = 80
 follow_min_interval = "2s"
@@ -97,6 +98,11 @@ In this mode:
 - `--whatsapp-auto-mark-read`
 - `--whatsapp-allow-self-chat`
 - `--allow-chat whatsapp:<jid>` for the remote operator account, or for the paired account itself when self-chat mode is enabled
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you omit them, any
+private chat that can reach the paired account may use the bot. In practice,
+most operators should still set an explicit allowlist on WhatsApp because chat
+IDs can differ between normal JIDs and `@lid` JIDs.
 
 ## Commands And Behavior
 

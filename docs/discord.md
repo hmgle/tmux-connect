@@ -34,6 +34,7 @@ Using TOML config:
 [daemon]
 platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
+# optional allowlist; remove this line to allow any reachable Discord channel or DM
 allow_chats = ["discord:123456789012345678"]
 snapshot_lines = 120
 plain_text_mode = "execute"
@@ -99,6 +100,20 @@ Supported environment variables:
 - `TMUXCONN_PLAIN_TEXT_ECHO_DELAY`
 - `TMUXCONN_PLAIN_TEXT_ECHO_TIMEOUT`
 - `TMUXCONN_FOLLOW_DEBUG`
+
+## Choosing `allow_chats` Values
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you do not set them,
+any Discord channel or DM that can reach the bot may use it.
+
+- recommended format: `discord:<channel_id>` or `discord:<dm_id>`
+- raw IDs without the `discord:` prefix also work, but the prefix avoids
+  collisions with other platforms in shared configs
+- to copy the ID in Discord, enable Developer Mode in `User Settings ->
+  Advanced -> Developer Mode`, then right-click the target server channel or DM
+  conversation and choose `Copy Channel ID`
+- when allowing multiple chats, repeat `--allow-chat` or add multiple TOML
+  entries
 
 ## Health Checks
 

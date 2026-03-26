@@ -40,6 +40,7 @@ tmux-connect daemon weixin new
 [daemon]
 platform = "weixin"
 db = "/home/user/.tmux-connect/tmux-connect.db"
+# optional allowlist; remove this line to allow any reachable Weixin user
 allow_chats = ["weixin:user@im.wechat"]
 
 [daemon.weixin]
@@ -91,6 +92,10 @@ weixin:user@im.wechat
 ```
 
 The `chat_id` is the iLink `from_user_id`. Use the full value exactly as delivered by the gateway.
+
+`--allow-chat` and `[daemon].allow_chats` are optional. If you omit them, any
+Weixin user that can reach the bot may use it. Most deployments should still
+set an explicit allowlist once the operator account is known.
 
 ## Current Scope
 

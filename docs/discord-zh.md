@@ -113,7 +113,7 @@ tmux-connect 支持三种配置方式，优先级：命令行参数 > 环境变�
 [daemon]
 platform = "discord"
 db = "/home/user/.tmux-connect/tmux-connect.db"
-allow_chats = ["discord:123456789012345678"]  # 允许的频道/用户 ID
+allow_chats = ["discord:123456789012345678"]  # 可选白名单；删除这一行表示允许任意可访问的频道或私聊
 snapshot_lines = 120
 plain_text_mode = "execute"
 plain_text_echo = "snapshot"
@@ -129,6 +129,8 @@ command_prefix = "tmux:"
 ```
 
 这里的示例故意启用了 `plain_text_mode = "execute"`，这样在私聊里直接发 `continue` 之类的裸文本就会立刻执行。如果你更想保留“只输入、不回车”的行为，再改回 `type`。
+
+`allow_chats` / `--allow-chat` 不是必填项。只有在你想限制“哪些 Discord 频道或私聊可以使用这个 Bot”时才需要配置；如果不配，任何能联系到这个 Bot 的频道或私聊都可以使用。
 
 #### 方式二：使用环境变量
 
@@ -412,7 +414,7 @@ command_prefix = "tmux:"
 | `--discord-token` | Discord Bot Token | - |
 | `--discord-command-prefix` | 前缀命令前缀 | `tmux:` |
 | `--db` | SQLite 数据库路径 | 必需 |
-| `--allow-chat` | 允许的频道/私聊 ID | - |
+| `--allow-chat` | 可选白名单项，限制允许访问的频道/私聊 ID | - |
 | `--snapshot-lines` | 快照默认行数 | 120 |
 | `--follow-lines` | follow 默认行数 | 80 |
 | `--follow-min-interval` | follow 最小推送间隔 | `700ms` |
@@ -437,18 +439,31 @@ command_prefix = "tmux:"
 使用 `--allow-chat` 参数限制只有特定频道/用户可以使用 Bot：
 
 ```bash
-# 单个频道
+# 单个频道或私聊
 --allow-chat discord:123456789012345678
 
-# 多个频道
---allow-chat discord:123456789012345678,discord:987654321098765432
+# 多个频道/私聊
+--allow-chat discord:123456789012345678 \
+--allow-chat discord:987654321098765432
 ```
+
+推荐格式是 `discord:<channel_id>` 或 `discord:<dm_id>`。不带 `discord:` 前缀的原始 ID 也能工作，但在多平台共用配置时更容易混淆。
+
+### 如何获取 Discord 里的 ID
+
+1. 打开 Discord 的 **用户设置** → **高级** → 打开 **开发者模式**
+2. 对目标服务器频道或私聊会话点右键
+3. 选择 **Copy Channel ID**
+
+Discord 私聊的底层标识也是 channel ID，所以同样复制 **Channel ID** 即可。
+
+如果你暂时还不确定具体值，也可以先不配置白名单，让 Bot 收到一条测试消息，再到 daemon 的 SQLite 数据库里查看最新一条 `platform = discord` 的 `message_log.chat_id`。
 
 ### 私聊安全
 
 如果只想在私聊中使用，确保：
-1. 不要在任何 allow_chats 列表中添加服务器频道
-2. 只在 allow_chats 中添加私聊 ID
+1. 不要把服务器频道 ID 放进 `allow_chats`
+2. 只把你希望允许的私聊 ID 放进去
 
 ---
 
