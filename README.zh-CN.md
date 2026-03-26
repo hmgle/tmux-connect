@@ -70,14 +70,14 @@ make platforms
 
 当前支持的平台名：
 
-| 平台 | 构建名 | 常见凭据 / 会话 | 指南 |
-|------|--------|-----------------|------|
-| Telegram | `telegram` | Bot Token | [docs/telegram.md](./docs/telegram.md) |
-| 飞书 | `feishu` | App ID + App Secret | [docs/feishu.md](./docs/feishu.md) |
-| Slack | `slack` | Bot Token + App Token | [docs/slack.md](./docs/slack.md) |
-| Discord | `discord` | Bot Token | [docs/discord.md](./docs/discord.md) |
-| WhatsApp | `whatsapp` | 已配对设备的 session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
-| 微信 iLink | `weixin` | iLink Bearer Token | [docs/weixin.md](./docs/weixin.md) |
+| 平台       | 构建名     | 常见凭据 / 会话         | 指南                                   |
+| ---------- | ---------- | ----------------------- | -------------------------------------- |
+| Telegram   | `telegram` | Bot Token               | [docs/telegram.md](./docs/telegram.md) |
+| 飞书       | `feishu`   | App ID + App Secret     | [docs/feishu.md](./docs/feishu.md)     |
+| Slack      | `slack`    | Bot Token + App Token   | [docs/slack.md](./docs/slack.md)       |
+| Discord    | `discord`  | Bot Token               | [docs/discord.md](./docs/discord.md)   |
+| WhatsApp   | `whatsapp` | 已配对设备的 session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
+| 微信 iLink | `weixin`   | iLink Bearer Token      | [docs/weixin.md](./docs/weixin.md)     |
 
 如果你只需要其中一部分平台，可以通过 `Makefile` 使用负向排除式 build tags：
 
@@ -104,23 +104,23 @@ make build EXCLUDE=feishu,whatsapp
 
 ## 文档
 
-| 主题 | 链接 |
-|------|------|
-| CLI 命令参考 | [docs/cli-zh.md](./docs/cli-zh.md) |
-| HTTP API 参考 | [docs/api-zh.md](./docs/api-zh.md) |
-| Daemon 配置参考 | [docs/daemon-zh.md](./docs/daemon-zh.md) |
-| Telegram 配置 | [docs/telegram.md](./docs/telegram.md) |
-| 飞书配置 | [docs/feishu.md](./docs/feishu.md) |
-| Slack 配置 | [docs/slack.md](./docs/slack.md) |
-| Discord 配置 | [docs/discord.md](./docs/discord.md) |
-| Discord 接入指南（中文） | [docs/discord-zh.md](./docs/discord-zh.md) |
-| WhatsApp 配置 | [docs/whatsapp.md](./docs/whatsapp.md) |
-| 微信 iLink 配置 | [docs/weixin.md](./docs/weixin.md) |
-| iLink 微信开发设计 | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
-| 系统架构 | [docs/architecture.md](./docs/architecture.md) |
-| 路线图 | [docs/roadmap.md](./docs/roadmap.md) |
-| 中文快速开始 | [docs/guide-zh.md](./docs/guide-zh.md) |
-| 中文故障排查 | [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) |
+| 主题                     | 链接                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| CLI 命令参考             | [docs/cli-zh.md](./docs/cli-zh.md)                                     |
+| HTTP API 参考            | [docs/api-zh.md](./docs/api-zh.md)                                     |
+| Daemon 配置参考          | [docs/daemon-zh.md](./docs/daemon-zh.md)                               |
+| Telegram 配置            | [docs/telegram.md](./docs/telegram.md)                                 |
+| 飞书配置                 | [docs/feishu.md](./docs/feishu.md)                                     |
+| Slack 配置               | [docs/slack.md](./docs/slack.md)                                       |
+| Discord 配置             | [docs/discord.md](./docs/discord.md)                                   |
+| Discord 接入指南（中文） | [docs/discord-zh.md](./docs/discord-zh.md)                             |
+| WhatsApp 配置            | [docs/whatsapp.md](./docs/whatsapp.md)                                 |
+| 微信 iLink 配置          | [docs/weixin.md](./docs/weixin.md)                                     |
+| iLink 微信开发设计       | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
+| 系统架构                 | [docs/architecture.md](./docs/architecture.md)                         |
+| 路线图                   | [docs/roadmap.md](./docs/roadmap.md)                                   |
+| 中文快速开始             | [docs/guide-zh.md](./docs/guide-zh.md)                                 |
+| 中文故障排查             | [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md)             |
 
 ## 当前限制
 

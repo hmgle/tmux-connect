@@ -75,14 +75,14 @@ make platforms
 
 Supported platform names:
 
-| Platform | Build name | Credentials / session | Guide |
-|----------|------------|-----------------------|-------|
-| Telegram | `telegram` | Bot token | [docs/telegram.md](./docs/telegram.md) |
-| Feishu | `feishu` | App ID + App Secret | [docs/feishu.md](./docs/feishu.md) |
-| Slack | `slack` | Bot token + App token | [docs/slack.md](./docs/slack.md) |
-| Discord | `discord` | Bot token | [docs/discord.md](./docs/discord.md) |
+| Platform | Build name | Credentials / session    | Guide                                  |
+| -------- | ---------- | ------------------------ | -------------------------------------- |
+| Telegram | `telegram` | Bot token                | [docs/telegram.md](./docs/telegram.md) |
+| Feishu   | `feishu`   | App ID + App Secret      | [docs/feishu.md](./docs/feishu.md)     |
+| Slack    | `slack`    | Bot token + App token    | [docs/slack.md](./docs/slack.md)       |
+| Discord  | `discord`  | Bot token                | [docs/discord.md](./docs/discord.md)   |
 | WhatsApp | `whatsapp` | Paired device session DB | [docs/whatsapp.md](./docs/whatsapp.md) |
-| Weixin | `weixin` | iLink bearer token | [docs/weixin.md](./docs/weixin.md) |
+| Weixin   | `weixin`   | iLink bearer token       | [docs/weixin.md](./docs/weixin.md)     |
 
 If you only need a subset, use negative build tags through the `Makefile`:
 
@@ -111,22 +111,22 @@ selection is still one process per platform.
 
 ## Documentation
 
-| Topic | Link |
-|-------|------|
-| CLI Reference | [docs/cli.md](./docs/cli.md) |
-| HTTP API Reference | [docs/api.md](./docs/api.md) |
-| Daemon Configuration | [docs/daemon.md](./docs/daemon.md) |
-| Telegram Setup | [docs/telegram.md](./docs/telegram.md) |
-| Feishu Setup | [docs/feishu.md](./docs/feishu.md) |
-| Slack Setup | [docs/slack.md](./docs/slack.md) |
-| Discord Setup | [docs/discord.md](./docs/discord.md) |
-| WhatsApp Setup | [docs/whatsapp.md](./docs/whatsapp.md) |
-| Weixin Setup | [docs/weixin.md](./docs/weixin.md) |
-| iLink Weixin Design | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
-| Architecture | [docs/architecture.md](./docs/architecture.md) |
-| Roadmap | [docs/roadmap.md](./docs/roadmap.md) |
-| 中文快速开始 | [docs/guide-zh.md](./docs/guide-zh.md) |
-| 中文故障排查 | [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md) |
+| Topic                | Link                                                                   |
+| -------------------- | ---------------------------------------------------------------------- |
+| CLI Reference        | [docs/cli.md](./docs/cli.md)                                           |
+| HTTP API Reference   | [docs/api.md](./docs/api.md)                                           |
+| Daemon Configuration | [docs/daemon.md](./docs/daemon.md)                                     |
+| Telegram Setup       | [docs/telegram.md](./docs/telegram.md)                                 |
+| Feishu Setup         | [docs/feishu.md](./docs/feishu.md)                                     |
+| Slack Setup          | [docs/slack.md](./docs/slack.md)                                       |
+| Discord Setup        | [docs/discord.md](./docs/discord.md)                                   |
+| WhatsApp Setup       | [docs/whatsapp.md](./docs/whatsapp.md)                                 |
+| Weixin Setup         | [docs/weixin.md](./docs/weixin.md)                                     |
+| iLink Weixin Design  | [docs/ILINK_WEIXIN_DEVELOPMENT.md](./docs/ILINK_WEIXIN_DEVELOPMENT.md) |
+| Architecture         | [docs/architecture.md](./docs/architecture.md)                         |
+| Roadmap              | [docs/roadmap.md](./docs/roadmap.md)                                   |
+| 中文快速开始         | [docs/guide-zh.md](./docs/guide-zh.md)                                 |
+| 中文故障排查         | [docs/troubleshooting-zh.md](./docs/troubleshooting-zh.md)             |
 
 ## Current Limits
 
