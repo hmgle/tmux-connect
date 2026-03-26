@@ -123,7 +123,7 @@ func TestDiscordAdapterSendMessageUsesInteractionResponse(t *testing.T) {
 	}
 }
 
-func TestDiscordAdapterSendMessageFallsBackToReplyTargetThread(t *testing.T) {
+func TestDiscordAdapterSendMessageIgnoresReplyMessageIDAsChannelTarget(t *testing.T) {
 	t.Parallel()
 
 	client := &fakeDiscordGatewayClient{}
@@ -138,8 +138,34 @@ func TestDiscordAdapterSendMessageFallsBackToReplyTargetThread(t *testing.T) {
 	if len(client.threadMessages) != 1 {
 		t.Fatalf("threadMessages = %#v, want one call", client.threadMessages)
 	}
-	if client.threadMessages[0].threadID != "reply-1" {
-		t.Fatalf("threadID = %q, want reply-1", client.threadMessages[0].threadID)
+	if client.threadMessages[0].channelID != "C123" {
+		t.Fatalf("channelID = %q, want C123", client.threadMessages[0].channelID)
+	}
+	if client.threadMessages[0].threadID != "" {
+		t.Fatalf("threadID = %q, want empty", client.threadMessages[0].threadID)
+	}
+}
+
+func TestDiscordAdapterSendImageIgnoresReplyMessageIDAsChannelTarget(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeDiscordGatewayClient{}
+	adapter := &discordAdapter{client: client, stderr: io.Discard, commandPrefix: "tmux:"}
+
+	_, err := adapter.SendImage(context.Background(), ChatRef{Platform: "discord", ChatID: "C123"}, "snapshot.png", []byte("png"), "caption", SendOptions{
+		ReplyToMessageID: "reply-1",
+	})
+	if err != nil {
+		t.Fatalf("SendImage() error = %v", err)
+	}
+	if len(client.images) != 1 {
+		t.Fatalf("images = %#v, want one call", client.images)
+	}
+	if client.images[0].channelID != "C123" {
+		t.Fatalf("channelID = %q, want C123", client.images[0].channelID)
+	}
+	if client.images[0].threadID != "" {
+		t.Fatalf("threadID = %q, want empty", client.images[0].threadID)
 	}
 }
 

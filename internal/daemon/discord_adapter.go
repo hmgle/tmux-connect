@@ -78,7 +78,7 @@ func (a *discordAdapter) SendMessage(ctx context.Context, chat ChatRef, text str
 		return OutboundMessage{MessageID: msgID}, nil
 	}
 
-	threadID := threadReplyTarget(opts)
+	threadID := strings.TrimSpace(opts.ThreadID)
 	msgID, err := a.client.SendMessageToThread(ctx, chat.ChatID, threadID, text, embed)
 	if err != nil {
 		return OutboundMessage{}, err
@@ -95,7 +95,7 @@ func (a *discordAdapter) SendImage(ctx context.Context, chat ChatRef, fileName s
 		return OutboundMessage{MessageID: msgID}, nil
 	}
 
-	threadID := threadReplyTarget(opts)
+	threadID := strings.TrimSpace(opts.ThreadID)
 	msgID, err := a.client.SendImage(ctx, chat.ChatID, threadID, fileName, data, caption)
 	if err != nil {
 		return OutboundMessage{}, err
