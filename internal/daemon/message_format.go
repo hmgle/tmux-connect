@@ -6,9 +6,10 @@ import (
 )
 
 func decorateTelegramMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
-	if isPreformattedHTML(kind) {
+	switch strings.TrimSpace(kind) {
+	case "panes":
 		opts.Format = MessageFormatTelegramHTML
-		return text, opts
+		return renderTelegramPaneListHTML(text), opts
 	}
 	if !usesTerminalHTML(kind) {
 		return text, opts
@@ -27,10 +28,6 @@ func decorateWhatsAppMessage(kind string, text string, opts SendOptions) (string
 
 func decorateFeishuMessage(_ string, text string, opts SendOptions) (string, SendOptions) {
 	return strings.TrimSpace(text), opts
-}
-
-func isPreformattedHTML(kind string) bool {
-	return kind == "panes"
 }
 
 func usesTerminalHTML(kind string) bool {
@@ -61,6 +58,50 @@ func renderTelegramTerminalHTML(text string) string {
 	return "<b>" + html.EscapeString(header) + "</b>\n<pre>" + html.EscapeString(body) + "</pre>"
 }
 
+func renderTelegramPaneListHTML(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "<pre>(empty output)</pre>"
+	}
+
+	lines := strings.Split(text, "\n")
+	header := strings.TrimSpace(lines[0])
+	bodyLines := lines[1:]
+	footer := ""
+	if len(bodyLines) > 0 {
+		last := strings.TrimSpace(bodyLines[len(bodyLines)-1])
+		if strings.HasPrefix(last, "Current: ") {
+			footer = last
+			bodyLines = bodyLines[:len(bodyLines)-1]
+		}
+	}
+
+	var b strings.Builder
+	if header != "" {
+		b.WriteString("<b>")
+		b.WriteString(html.EscapeString(header))
+		b.WriteString("</b>")
+	}
+	if len(bodyLines) > 0 {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString("<pre>")
+		b.WriteString(html.EscapeString(strings.Join(bodyLines, "\n")))
+		b.WriteString("</pre>")
+	}
+	if footer != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(html.EscapeString(footer))
+	}
+	if b.Len() == 0 {
+		return "<pre>" + html.EscapeString(text) + "</pre>"
+	}
+	return b.String()
+}
+
 func renderSlackCodeBlock(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -78,7 +119,7 @@ const (
 
 func decorateDiscordMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
 	switch strings.TrimSpace(kind) {
-	case "snapshot", "follow-initial", "follow-output":
+	case "panes", "snapshot", "follow-initial", "follow-output":
 		text = strings.TrimSpace(text)
 		if text == "" {
 			text = "(empty output)"

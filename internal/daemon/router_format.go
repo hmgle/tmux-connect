@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"html"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -64,7 +63,7 @@ func formatPaneList(records []tmuxconn.PaneRecord, current string, following boo
 	}
 
 	var b strings.Builder
-	b.WriteString("<b>Panes:</b>\n<pre>")
+	b.WriteString("Panes:")
 	writeRow := func(r row) {
 		b.WriteString(r.marker)
 		b.WriteByte(' ')
@@ -74,22 +73,23 @@ func formatPaneList(records []tmuxconn.PaneRecord, current string, following boo
 		b.WriteString("  ")
 		writePadded(&b, r.dir, wDir)
 		b.WriteString("  ")
-		b.WriteString(html.EscapeString(r.where))
+		b.WriteString(r.where)
 	}
+	b.WriteByte('\n')
 	writeRow(header)
 	for _, r := range rows {
 		b.WriteByte('\n')
 		writeRow(r)
 	}
-	b.WriteString("</pre>\nCurrent: ")
-	b.WriteString(html.EscapeString(displayCurrent(current)))
+	b.WriteString("\nCurrent: ")
+	b.WriteString(displayCurrent(current))
 	b.WriteString(" · Follow: ")
 	b.WriteString(onOff(following))
 	return b.String()
 }
 
 func writePadded(b *strings.Builder, s string, width int) {
-	b.WriteString(html.EscapeString(s))
+	b.WriteString(s)
 	for i := utf8.RuneCountInString(s); i < width; i++ {
 		b.WriteByte(' ')
 	}

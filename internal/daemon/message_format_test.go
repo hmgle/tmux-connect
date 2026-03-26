@@ -30,16 +30,17 @@ func TestDecorateTelegramMessageLeavesNonTerminalTextPlain(t *testing.T) {
 	}
 }
 
-func TestDecorateTelegramMessagePanesPassthroughHTML(t *testing.T) {
+func TestDecorateTelegramMessageRendersPaneListHTML(t *testing.T) {
 	t.Parallel()
 
-	input := "<b>Panes:</b>\n<pre>> %5  bash  project</pre>\nCurrent: %5 · Follow: off"
+	input := "Panes:\n> %5  bash  project\nCurrent: %5 · Follow: off"
 	text, opts := decorateTelegramMessage("panes", input, SendOptions{})
 	if opts.Format != MessageFormatTelegramHTML {
 		t.Fatalf("format = %q, want %q", opts.Format, MessageFormatTelegramHTML)
 	}
-	if text != input {
-		t.Fatalf("text = %q, want passthrough", text)
+	want := "<b>Panes:</b>\n<pre>&gt; %5  bash  project</pre>\nCurrent: %5 · Follow: off"
+	if text != want {
+		t.Fatalf("text = %q, want %q", text, want)
 	}
 }
 
@@ -52,6 +53,21 @@ func TestDecorateDiscordMessageUsesEmbedForSnapshot(t *testing.T) {
 	}
 	if opts.Embed == nil {
 		t.Fatal("Embed = nil, want snapshot embed")
+	}
+	if opts.Embed.Description == "" || opts.Embed.Color != discordEmbedColorInfo {
+		t.Fatalf("embed = %#v, want info embed with description", opts.Embed)
+	}
+}
+
+func TestDecorateDiscordMessageUsesEmbedForPanes(t *testing.T) {
+	t.Parallel()
+
+	text, opts := decorateDiscordMessage("panes", "Panes:\n> %5  bash", SendOptions{})
+	if text != "" {
+		t.Fatalf("text = %q, want empty when embed is used", text)
+	}
+	if opts.Embed == nil {
+		t.Fatal("Embed = nil, want panes embed")
 	}
 	if opts.Embed.Description == "" || opts.Embed.Color != discordEmbedColorInfo {
 		t.Fatalf("embed = %#v, want info embed with description", opts.Embed)

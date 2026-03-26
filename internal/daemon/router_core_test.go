@@ -56,7 +56,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	if !strings.Contains(last.Text, "  Pane  Cmd    Dir           Where") {
 		t.Fatalf("last panes message = %q, want column header", last.Text)
 	}
-	if !strings.Contains(last.Text, "> %5    codex  tmux-connect  dev/shell") {
+	if !strings.Contains(last.Text, "&gt; %5    codex  tmux-connect  dev/shell") {
 		t.Fatalf("last panes message = %q, want current pane row", last.Text)
 	}
 	if last.ParseMode != telegram.ParseModeHTML {
