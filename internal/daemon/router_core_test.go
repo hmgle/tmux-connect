@@ -33,7 +33,7 @@ func TestRouterPanesRefreshesLiveStateAfterSelect(t *testing.T) {
 	messenger := &fakeMessenger{}
 	registry := NewPaneRegistry(service)
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, registry, store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, registry, store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -82,7 +82,7 @@ func TestRouterSelectAndSnapshot(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -124,7 +124,7 @@ func TestRouterSelectPromptsForPaneAndExecutesReply(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 10, "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -175,7 +175,7 @@ func TestRouterSendPromptsForTextAndUsesReply(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -214,7 +214,7 @@ func TestRouterPlainTextSendsToCurrentPane(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -242,7 +242,7 @@ func TestRouterPlainTextExecuteSendsTextAndReturnsSnapshot(t *testing.T) {
 	service.snapshotSequence = []snapshotResult{{body: "before"}, {body: "before"}, {body: "after\nok"}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -283,7 +283,7 @@ func TestRouterPlainTextExecuteTimeoutReturnsNoVisibleOutputMessage(t *testing.T
 	service.snapshotSequence = []snapshotResult{{body: "same"}, {body: "same"}, {body: "same"}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -320,7 +320,7 @@ func TestRouterPlainTextExecuteSnapshotFailureReturnsErrorAfterSend(t *testing.T
 	service.snapshotSequence = []snapshotResult{{err: fmt.Errorf("tmux down")}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -358,7 +358,7 @@ func TestRouterPlainTextExecuteSendFailureReturnsError(t *testing.T) {
 	service.snapshotSequence = []snapshotResult{{body: "before"}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -394,7 +394,7 @@ func TestRouterPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "status --short")); err != nil {
 		t.Fatalf("HandleMessage(plain text) error = %v", err)
@@ -418,7 +418,7 @@ func TestRouterKeysSendsNormalizedTmuxKeys(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -449,7 +449,7 @@ func TestRouterKeysRejectsUnknownKey(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -482,7 +482,7 @@ func TestRouterKeysPromptUsesReply(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -517,7 +517,7 @@ func TestRouterEnterAndCtrlCAliasKeySending(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -551,7 +551,7 @@ func TestRouterEnterWithTextSendsTextAndEnter(t *testing.T) {
 	service.snapshotSequence = []snapshotResult{{body: "before"}, {body: "after\nmake test"}}
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
 		EchoDelay:   time.Millisecond,
@@ -592,7 +592,7 @@ func TestRouterNewCommandClearsPendingPrompt(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -633,7 +633,7 @@ func TestRouterSelectAutoAttachesUnmanagedPane(t *testing.T) {
 	service.records["default:%5"] = record
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -697,7 +697,7 @@ func TestRouterSnapshotTextMode(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -730,7 +730,7 @@ func TestRouterWeixinSnapshotForcesTextMode(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "weixin"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, weixinMessage("user@im.wechat", "1", "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)

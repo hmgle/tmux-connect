@@ -18,6 +18,7 @@ type fakeMessenger struct {
 	mu              sync.Mutex
 	messages        []sentMessage
 	platform        string
+	commandPrefix   string
 	sendMessageErrs []error
 	sendImageErrs   []error
 }
@@ -42,6 +43,20 @@ func (m *fakeMessenger) Platform() string {
 		return "telegram"
 	}
 	return m.platform
+}
+
+func (m *fakeMessenger) effectiveCommandPrefix() string {
+	if strings.TrimSpace(m.commandPrefix) != "" {
+		return strings.TrimSpace(m.commandPrefix)
+	}
+	switch m.Platform() {
+	case "slack":
+		return defaultSlackCommandPrefix
+	case "discord":
+		return defaultDiscordCommandPrefix
+	default:
+		return ""
+	}
 }
 
 func (m *fakeMessenger) SendMessage(_ context.Context, _ ChatRef, text string, opts SendOptions) (OutboundMessage, error) {
@@ -128,7 +143,9 @@ func (m *fakeMessenger) DecorateMessage(kind string, text string, opts SendOptio
 func (m *fakeMessenger) ParseMessage(message IncomingMessage) parsedCommand {
 	switch m.Platform() {
 	case "slack":
-		return defaultParseMessage(message, defaultSlackCommandPrefix)
+		return defaultParseMessage(message, m.effectiveCommandPrefix())
+	case "discord":
+		return defaultParseMessage(message, m.effectiveCommandPrefix())
 	case "feishu":
 		if !isFeishuDirectMessage(message) && !message.IsAppMention {
 			return parsedCommand{Ignore: true}
@@ -160,7 +177,7 @@ func (m *fakeMessenger) PromptOptions(message IncomingMessage, spec commandPromp
 
 func (m *fakeMessenger) PromptText(message IncomingMessage, spec commandPromptSpec) string {
 	if m.Platform() == "discord" && strings.TrimSpace(message.ThreadID) != "" {
-		return spec.Message + "\n\nIn Discord channels, reply with " + strconv.Quote(defaultDiscordCommandPrefix+" <value>") + "."
+		return spec.Message + "\n\nIn Discord channels, reply with " + strconv.Quote(m.effectiveCommandPrefix()+" <value>") + "."
 	}
 	return spec.Message
 }
@@ -179,9 +196,9 @@ func (m *fakeMessenger) SnapshotCaption(paneKey string) string {
 func (m *fakeMessenger) HelpText() string {
 	switch m.Platform() {
 	case "slack":
-		return platformHelpText("slack", defaultSlackCommandPrefix)
+		return platformHelpText("slack", m.effectiveCommandPrefix())
 	case "discord":
-		return platformHelpText("discord", defaultDiscordCommandPrefix)
+		return platformHelpText("discord", m.effectiveCommandPrefix())
 	default:
 		return platformHelpText(m.Platform(), "")
 	}

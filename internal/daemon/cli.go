@@ -104,7 +104,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	if cfg.FollowDebug {
 		follow.SetDebugWriter(stderr)
 	}
-	router := NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, cfg.DiscordCommandPrefix, PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, PlainTextConfig{
 		Mode:                        cfg.PlainTextMode,
 		Echo:                        cfg.PlainTextEcho,
 		EchoLines:                   cfg.PlainTextEchoLines,

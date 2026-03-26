@@ -24,7 +24,7 @@ func TestRouterFollow(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -86,7 +86,7 @@ func TestRouterFollowFlushesBufferedOutputOnDisable(t *testing.T) {
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
 	follow.minInterval = 5 * time.Second
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -122,7 +122,7 @@ func TestRouterFollowSupportsCustomInterval(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -161,7 +161,7 @@ func TestRouterFollowShowsContextForInlineUpdates(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -225,7 +225,7 @@ func TestRouterFollowDrainsChunksAfterErrChannelCloses(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -260,7 +260,7 @@ func TestRouterClearStopsFollowAndKeepsSelectionHistory(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -310,7 +310,7 @@ func TestRouterUnmanageClearsBindingsAndFollow(t *testing.T) {
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
 	follow := NewFollowManager(service, replyBus, 20)
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, follow, 120, nil, "")
 
 	if err := router.HandleMessage(ctx, telegramMessage(7, 1, "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
