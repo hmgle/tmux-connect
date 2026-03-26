@@ -14,9 +14,11 @@ import (
 )
 
 type slackAdapter struct {
-	client *slackclient.Client
-	stderr io.Writer
-	store  *Store
+	adapterBehavior
+	client        *slackclient.Client
+	stderr        io.Writer
+	store         *Store
+	commandPrefix string
 
 	mu            sync.Mutex
 	activeThreads map[string]time.Time
@@ -37,14 +39,20 @@ func newSlackAdapter(cfg Config, stderr io.Writer, store *Store) (platformAdapte
 	if strings.TrimSpace(cfg.SlackAppToken) == "" {
 		return nil, fmt.Errorf("slack app token is required")
 	}
+	prefix := strings.TrimSpace(cfg.SlackCommandPrefix)
+	if prefix == "" {
+		prefix = defaultSlackCommandPrefix
+	}
 	return &slackAdapter{
-		client:        slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
-		stderr:        stderr,
-		store:         store,
-		activeThreads: make(map[string]time.Time),
-		threadTTL:     defaultSlackThreadTTL,
-		maxThreads:    defaultSlackMaxThreads,
-		now:           time.Now,
+		adapterBehavior: newAdapterBehavior("slack", prefix),
+		client:          slackclient.NewClient(cfg.SlackBotToken, cfg.SlackAppToken),
+		stderr:          stderr,
+		store:           store,
+		commandPrefix:   prefix,
+		activeThreads:   make(map[string]time.Time),
+		threadTTL:       defaultSlackThreadTTL,
+		maxThreads:      defaultSlackMaxThreads,
+		now:             time.Now,
 	}, nil
 }
 
@@ -78,12 +86,12 @@ func (a *slackAdapter) DecorateMessage(kind string, text string, opts SendOption
 	return decorateSlackMessage(kind, text, opts)
 }
 
-func (a *slackAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
-	return SendOptions{ThreadID: message.replyThreadID()}
+func (a *slackAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, a.commandPrefix)
 }
 
-func (a *slackAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
+func (a *slackAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
+	return SendOptions{ThreadID: message.replyThreadID()}
 }
 
 func (a *slackAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

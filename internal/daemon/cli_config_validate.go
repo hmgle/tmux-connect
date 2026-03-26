@@ -3,9 +3,7 @@ package daemon
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/hmgle/tmux-connect/internal/config"
 	"github.com/hmgle/tmux-connect/internal/termrender"
@@ -81,50 +79,6 @@ func validateConfigValues(cfg *Config) error {
 	}
 	if cfg.FollowMinGap <= 0 {
 		return tmuxconn.UsageError("--follow-min-interval must be > 0")
-	}
-	return nil
-}
-
-func applyPlatformSpecificConfigDefaults(cfg *Config, fs *flag.FlagSet, fileCfg config.Daemon) {
-	if shouldUseWhatsAppFollowMinGap(fs, fileCfg, cfg.Platform) {
-		cfg.FollowMinGap = 2 * time.Second
-	}
-	if strings.TrimSpace(cfg.WhatsAppSessionDB) == "" {
-		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
-	}
-	if !flagWasSet(fs, "whatsapp-session-db") && fileCfg.WhatsApp.SessionDB == nil && strings.TrimSpace(os.Getenv("TMUXCONN_WHATSAPP_SESSION_DB")) == "" {
-		cfg.WhatsAppSessionDB = defaultWhatsAppSessionDBPath(cfg.DBPath)
-	}
-	if strings.TrimSpace(cfg.WhatsAppDeviceName) == "" {
-		cfg.WhatsAppDeviceName = "tmux-connect"
-	}
-	if strings.TrimSpace(cfg.WeixinBaseURL) == "" {
-		cfg.WeixinBaseURL = defaultWeixinBaseURL
-	}
-	if strings.TrimSpace(cfg.WeixinCDNBaseURL) == "" {
-		cfg.WeixinCDNBaseURL = defaultWeixinCDNBaseURL
-	}
-	cfg.WeixinBaseURL = strings.TrimRight(strings.TrimSpace(cfg.WeixinBaseURL), "/")
-	cfg.WeixinCDNBaseURL = strings.TrimRight(strings.TrimSpace(cfg.WeixinCDNBaseURL), "/")
-	cfg.WeixinRouteTag = strings.TrimSpace(cfg.WeixinRouteTag)
-	if cfg.Platform != "slack" {
-		cfg.SlackCommandPrefix = ""
-	}
-	if cfg.Platform != "discord" {
-		cfg.DiscordCommandPrefix = ""
-	}
-}
-
-func validatePlatformPrefixes(cfg *Config) error {
-	if cfg.Platform == "slack" {
-		if strings.TrimSpace(cfg.SlackCommandPrefix) == "" || strings.ContainsAny(cfg.SlackCommandPrefix, " \t\n") {
-			return tmuxconn.UsageError("--slack-command-prefix must be non-empty and contain no whitespace")
-		}
-	}
-	if cfg.Platform == "discord" {
-		if strings.TrimSpace(cfg.DiscordCommandPrefix) == "" || strings.ContainsAny(cfg.DiscordCommandPrefix, " \t\n") {
-			return tmuxconn.UsageError("--discord-command-prefix must be non-empty and contain no whitespace")
-		}
 	}
 	return nil
 }

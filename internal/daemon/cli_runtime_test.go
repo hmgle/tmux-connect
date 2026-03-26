@@ -25,10 +25,20 @@ func (f *fakeRuntimeAdapter) SendImage(context.Context, ChatRef, string, []byte,
 func (f *fakeRuntimeAdapter) DecorateMessage(kind string, text string, opts SendOptions) (string, SendOptions) {
 	return text, opts
 }
+func (f *fakeRuntimeAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
 func (f *fakeRuntimeAdapter) PromptOptions(IncomingMessage, commandPromptSpec) SendOptions {
 	return SendOptions{}
 }
+func (f *fakeRuntimeAdapter) PromptText(_ IncomingMessage, spec commandPromptSpec) string {
+	return spec.Message
+}
+func (f *fakeRuntimeAdapter) NormalizeSnapshotMode(mode snapshotMode) snapshotMode {
+	return mode
+}
 func (f *fakeRuntimeAdapter) SnapshotCaption(string) string { return "" }
+func (f *fakeRuntimeAdapter) HelpText() string              { return platformHelpText("telegram", "") }
 func (f *fakeRuntimeAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {
 	f.order = append(f.order, "run")
 	if f.runFn != nil {

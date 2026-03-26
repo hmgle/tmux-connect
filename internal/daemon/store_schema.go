@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 )
 
@@ -60,17 +59,11 @@ func (s *Store) applyMigrations(ctx context.Context) error {
 }
 
 func (s *Store) schemaVersion(ctx context.Context) (int, error) {
-	type row struct {
-		UserVersion json.Number `json:"user_version"`
+	var version int
+	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version;").Scan(&version); err != nil {
+		return 0, fmt.Errorf("sqlite query failed: %w", err)
 	}
-	var rows []row
-	if err := s.queryJSON(ctx, "PRAGMA user_version;", &rows); err != nil {
-		return 0, err
-	}
-	if len(rows) == 0 {
-		return 0, nil
-	}
-	return numberToInt(rows[0].UserVersion)
+	return version, nil
 }
 
 func (s *Store) setSchemaVersion(ctx context.Context, version int) error {

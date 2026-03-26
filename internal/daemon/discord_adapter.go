@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -28,6 +29,7 @@ type discordGatewayClient interface {
 }
 
 type discordAdapter struct {
+	adapterBehavior
 	client        discordGatewayClient
 	stderr        io.Writer
 	commandPrefix string
@@ -54,9 +56,10 @@ func newDiscordAdapter(cfg Config, stderr io.Writer) (*discordAdapter, error) {
 	}
 
 	return &discordAdapter{
-		client:        client,
-		stderr:        stderr,
-		commandPrefix: prefix,
+		adapterBehavior: newAdapterBehavior("discord", prefix),
+		client:          client,
+		stderr:          stderr,
+		commandPrefix:   prefix,
 	}, nil
 }
 
@@ -104,12 +107,20 @@ func (a *discordAdapter) DecorateMessage(kind string, text string, opts SendOpti
 	return decorateDiscordMessage(kind, text, opts)
 }
 
+func (a *discordAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *discordAdapter) PromptOptions(message IncomingMessage, _ commandPromptSpec) SendOptions {
 	return SendOptions{ThreadID: message.ThreadID}
 }
 
-func (a *discordAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
+func (a *discordAdapter) PromptText(message IncomingMessage, spec commandPromptSpec) string {
+	text := defaultPromptText(message, spec)
+	if strings.TrimSpace(message.ThreadID) != "" {
+		text += "\n\nIn Discord channels, reply with " + strconv.Quote(a.commandPrefix+" <value>") + "."
+	}
+	return text
 }
 
 func (a *discordAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

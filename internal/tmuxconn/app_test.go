@@ -252,7 +252,7 @@ func newTestApp(t *testing.T, runFn func(context.Context, []byte, ...string) (tm
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	service := NewService(tmux.NewClient(&fakeRunner{runFn: runFn}, ""))
+	service := NewService(tmux.NewClient(&fakeRunner{RunFn: runFn}, ""))
 	return NewApp(stdout, stderr, service), stdout, stderr
 }
 

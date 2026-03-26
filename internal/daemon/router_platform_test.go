@@ -45,15 +45,15 @@ func TestHelpTextUsesSlackPrefixedCommands(t *testing.T) {
 func TestHelpTextUsesDiscordSlashCommands(t *testing.T) {
 	t.Parallel()
 
-	text := helpTextForPlatform("discord", "", "tmux:")
+	text := platformHelpText("discord", "")
 	for _, want := range []string{"/start", "/help", "/snapshot [lines] [image|text]", `prefix text commands with "tmux:"`} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("helpTextForPlatform(discord) missing %q in %q", want, text)
+			t.Fatalf("platformHelpText(discord) missing %q in %q", want, text)
 		}
 	}
 	for _, unwanted := range []string{"\ntmux: start", "\ntmux: help"} {
 		if strings.Contains(text, unwanted) {
-			t.Fatalf("helpTextForPlatform(discord) unexpectedly contains %q in %q", unwanted, text)
+			t.Fatalf("platformHelpText(discord) unexpectedly contains %q in %q", unwanted, text)
 		}
 	}
 }
@@ -61,10 +61,10 @@ func TestHelpTextUsesDiscordSlashCommands(t *testing.T) {
 func TestHelpTextUsesWhatsAppReplyGuidance(t *testing.T) {
 	t.Parallel()
 
-	text := helpTextForPlatform("whatsapp", "", "tmux:")
+	text := platformHelpText("whatsapp", "")
 	for _, want := range []string{`"/panes"`, `"/follow on"`, `replying with "1" or "2"`, `plain text is disabled to avoid reply loops`} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("helpTextForPlatform(whatsapp) missing %q in %q", want, text)
+			t.Fatalf("platformHelpText(whatsapp) missing %q in %q", want, text)
 		}
 	}
 }
@@ -72,10 +72,10 @@ func TestHelpTextUsesWhatsAppReplyGuidance(t *testing.T) {
 func TestHelpTextUsesFeishuGuidance(t *testing.T) {
 	t.Parallel()
 
-	text := helpTextForPlatform("feishu", "", "tmux:")
+	text := platformHelpText("feishu", "")
 	for _, want := range []string{`Feishu private chats`, `mention the bot`, `Static cards are used for help and pane selection prompts`} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("helpTextForPlatform(feishu) missing %q in %q", want, text)
+			t.Fatalf("platformHelpText(feishu) missing %q in %q", want, text)
 		}
 	}
 }
@@ -83,14 +83,14 @@ func TestHelpTextUsesFeishuGuidance(t *testing.T) {
 func TestHelpTextUsesWeixinSnapshotTextGuidance(t *testing.T) {
 	t.Parallel()
 
-	text := helpTextForPlatform("weixin", "", "tmux:")
+	text := platformHelpText("weixin", "")
 	for _, want := range []string{`/snapshot [lines] [text]`, `forces "/snapshot" to text output`, `placeholder boxes`} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("helpTextForPlatform(weixin) missing %q in %q", want, text)
+			t.Fatalf("platformHelpText(weixin) missing %q in %q", want, text)
 		}
 	}
 	if strings.Contains(text, "/snapshot [lines] [image|text]") {
-		t.Fatalf("helpTextForPlatform(weixin) unexpectedly contains image snapshot usage in %q", text)
+		t.Fatalf("platformHelpText(weixin) unexpectedly contains image snapshot usage in %q", text)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestRouterWhatsAppSelfChatRejectsPlainText(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "whatsapp"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		WhatsAppSelfChatCommandOnly: true,
 	})
 
@@ -140,7 +140,7 @@ func TestRouterWhatsAppSelfChatPromptReplyStillWorks(t *testing.T) {
 	service.records[record2.Info.Target.PaneKey()] = record2
 	messenger := &fakeMessenger{platform: "whatsapp"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		WhatsAppSelfChatCommandOnly: true,
 	})
 
@@ -174,7 +174,7 @@ func TestRouterWhatsAppSelectPromptSupportsNumericReply(t *testing.T) {
 	service.records[record2.Info.Target.PaneKey()] = record2
 	messenger := &fakeMessenger{platform: "whatsapp"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, whatsappMessage("8613800000000@s.whatsapp.net", "wamid-1", "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -235,7 +235,7 @@ func TestRouterSlackAcceptsPrefixedCommands(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux: select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -270,7 +270,7 @@ func TestRouterFeishuPrivatePlainTextUsesCurrentPane(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "/select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -297,7 +297,7 @@ func TestRouterFeishuGroupIgnoresNonMentionPlainText(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, IncomingMessage{
 		Chat:      feishuChat("oc_group_1"),
@@ -326,7 +326,7 @@ func TestRouterFeishuGroupMentionAcceptsCommand(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "select %5")); err != nil {
 		t.Fatalf("HandleMessage(group mention select) error = %v", err)
@@ -355,7 +355,7 @@ func TestRouterFeishuGroupPendingReplySelectsPaneWithoutMention(t *testing.T) {
 	service.records[record2.Info.Target.PaneKey()] = record2
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "select")); err != nil {
 		t.Fatalf("HandleMessage(group mention select) error = %v", err)
@@ -389,7 +389,7 @@ func TestRouterFeishuGroupMentionOnlyShowsHelpCard(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuGroupMentionMessage("oc_group_1", "m1", "help")); err != nil {
 		t.Fatalf("HandleMessage(group mention help) error = %v", err)
@@ -414,7 +414,7 @@ func TestRouterFeishuHelpCardRepliesInThread(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuThreadMentionMessage("oc_group_1", "omt_1", "m1", "help")); err != nil {
 		t.Fatalf("HandleMessage(threaded help) error = %v", err)
@@ -442,7 +442,7 @@ func TestRouterFeishuHelpUsesCard(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "/help")); err != nil {
 		t.Fatalf("HandleMessage(help) error = %v", err)
@@ -471,7 +471,7 @@ func TestRouterFeishuNoCurrentPaneCardCreatesPendingSelection(t *testing.T) {
 	service.records[record2.Info.Target.PaneKey()] = record2
 	messenger := &fakeMessenger{platform: "feishu"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, feishuPrivateMessage("oc_chat_1", "m1", "pwd")); err != nil {
 		t.Fatalf("HandleMessage(no current pane) error = %v", err)
@@ -504,7 +504,7 @@ func TestRouterAllowedChecksPlatformScopedAllowlist(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, []string{"discord:C123"}, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, []string{"discord:C123"}, "")
 
 	if !router.allowed(discordChat("C123")) {
 		t.Fatal("router.allowed(discord:C123) = false, want true")
@@ -523,9 +523,9 @@ func TestRouterDiscordPromptMentionsPrefixedReplyInChannels(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	service := newFakePaneService()
-	messenger := &fakeMessenger{platform: "discord"}
+	messenger := &fakeMessenger{platform: "discord", commandPrefix: "bot:"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "tmux:")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, discordMessage("C123", "1", "/select")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -533,8 +533,34 @@ func TestRouterDiscordPromptMentionsPrefixedReplyInChannels(t *testing.T) {
 
 	messages := messenger.snapshot()
 	last := messages[len(messages)-1]
-	if !strings.Contains(last.Text, `reply with "tmux: <value>"`) {
-		t.Fatalf("prompt text = %q, want Discord channel reply hint", last.Text)
+	if !strings.Contains(last.Text, `reply with "bot: <value>"`) {
+		t.Fatalf("prompt text = %q, want custom Discord channel reply hint", last.Text)
+	}
+}
+
+func TestRouterDiscordHelpUsesCustomCommandPrefix(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, err := OpenStore(ctx, filepath.Join(t.TempDir(), "tmuxconn.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	service := newFakePaneService()
+	messenger := &fakeMessenger{platform: "discord", commandPrefix: "bot:"}
+	replyBus := NewReplyBus(messenger, store, termrender.Options{})
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
+
+	if err := router.HandleMessage(ctx, discordMessage("C123", "1", "/help")); err != nil {
+		t.Fatalf("HandleMessage(help) error = %v", err)
+	}
+
+	last := messenger.snapshot()[0]
+	if !strings.Contains(last.Text, `prefix text commands with "bot:"`) {
+		t.Fatalf("help text = %q, want custom discord prefix guidance", last.Text)
+	}
+	if !strings.Contains(last.Text, "bot: current") {
+		t.Fatalf("help text = %q, want custom discord prefix example", last.Text)
 	}
 }
 
@@ -549,7 +575,7 @@ func TestRouterSlackAppMentionAcceptsCommandWithoutPrefix(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "panes")); err != nil {
 		t.Fatalf("HandleMessage(app mention panes) error = %v", err)
@@ -573,7 +599,7 @@ func TestRouterSlackHelpUsesCommandPrefix(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux: help")); err != nil {
 		t.Fatalf("HandleMessage(help) error = %v", err)
@@ -609,7 +635,7 @@ func TestRouterSlackPlainTextUsesCurrentPane(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux: select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -636,7 +662,7 @@ func TestRouterSlackPlainTextInManagedThreadUsesCurrentPane(t *testing.T) {
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackAppMentionMessage("C123", "1", "select %5")); err != nil {
 		t.Fatalf("HandleMessage(select) error = %v", err)
@@ -664,7 +690,7 @@ func TestRouterSlackPlainTextExecuteInManagedThreadReturnsSnapshot(t *testing.T)
 	service.snapshotSequence = []snapshotResult{{body: "before"}, {body: "after\nok"}}
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -701,7 +727,7 @@ func TestRouterDiscordDMPlainTextExecuteReturnsSnapshot(t *testing.T) {
 	service.snapshotSequence = []snapshotResult{{body: "before"}, {body: "after\nok"}}
 	messenger := &fakeMessenger{platform: "discord"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "", PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", PlainTextConfig{
 		Mode:        plainTextModeExecute,
 		Echo:        plainTextEchoSnapshot,
 		EchoLines:   8,
@@ -737,7 +763,7 @@ func TestRouterSlackPlainTextWithoutCurrentPaneReturnsSelectError(t *testing.T) 
 	service := newFakePaneService()
 	messenger := &fakeMessenger{platform: "slack"}
 	replyBus := NewReplyBus(messenger, store, termrender.Options{})
-	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "", "")
+	router := NewRouter(service, NewPaneRegistry(service), store, replyBus, NewFollowManager(service, replyBus, 20), 120, nil, "")
 
 	if err := router.HandleMessage(ctx, slackMessage("D123", "1", "tmux panes")); err != nil {
 		t.Fatalf("HandleMessage(plain text) error = %v", err)

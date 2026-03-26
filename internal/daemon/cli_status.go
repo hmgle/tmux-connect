@@ -18,6 +18,7 @@ func runStatusWithConfig(ctx context.Context, stdout io.Writer, stderr io.Writer
 	if err != nil {
 		return tmuxconn.UsageError("open sqlite store: %v", err)
 	}
+	defer store.Close()
 	stats, err := store.Stats(ctx)
 	if err != nil {
 		return tmuxconn.UsageError("read sqlite stats: %v", err)

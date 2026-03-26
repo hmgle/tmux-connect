@@ -15,12 +15,14 @@ import (
 )
 
 type telegramAdapter struct {
+	adapterBehavior
 	client *telegram.Client
 	stderr io.Writer
 }
 
 func newTelegramAdapter(cfg Config, stderr io.Writer) *telegramAdapter {
 	return &telegramAdapter{
+		adapterBehavior: newAdapterBehavior("telegram", ""),
 		client: telegram.NewClient(cfg.TelegramToken,
 			telegram.WithBaseURL(cfg.APIBaseURL),
 			telegram.WithPollTimeout(cfg.PollTimeout),
@@ -81,6 +83,10 @@ func (a *telegramAdapter) DecorateMessage(kind string, text string, opts SendOpt
 	return decorateTelegramMessage(kind, text, opts)
 }
 
+func (a *telegramAdapter) ParseMessage(message IncomingMessage) parsedCommand {
+	return defaultParseMessage(message, "")
+}
+
 func (a *telegramAdapter) PromptOptions(message IncomingMessage, spec commandPromptSpec) SendOptions {
 	return SendOptions{
 		ReplyToMessageID: message.MessageID,
@@ -89,10 +95,6 @@ func (a *telegramAdapter) PromptOptions(message IncomingMessage, spec commandPro
 			InputFieldPlaceholder: spec.Placeholder,
 		},
 	}
-}
-
-func (a *telegramAdapter) SnapshotCaption(paneKey string) string {
-	return formatSnapshotCaption(paneKey)
 }
 
 func (a *telegramAdapter) Run(ctx context.Context, handler func(context.Context, IncomingMessage) error) error {

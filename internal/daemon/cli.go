@@ -89,11 +89,13 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	}
 	registry := NewPaneRegistry(service)
 	if err := registry.Refresh(ctx); err != nil {
+		_ = store.Close()
 		return nil, tmuxconn.TmuxError("initial pane refresh: %v", err)
 	}
 
 	adapter, err := newPlatformAdapter(cfg, stderr, store)
 	if err != nil {
+		_ = store.Close()
 		return nil, err
 	}
 	replyBus := NewReplyBus(adapter, store, snapshotRenderOptions(cfg))
@@ -102,7 +104,7 @@ func NewRuntime(ctx context.Context, cfg Config, service paneService, stderr io.
 	if cfg.FollowDebug {
 		follow.SetDebugWriter(stderr)
 	}
-	router := NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, cfg.DiscordCommandPrefix, PlainTextConfig{
+	router := NewRouterWithPlainTextConfig(service, registry, store, replyBus, follow, cfg.SnapshotLines, cfg.AllowChats, cfg.SlackCommandPrefix, PlainTextConfig{
 		Mode:                        cfg.PlainTextMode,
 		Echo:                        cfg.PlainTextEcho,
 		EchoLines:                   cfg.PlainTextEchoLines,
@@ -136,6 +138,9 @@ func (r *Runtime) Close() {
 	}
 	if r.adapter != nil {
 		_ = r.adapter.Close()
+	}
+	if r.store != nil {
+		_ = r.store.Close()
 	}
 }
 
