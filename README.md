@@ -15,6 +15,10 @@ English | [简体中文](./README.zh-CN.md)
 
 Control your tmux panes from anywhere — CLI, HTTP API, or your phone via Telegram, Feishu, Slack, Discord, WhatsApp, and Weixin via iLink.
 
+## Demo
+
+https://github.com/user-attachments/assets/4c8aeea9-2d0c-4e5c-8f33-621c5391bf93
+
 ## Features
 
 - **Local CLI** — list, attach, inspect, snapshot, stream, and send input to any tmux pane

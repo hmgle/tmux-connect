@@ -14,6 +14,10 @@
 
 随时随地控制你的 tmux pane——CLI、HTTP API，或通过 Telegram、飞书、Slack、Discord、WhatsApp、微信 iLink 在手机上操作。
 
+## Demo
+
+https://github.com/user-attachments/assets/4c8aeea9-2d0c-4e5c-8f33-621c5391bf93
+
 ## 特性
 
 - **本地 CLI** — 对任意 tmux pane 执行 list、attach、inspect、snapshot、stream 和 send
